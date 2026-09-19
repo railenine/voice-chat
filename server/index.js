@@ -40,7 +40,7 @@ app.get('/api/info', (req, res) => {
 // - app.use(peerServer) - без mount point
 // - HTTP: /peerjs/id, /peerjs/peers
 // - WebSocket: /peerjs/peerjs
-const peerServer = ExpressPrivacyServer(server, {
+const peerServer = ExpressPeerServer(server, {
   debug: 2,
   path: '/peerjs',
   allow_discovery: true,
