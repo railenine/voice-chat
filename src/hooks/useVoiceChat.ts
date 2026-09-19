@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Peer, { MediaConnection, DataConnection } from 'peerjs';
-
+//UPD
 export interface PeerInfo {
   peerId: string;
   nickname: string;
