@@ -36,7 +36,18 @@ jobs:
           strip_components: 1
           rm: true
 
-      - name: Deploy Backend to VPS
+      - name: Deploy Backend package files to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "package.json,package-lock.json"
+          target: "/var/www/voice-chat-backend"
+          strip_components: 1
+
+      - name: Deploy Backend server code to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -44,9 +55,8 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "server/"
-          target: "/var/www/voice-chat-backend"
+          target: "/var/www/voice-chat-backend/server"
           strip_components: 1
-          rm: true
 
       - name: Restart Backend via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -57,7 +67,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             cd /var/www/voice-chat-backend
-            npm install --production
+            npm install --omit=dev
             pm2 delete voicechat-server || true
             pm2 start server/index.js --name voicechat-server
             pm2 save
