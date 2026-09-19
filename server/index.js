@@ -20,10 +20,11 @@ app.get('/health', (req, res) => {
 });
 
 // PeerJS signaling server
-// Стандартная и самая надежная конфигурация
+// ПРАВИЛЬНАЯ КОНФИГУРАЦИЯ:
+// path: '/' означает, что сервер обрабатывает запросы относительно точки монтирования.
 const peerServer = ExpressPeerServer(server, {
   debug: 2,
-  path: '/peerjs', // Явно указываем путь
+  path: '/', 
   allow_discovery: true,
   concurrent_limit: 10000,
   config: {
@@ -37,8 +38,8 @@ const peerServer = ExpressPeerServer(server, {
   }
 });
 
-// Монтируем PeerJS (он сам будет обрабатывать маршрут /peerjs)
-app.use(peerServer);
+// Монтируем PeerJS именно по пути /peerjs
+app.use('/peerjs', peerServer);
 
 // Логирование событий PeerJS
 peerServer.on('connection', (client) => {
