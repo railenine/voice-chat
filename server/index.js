@@ -6,11 +6,9 @@ import cors from 'cors';
 const app = express();
 const server = http.createServer(app);
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -19,12 +17,11 @@ app.get('/health', (req, res) => {
   });
 });
 
-// PeerJS signaling server
-// ПРАВИЛЬНАЯ КОНФИГУРАЦИЯ:
-// path: '/' означает, что сервер обрабатывает запросы относительно точки монтирования.
+// ПРАВИЛЬНАЯ КОНФИГУРАЦИЯ PeerJS v1.x
+// Мы явно указываем path: '/peerjs' и монтируем на '/peerjs'
 const peerServer = ExpressPeerServer(server, {
   debug: 2,
-  path: '/', 
+  path: '/peerjs', 
   allow_discovery: true,
   concurrent_limit: 10000,
   config: {
@@ -38,10 +35,9 @@ const peerServer = ExpressPeerServer(server, {
   }
 });
 
-// Монтируем PeerJS именно по пути /peerjs
+// Монтируем сервер
 app.use('/peerjs', peerServer);
 
-// Логирование событий PeerJS
 peerServer.on('connection', (client) => {
   console.log(`[PeerJS] Client connected: ${client.getId()}`);
 });
@@ -50,17 +46,8 @@ peerServer.on('disconnect', (client) => {
   console.log(`[PeerJS] Client disconnected: ${client.getId()}`);
 });
 
-// Start server
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║   🎤 VoiceChat Server is running!                        ║
-║                                                           ║
-║   📡 PeerJS Signaling: http://localhost:${PORT}/peerjs      ║
-║   ❤️  Health Check:     http://localhost:${PORT}/health     ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-  `);
+  console.log(`🎤 VoiceChat Server is running on port ${PORT}`);
+  console.log(`📡 PeerJS: http://localhost:${PORT}/peerjs`);
 });
