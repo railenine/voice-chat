@@ -71,7 +71,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     return {
       host: peerServerHost,
       port: port,
-      path: '/peerjs',
+      path: '',
       secure: window.location.protocol === 'https:',
       debug: 0,
       config: {
