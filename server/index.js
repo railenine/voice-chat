@@ -35,10 +35,11 @@ app.get('/api/info', (req, res) => {
 });
 
 // PeerJS signaling server
-// IMPORTANT: WebSocket upgrade is handled on HTTP server with absolute paths
-// HTTP requests are handled via Express middleware
-// Solution: Use path: '/peerjs' WITHOUT mount point
-// Client: path: '/peerjs' → HTTP: /peerjs/id, WebSocket: /peerjs/peerjs ✓
+// CORRECT CONFIGURATION (verified from PeerJS source code):
+// - WebSocket upgrade is handled by HTTP server directly (NOT through Express)
+// - PeerJS checks: pathname === path + '/peerjs'
+// - Therefore: server path: '/peerjs' + NO mount point
+// - Client path: '/peerjs' → WebSocket: /peerjs/peerjs ✓
 const peerServer = ExpressPeerServer(server, {
   debug: 2,
   path: '/peerjs',
@@ -55,11 +56,7 @@ const peerServer = ExpressPeerServer(server, {
   }
 });
 
-// CRITICAL: Do NOT use mount point! 
-// WebSocket upgrade is handled on HTTP server with absolute paths.
-// If we use app.use('/peerjs', peerServer), Express strips the prefix for HTTP
-// but WebSocket still uses absolute path /peerjs/peerjs, causing mismatch.
-// Without mount point, both HTTP and WebSocket use the same absolute paths.
+// CRITICAL: NO mount point! WebSocket upgrade uses absolute paths on HTTP server
 app.use(peerServer);
 
 // Peer events logging
