@@ -32,6 +32,34 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
   const roomHubId = `vc-room-${roomId}`;
 
+  // Get PeerJS server configuration
+  const getPeerOptions = useCallback((peerId?: string) => {
+    const peerServerHost = window.location.hostname;
+    const peerServerPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+    const peerServerPath = '/peerjs';
+    
+    const options: any = {
+      host: peerServerHost,
+      port: peerServerPort,
+      path: peerServerPath,
+      secure: window.location.protocol === 'https:',
+      debug: 0,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' },
+        ],
+      },
+    };
+
+    if (peerId) {
+      options.id = peerId;
+    }
+
+    return options;
+  }, []);
+
   const updatePeersState = useCallback(() => {
     const peerList = Array.from(peersInfoRef.current.values());
     setPeers(peerList);
@@ -153,16 +181,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         const myPeerId = `vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
         myPeerIdRef.current = myPeerId;
 
-        const peer = new Peer(myPeerId, {
-          debug: 0,
-          config: {
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' },
-              { urls: 'stun:stun1.l.google.com:19302' },
-              { urls: 'stun:stun2.l.google.com:19302' },
-            ],
-          },
-        });
+        const peer = new Peer(myPeerId, getPeerOptions());
         peerRef.current = peer;
 
         peer.on('open', () => {
@@ -329,16 +348,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           
           p.destroy();
           
-          const hubPeer = new Peer(roomHubId, {
-            debug: 0,
-            config: {
-              iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-              ],
-            },
-          });
+          const hubPeer = new Peer(roomHubId, getPeerOptions());
           
           peerRef.current = hubPeer;
           isHostRef.current = true;
@@ -423,15 +433,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
               setConnectionStatus('Переподключение к хосту...');
               // Recreate as client
               hubPeer.destroy();
-              const clientPeer = new Peer(`vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`, {
-                debug: 0,
-                config: {
-                  iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' },
-                  ],
-                },
-              });
+              const clientPeer = new Peer(`vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`, getPeerOptions());
               peerRef.current = clientPeer;
               myPeerIdRef.current = clientPeer.id || '';
               
