@@ -36,13 +36,13 @@ app.get('/api/info', (req, res) => {
 
 // PeerJS signaling server
 // CORRECT CONFIGURATION:
-// - WebSocket upgrade: HTTP server checks pathname === path + '/peerjs'
-// - Express mount: app.use('/peerjs', peerServer) mounts at /peerjs
-// - Client: path: '' → WebSocket: /peerjs
-// - Server: path: '' + mount '/peerjs' → checks '/peerjs' ✓
-const peerServer = ExpressPeerServer(server, {
+// - path: '/peerjs' - полный путь для PeerJS
+// - app.use(peerServer) - без mount point
+// - HTTP: /peerjs/id, /peerjs/peers
+// - WebSocket: /peerjs/peerjs
+const peerServer = ExpressPrivacyServer(server, {
   debug: 2,
-  path: '',
+  path: '/peerjs',
   allow_discovery: true,
   concurrent_limit: 10000,
   config: {
@@ -56,8 +56,8 @@ const peerServer = ExpressPeerServer(server, {
   }
 });
 
-// Mount PeerJS at /peerjs
-app.use('/peerjs', peerServer);
+// Mount PeerJS WITHOUT mount point (important!)
+app.use(peerServer);
 
 // Peer events logging
 peerServer.on('connection', (client) => {
