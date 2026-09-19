@@ -37,41 +37,34 @@ app.get('/peerjs/info', (req, res) => {
   });
 });
 
-// Metered TURN credentials caching
-let cachedIceServers = null;
-let cachedIceServersExpiry = 0;
+// Coturn TURN/STUN configuration (VPS rvxis.site)
+const COTURN_DOMAIN = process.env.COTURN_DOMAIN || 'rvxis.site';
+const COTURN_PORT = process.env.COTURN_PORT || 3478;
+const COTURN_TLS_PORT = process.env.COTURN_TLS_PORT || 5349;
+const COTURN_USER = process.env.COTURN_USER || 'voicechat';
+const COTURN_PASSWORD = process.env.COTURN_PASSWORD || 'VoiceChatSecret2026!';
 
-async function getIceServers() {
-  const now = Date.now();
-  if (cachedIceServers && now < cachedIceServersExpiry) {
-    return cachedIceServers;
-  }
-
-  const fallbackStuns = [
+function getIceServers() {
+  return [
+    // VPS Dedicated STUN
+    { urls: `stun:${COTURN_DOMAIN}:${COTURN_PORT}` },
+    // VPS Dedicated TURN (UDP, TCP, and TURNS over TLS)
+    {
+      urls: [
+        `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=udp`,
+        `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=tcp`,
+        `turns:${COTURN_DOMAIN}:${COTURN_TLS_PORT}?transport=tcp`,
+      ],
+      username: COTURN_USER,
+      credential: COTURN_PASSWORD,
+    },
+    // Public Fallback STUNs
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
   ];
-
-  try {
-    const apiKey = process.env.METERED_API_KEY || '8b6ae7ebb9d50b9b18c93ae356e001dd6b44';
-    const appName = process.env.METERED_APP_NAME || 'rvxis';
-    const res = await fetch(`https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`, {
-      signal: AbortSignal.timeout(6000),
-    });
-    if (res.ok) {
-      const meteredServers = await res.json();
-      cachedIceServers = [...fallbackStuns, ...meteredServers];
-      cachedIceServersExpiry = now + 3600000; // Cache for 1 hour
-      console.log(`[ICE] Successfully fetched ${meteredServers.length} TURN servers from Metered`);
-      return cachedIceServers;
-    }
-  } catch (err) {
-    console.warn('[ICE] Failed to fetch TURN credentials from Metered, using fallback:', err);
-  }
-
-  return fallbackStuns;
 }
 
 app.get('/peerjs/ice-servers', async (req, res) => {

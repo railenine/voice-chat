@@ -41,11 +41,11 @@ async function runTests() {
 
     const ice = await (await fetch(`http://localhost:${TEST_PORT}/peerjs/ice-servers`)).json();
     console.log(`✓ /peerjs/ice-servers: Received ${ice.iceServers.length} ICE servers`);
-    const hasMeteredTurn = ice.iceServers.some(s => 
-      Array.isArray(s.urls) ? s.urls.some(u => u.includes('metered')) : (s.urls && s.urls.includes('metered'))
+    const hasCoturnTurn = ice.iceServers.some(s => 
+      Array.isArray(s.urls) ? s.urls.some(u => u.includes('rvxis.site')) : (s.urls && s.urls.includes('rvxis.site'))
     );
-    console.log('✓ Metered TURN present:', hasMeteredTurn);
-    if (!hasMeteredTurn) throw new Error('Metered TURN credentials missing from /peerjs/ice-servers');
+    console.log('✓ Coturn VPS TURN (rvxis.site) present:', hasCoturnTurn);
+    if (!hasCoturnTurn) throw new Error('Coturn TURN credentials missing from /peerjs/ice-servers');
 
     // 3. Test Multi-User Room (3 Users: Alice, Bob, Charlie)
     console.log('\n--- 2. Testing Multi-User WebSocket Signaling (3 Users) ---');

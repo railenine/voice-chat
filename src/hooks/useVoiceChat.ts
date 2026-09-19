@@ -328,7 +328,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             const iceData = await iceRes.json();
             if (Array.isArray(iceData?.iceServers) && iceData.iceServers.length > 0) {
               iceServersRef.current = iceData.iceServers;
-              console.log(`[ICE] Pre-fetched ${iceData.iceServers.length} ICE servers (Metered TURN ready)`);
+              console.log(`[ICE] Pre-fetched ${iceData.iceServers.length} ICE servers (Coturn TURN ready)`);
             }
           }
         } catch (iceErr) {

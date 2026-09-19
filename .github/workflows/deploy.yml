@@ -43,7 +43,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           port: ${{ secrets.VPS_PORT }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "package.json,package-lock.json,server/"
+          source: "package.json,package-lock.json,server/,scripts/"
           target: "/var/www/voice-chat-backend"
           overwrite: true
 
@@ -57,6 +57,8 @@ jobs:
           script: |
             cd /var/www/voice-chat-backend
             npm install --omit=dev
+            chmod +x scripts/setup-coturn.sh || true
+            bash scripts/setup-coturn.sh || true
             pm2 delete voicechat-server || true
             pm2 start server/index.js --name voicechat-server
             pm2 save
