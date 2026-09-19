@@ -17,6 +17,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
     needsAudioUnlock,
     unlockAudio,
     toggleMute,
+    changeNickname,
   } = useVoiceChat({
     roomId,
     nickname,
@@ -24,6 +25,9 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
 
   const [copied, setCopied] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [myNickname, setMyNickname] = useState(nickname);
+  const [isEditingNick, setIsEditingNick] = useState(false);
+  const [newNickInput, setNewNickInput] = useState(nickname);
 
   const copyRoomId = useCallback(() => {
     const url = `${window.location.origin}?room=${roomId}`;
@@ -180,8 +184,44 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
                   }`}>
                     {isMuted ? '🔇' : isSpeaking ? '🗣️' : '🎤'}
                   </div>
-                  <p className="text-white font-semibold text-xs sm:text-sm truncate">{nickname}</p>
-                  <p className="text-blue-400 text-xs mt-1">Вы</p>
+                  {isEditingNick ? (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const trimmed = newNickInput.trim();
+                        if (trimmed) {
+                          changeNickname(trimmed);
+                          setMyNickname(trimmed);
+                          try {
+                            localStorage.setItem('voice_chat_nickname', trimmed);
+                          } catch (err) {}
+                          setIsEditingNick(false);
+                        }
+                      }}
+                      className="flex items-center gap-1 justify-center mt-1"
+                    >
+                      <input
+                        type="text"
+                        value={newNickInput}
+                        onChange={(e) => setNewNickInput(e.target.value)}
+                        maxLength={24}
+                        autoFocus
+                        className="w-20 sm:w-24 px-1.5 py-0.5 text-xs bg-white/10 border border-blue-400 rounded text-white text-center focus:outline-none"
+                      />
+                      <button type="submit" className="text-xs text-green-400 hover:text-green-300 font-bold">✓</button>
+                      <button type="button" onClick={() => setIsEditingNick(false)} className="text-xs text-red-400 hover:text-red-300 font-bold">✕</button>
+                    </form>
+                  ) : (
+                    <div
+                      onClick={() => setIsEditingNick(true)}
+                      className="group cursor-pointer flex items-center justify-center gap-1 mt-1 hover:text-blue-300 transition-colors"
+                      title="Нажмите, чтобы изменить никнейм"
+                    >
+                      <p className="text-white font-semibold text-xs sm:text-sm truncate max-w-[110px]">{myNickname}</p>
+                      <span className="text-[11px] text-gray-400 opacity-60 group-hover:opacity-100">✏️</span>
+                    </div>
+                  )}
+                  <p className="text-blue-400 text-xs mt-0.5">Вы</p>
                   {isMuted && (
                     <div className="absolute top-2 right-2">
                       <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30">Muted</span>

@@ -63,6 +63,7 @@ function App() {
     return (
       <LobbyScreen
         nickname={nickname}
+        setNickname={setNickname}
         mode={mode}
         setMode={setMode}
         joinRoomId={joinRoomId}

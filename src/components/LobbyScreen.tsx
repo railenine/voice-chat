@@ -2,6 +2,7 @@ import React from 'react';
 
 interface LobbyScreenProps {
   nickname: string;
+  setNickname: (nick: string) => void;
   mode: 'create' | 'join';
   setMode: (mode: 'create' | 'join') => void;
   joinRoomId: string;
@@ -12,6 +13,7 @@ interface LobbyScreenProps {
 
 export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   nickname,
+  setNickname,
   mode,
   setMode,
   joinRoomId,
@@ -47,21 +49,38 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
           <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-5 sm:p-6 mb-5 sm:mb-6 border border-white/10 animate-bounce-in">
             <div className="text-center">
               <p className="text-gray-400 text-xs sm:text-sm mb-2">Ваш никнейм</p>
-              <p className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-blue-600">
-                {nickname}
-              </p>
-              <button
-                onClick={() => {
-                  const newNick = `${['Быстрый', 'Тихий', 'Мудрый', 'Смелый', 'Весёлый', 'Добрый', 'Храбрый', 'Ловкий', 'Грозный', 'Спокойный', 'Яркий', 'Тёмный', 'Золотой', 'Серебряный', 'Огненный'][Math.floor(Math.random() * 15)]}${['Волк', 'Тигр', 'Орёл', 'Дракон', 'Феникс', 'Лев', 'Медведь', 'Ястреб', 'Пантера', 'Лис', 'Кот', 'Пёс', 'Сова', 'Дельфин', 'Кит'][Math.floor(Math.random() * 15)]}${Math.floor(Math.random() * 100)}`;
-                  try {
-                    sessionStorage.setItem('voicechat-nickname', newNick);
-                  } catch {}
-                  window.location.reload();
-                }}
-                className="mt-2 text-xs text-gray-500 hover:text-blue-400 transition-colors"
-              >
-                🔄 Сменить никнейм
-              </button>
+              <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={(e) => {
+                    const val = e.target.value.substring(0, 24);
+                    setNickname(val);
+                    try {
+                      sessionStorage.setItem('voicechat-nickname', val);
+                    } catch {}
+                  }}
+                  placeholder="Введите никнейм"
+                  maxLength={24}
+                  className="w-full py-2 px-3 bg-white/10 border border-white/20 rounded-xl text-center text-white font-bold text-lg sm:text-xl focus:outline-none focus:border-blue-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const adjectives = ['Быстрый', 'Тихий', 'Мудрый', 'Смелый', 'Весёлый', 'Добрый', 'Храбрый', 'Ловкий', 'Грозный', 'Спокойный', 'Яркий', 'Тёмный', 'Золотой', 'Серебряный', 'Огненный'];
+                    const animals = ['Волк', 'Тигр', 'Орёл', 'Дракон', 'Феникс', 'Лев', 'Медведь', 'Ястреб', 'Пантера', 'Лис', 'Кот', 'Пёс', 'Сова', 'Дельфин', 'Кит'];
+                    const newNick = `${adjectives[Math.floor(Math.random() * adjectives.length)]}${animals[Math.floor(Math.random() * animals.length)]}${Math.floor(Math.random() * 100)}`;
+                    setNickname(newNick);
+                    try {
+                      sessionStorage.setItem('voicechat-nickname', newNick);
+                    } catch {}
+                  }}
+                  className="p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all border border-white/10 flex-shrink-0"
+                  title="Случайный никнейм"
+                >
+                  🎲
+                </button>
+              </div>
             </div>
           </div>
 

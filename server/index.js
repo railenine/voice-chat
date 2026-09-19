@@ -1,10 +1,10 @@
 import express from 'express';
-import { ExpressPeerServer } from 'peer';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs';
+import { WebSocketServer, WebSocket } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,134 +17,286 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-// Health check endpoint
+// Health & Info endpoints
 app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'voicechat-server'
+    service: 'voicechat-server',
+    version: '2.0.0'
   });
 });
 
-// API info endpoint
-app.get('/api/info', (req, res) => {
+app.get('/peerjs/info', (req, res) => {
   res.json({
     name: 'VoiceChat Server',
-    version: '1.0.0',
-    peerServer: '/peerjs',
+    version: '2.0.0',
+    signaling: 'websocket',
+    path: '/peerjs/ws',
     status: 'running'
   });
 });
 
-// In-memory room registry
-// roomId -> Map<peerId, { peerId, nickname, lastSeen: number }>
+// In-memory room manager
+// roomId -> Map<peerId, { ws: WebSocket, peerId: string, nickname: string, isMuted: boolean, isSpeaking: boolean }>
 const rooms = new Map();
+// ws -> { roomId: string, peerId: string }
+const clientMeta = new Map();
 
-function getActiveRoomPeers(roomId) {
-  const room = rooms.get(roomId);
-  if (!room) return [];
-  const now = Date.now();
-  const activePeers = [];
-  for (const [peerId, peer] of room.entries()) {
-    if (now - peer.lastSeen > 15000) {
-      room.delete(peerId);
-    } else {
-      activePeers.push({ peerId: peer.peerId, nickname: peer.nickname });
-    }
-  }
-  if (room.size === 0) {
-    rooms.delete(roomId);
-  }
-  return activePeers;
-}
-
-// Room endpoints (under /peerjs/rooms to ensure Nginx proxies them to Node)
-app.post('/peerjs/rooms/:roomId/join', (req, res) => {
-  const { roomId } = req.params;
-  const { peerId, nickname } = req.body;
-  if (!peerId) {
-    return res.status(400).json({ error: 'peerId is required' });
-  }
-
+function getRoom(roomId) {
   if (!rooms.has(roomId)) {
     rooms.set(roomId, new Map());
   }
+  return rooms.get(roomId);
+}
 
+function broadcastToRoom(roomId, message, excludePeerId = null) {
   const room = rooms.get(roomId);
-  room.set(peerId, {
-    peerId,
-    nickname: nickname || 'Аноним',
-    lastSeen: Date.now()
-  });
+  if (!room) return;
 
-  const peers = getActiveRoomPeers(roomId).filter(p => p.peerId !== peerId);
-  console.log(`[Rooms] Peer ${peerId} (${nickname}) joined room ${roomId}. Active peers: ${peers.length}`);
-  res.json({ peers });
-});
-
-app.post('/peerjs/rooms/:roomId/heartbeat', (req, res) => {
-  const { roomId } = req.params;
-  const { peerId } = req.body;
-  const room = rooms.get(roomId);
-  if (room && peerId && room.has(peerId)) {
-    room.get(peerId).lastSeen = Date.now();
-  }
-  const peers = getActiveRoomPeers(roomId).filter(p => p.peerId !== peerId);
-  res.json({ peers });
-});
-
-app.post('/peerjs/rooms/:roomId/leave', (req, res) => {
-  const { roomId } = req.params;
-  const { peerId } = req.body;
-  const room = rooms.get(roomId);
-  if (room && peerId) {
-    room.delete(peerId);
-    if (room.size === 0) rooms.delete(roomId);
-    console.log(`[Rooms] Peer ${peerId} left room ${roomId}`);
-  }
-  res.json({ status: 'ok' });
-});
-
-// PeerJS signaling server
-// CORRECT CONFIGURATION:
-// - path: '/peerjs' - полный путь для PeerJS
-// - app.use(peerServer) - без mount point
-// - HTTP: /peerjs/id, /peerjs/peers
-// - WebSocket: /peerjs/peerjs
-const peerServer = ExpressPeerServer(server, {
-  debug: 2,
-  path: '/peerjs',
-  allow_discovery: true,
-  concurrent_limit: 10000,
-  config: {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun.cloudflare.com:3478' },
-      { urls: 'stun:global.stun.twilio.com:3478' },
-    ]
-  }
-});
-
-// Mount PeerJS WITHOUT mount point (important!)
-app.use(peerServer);
-
-// Peer events logging
-peerServer.on('connection', (client) => {
-  console.log(`[PeerJS] Client connected: ${client.getId()}`);
-});
-
-peerServer.on('disconnect', (client) => {
-  const peerId = client.getId();
-  console.log(`[PeerJS] Client disconnected: ${peerId}`);
-  for (const [roomId, room] of rooms.entries()) {
-    if (room.has(peerId)) {
-      room.delete(peerId);
-      if (room.size === 0) rooms.delete(roomId);
-      console.log(`[Rooms] Cleaned up disconnected peer ${peerId} from room ${roomId}`);
+  const data = typeof message === 'string' ? message : JSON.stringify(message);
+  for (const [peerId, client] of room.entries()) {
+    if (peerId !== excludePeerId && client.ws.readyState === WebSocket.OPEN) {
+      try {
+        client.ws.send(data);
+      } catch (err) {
+        console.warn(`[WS] Failed to send message to ${peerId}:`, err);
+      }
     }
   }
+}
+
+function removeClientFromRoom(ws) {
+  const meta = clientMeta.get(ws);
+  if (!meta) return;
+
+  const { roomId, peerId } = meta;
+  clientMeta.delete(ws);
+
+  const room = rooms.get(roomId);
+  if (room && room.has(peerId)) {
+    room.delete(peerId);
+    console.log(`[Room ${roomId}] Peer ${peerId} left. Remaining: ${room.size}`);
+
+    broadcastToRoom(roomId, {
+      type: 'user-left',
+      peerId
+    });
+
+    if (room.size === 0) {
+      rooms.delete(roomId);
+      console.log(`[Room ${roomId}] Room closed (empty)`);
+    }
+  }
+}
+
+// WebSocket Server attached to HTTP server
+const wss = new WebSocketServer({ noServer: true });
+
+// Handle upgrade for paths starting with /peerjs
+server.on('upgrade', (request, socket, head) => {
+  const pathname = request.url ? new URL(request.url, 'http://localhost').pathname : '';
+  
+  // Accept both /peerjs/ws and /peerjs (and any subpath like /peerjs/peerjs for compatibility)
+  if (pathname.startsWith('/peerjs')) {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+wss.on('connection', (ws) => {
+  console.log('[WS] Client connected');
+
+  // Keep-alive ping
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
+
+  ws.on('message', (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch (e) {
+      console.warn('[WS] Invalid JSON received:', raw.toString());
+      return;
+    }
+
+    const { type } = msg;
+
+    if (type === 'join') {
+      const { roomId, peerId, nickname } = msg;
+      if (!roomId || !peerId) {
+        ws.send(JSON.stringify({ type: 'error', message: 'roomId and peerId are required' }));
+        return;
+      }
+
+      // Cleanup any previous room for this socket
+      removeClientFromRoom(ws);
+
+      clientMeta.set(ws, { roomId, peerId });
+      const room = getRoom(roomId);
+
+      // Existing peers list (excluding self)
+      const existingPeers = [];
+      for (const [existingId, client] of room.entries()) {
+        existingPeers.push({
+          peerId: existingId,
+          nickname: client.nickname,
+          isMuted: client.isMuted,
+          isSpeaking: client.isSpeaking,
+        });
+      }
+
+      // Add client to room
+      room.set(peerId, {
+        ws,
+        peerId,
+        nickname: nickname || 'Аноним',
+        isMuted: false,
+        isSpeaking: false,
+      });
+
+      console.log(`[Room ${roomId}] Peer ${peerId} (${nickname}) joined. Total peers: ${room.size}`);
+
+      // Send existing peers to joining client
+      ws.send(JSON.stringify({
+        type: 'room-state',
+        peers: existingPeers,
+      }));
+
+      // Broadcast user-joined to all other peers in the room
+      broadcastToRoom(roomId, {
+        type: 'user-joined',
+        peer: {
+          peerId,
+          nickname: nickname || 'Аноним',
+          isMuted: false,
+          isSpeaking: false,
+        },
+      }, peerId);
+
+      return;
+    }
+
+    // WebRTC Signaling forwarding (offer, answer, candidate)
+    if (type === 'signal') {
+      const { to, data } = msg;
+      const meta = clientMeta.get(ws);
+      if (!meta || !to || !data) return;
+
+      const room = rooms.get(meta.roomId);
+      if (room && room.has(to)) {
+        const targetClient = room.get(to);
+        if (targetClient.ws.readyState === WebSocket.OPEN) {
+          targetClient.ws.send(JSON.stringify({
+            type: 'signal',
+            from: meta.peerId,
+            data,
+          }));
+        }
+      }
+      return;
+    }
+
+    // Update nickname in room
+    if (type === 'update-nickname') {
+      const meta = clientMeta.get(ws);
+      if (!meta) return;
+
+      const { nickname } = msg;
+      if (!nickname || typeof nickname !== 'string') return;
+
+      const room = rooms.get(meta.roomId);
+      if (room && room.has(meta.peerId)) {
+        const client = room.get(meta.peerId);
+        client.nickname = nickname.trim().substring(0, 32) || 'Аноним';
+
+        console.log(`[Room ${meta.roomId}] Peer ${meta.peerId} changed nickname to: ${client.nickname}`);
+
+        broadcastToRoom(meta.roomId, {
+          type: 'user-updated',
+          peerId: meta.peerId,
+          nickname: client.nickname,
+        });
+      }
+      return;
+    }
+
+    // Update mute status
+    if (type === 'update-mute') {
+      const meta = clientMeta.get(ws);
+      if (!meta) return;
+
+      const { isMuted } = msg;
+      const room = rooms.get(meta.roomId);
+      if (room && room.has(meta.peerId)) {
+        const client = room.get(meta.peerId);
+        client.isMuted = Boolean(isMuted);
+
+        broadcastToRoom(meta.roomId, {
+          type: 'user-muted',
+          peerId: meta.peerId,
+          isMuted: client.isMuted,
+        }, meta.peerId);
+      }
+      return;
+    }
+
+    // Speaking activity (VAD)
+    if (type === 'speaking') {
+      const meta = clientMeta.get(ws);
+      if (!meta) return;
+
+      const { isSpeaking } = msg;
+      const room = rooms.get(meta.roomId);
+      if (room && room.has(meta.peerId)) {
+        const client = room.get(meta.peerId);
+        client.isSpeaking = Boolean(isSpeaking);
+
+        broadcastToRoom(meta.roomId, {
+          type: 'user-speaking',
+          peerId: meta.peerId,
+          isSpeaking: client.isSpeaking,
+        }, meta.peerId);
+      }
+      return;
+    }
+
+    // Explicit leave
+    if (type === 'leave') {
+      removeClientFromRoom(ws);
+      return;
+    }
+  });
+
+  ws.on('close', () => {
+    removeClientFromRoom(ws);
+  });
+
+  ws.on('error', (err) => {
+    console.warn('[WS] Socket error:', err);
+    removeClientFromRoom(ws);
+  });
+});
+
+// Periodic ping interval (every 30s) to keep connections alive through proxies
+const pingInterval = setInterval(() => {
+  wss.clients.forEach((ws) => {
+    if (ws.isAlive === false) {
+      removeClientFromRoom(ws);
+      return ws.terminate();
+    }
+    ws.isAlive = false;
+    ws.ping();
+  });
+}, 30000);
+
+wss.on('close', () => {
+  clearInterval(pingInterval);
 });
 
 // Serve static files from dist if available
@@ -165,13 +317,13 @@ server.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   🎤 VoiceChat Server is running!                        ║
+║   🎤 VoiceChat Server 2.0 (Pure WebRTC + WS)             ║
 ║                                                           ║
-║   📡 PeerJS Signaling: ws://localhost:${PORT}/peerjs        ║
-║   🌐 Web App:          http://localhost:${PORT}              ║
-║   ❤️  Health Check:     http://localhost:${PORT}/health       ║
+║   📡 WebSocket Signaling: ws://localhost:${PORT}/peerjs/ws   ║
+║   🌐 Web App:             http://localhost:${PORT}           ║
+║   ❤️  Health Check:        http://localhost:${PORT}/health    ║
 ║                                                           ║
-║   Press Ctrl+C to stop                                   ║
+║   Press Ctrl+C to stop                                    ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
   `);
@@ -180,6 +332,7 @@ server.listen(PORT, () => {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('SIGTERM received. Shutting down gracefully...');
+  clearInterval(pingInterval);
   server.close(() => {
     console.log('Server closed');
     process.exit(0);
@@ -188,6 +341,7 @@ process.on('SIGTERM', () => {
 
 process.on('SIGINT', () => {
   console.log('SIGINT received. Shutting down gracefully...');
+  clearInterval(pingInterval);
   server.close(() => {
     console.log('Server closed');
     process.exit(0);
