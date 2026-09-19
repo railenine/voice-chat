@@ -53,7 +53,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
               <button
                 onClick={() => {
                   const newNick = `${['Быстрый', 'Тихий', 'Мудрый', 'Смелый', 'Весёлый', 'Добрый', 'Храбрый', 'Ловкий', 'Грозный', 'Спокойный', 'Яркий', 'Тёмный', 'Золотой', 'Серебряный', 'Огненный'][Math.floor(Math.random() * 15)]}${['Волк', 'Тигр', 'Орёл', 'Дракон', 'Феникс', 'Лев', 'Медведь', 'Ястреб', 'Пантера', 'Лис', 'Кот', 'Пёс', 'Сова', 'Дельфин', 'Кит'][Math.floor(Math.random() * 15)]}${Math.floor(Math.random() * 100)}`;
-                  sessionStorage.setItem('voicechat-nickname', newNick);
+                  try {
+                    sessionStorage.setItem('voicechat-nickname', newNick);
+                  } catch {}
                   window.location.reload();
                 }}
                 className="mt-2 text-xs text-gray-500 hover:text-blue-400 transition-colors"

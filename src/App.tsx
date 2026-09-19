@@ -3,31 +3,45 @@ import { generateNickname, generateRoomId } from './utils/nicknames';
 import { LobbyScreen } from './components/LobbyScreen';
 import { VoiceChatScreen } from './components/VoiceChatScreen';
 
+const safeStorage = {
+  getItem: (key: string): string | null => {
+    try {
+      return sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (key: string, val: string): void => {
+    try {
+      sessionStorage.setItem(key, val);
+    } catch {}
+  },
+};
+
 function App() {
-  const [nickname, setNickname] = useState<string>('');
+  const [nickname, setNickname] = useState<string>(() => {
+    const saved = safeStorage.getItem('voicechat-nickname');
+    if (saved) return saved;
+    const newNick = generateNickname();
+    safeStorage.setItem('voicechat-nickname', newNick);
+    return newNick;
+  });
   const [roomId, setRoomId] = useState<string>('');
   const [joined, setJoined] = useState(false);
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [joinRoomId, setJoinRoomId] = useState('');
 
   useEffect(() => {
-    const saved = sessionStorage.getItem('voicechat-nickname');
-    if (saved) {
-      setNickname(saved);
-    } else {
-      const newNick = generateNickname();
-      setNickname(newNick);
-      sessionStorage.setItem('voicechat-nickname', newNick);
-    }
-
     // Check URL for room ID
-    const params = new URLSearchParams(window.location.search);
-    const urlRoom = params.get('room');
-    if (urlRoom) {
-      setRoomId(urlRoom);
-      setMode('join');
-      setJoinRoomId(urlRoom);
-    }
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlRoom = params.get('room');
+      if (urlRoom) {
+        setRoomId(urlRoom);
+        setMode('join');
+        setJoinRoomId(urlRoom);
+      }
+    } catch {}
   }, []);
 
   const handleCreateRoom = useCallback(() => {

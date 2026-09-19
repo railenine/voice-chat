@@ -39,6 +39,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const isSpeakingRef = useRef(false);
   const speechHangoverRef = useRef<number>(0);
   const remoteAnalysersRef = useRef<Map<string, { analyser: AnalyserNode; dataArray: any; hangover: number }>>(new Map());
+  const remoteHangoverRef = useRef<Map<string, number>>(new Map());
+  const peerJoinTimesRef = useRef<Map<string, number>>(new Map());
 
   // Deterministic caller rule to prevent call collisions (glare) in P2P mesh
   const shouldInitiateCall = useCallback((myId: string, remoteId: string): boolean => {
@@ -76,23 +78,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     const defaultIceServers = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun.cloudflare.com:3478' },
-      { urls: 'stun:openrelay.metered.ca:80' },
-      {
-        urls: 'turn:openrelay.metered.ca:80',
-        username: 'openrelayproject',
-        credential: 'openrelayproject',
-      },
-      {
-        urls: 'turn:openrelay.metered.ca:443',
-        username: 'openrelayproject',
-        credential: 'openrelayproject',
-      },
-      {
-        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-        username: 'openrelayproject',
-        credential: 'openrelayproject',
-      },
+      { urls: 'stun:global.stun.twilio.com:3478' },
     ];
     
     // For dev mode (Vite), use public PeerJS server
@@ -130,10 +118,17 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     setPeers([...peerList]);
   }, []);
 
-  const cleanupPeerCall = useCallback((peerId: string) => {
-    const call = callsRef.current.get(peerId);
-    if (call) {
-      call.close();
+  const cleanupPeerCall = useCallback((peerId: string, closingCall?: MediaConnection) => {
+    const currentCall = callsRef.current.get(peerId);
+    if (closingCall && currentCall && currentCall !== closingCall) {
+      console.log(`[Call] Ignoring close for superseded call with ${peerId}`);
+      return;
+    }
+
+    if (currentCall) {
+      try {
+        currentCall.close();
+      } catch (e) {}
       callsRef.current.delete(peerId);
     }
 
@@ -145,6 +140,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     }
 
     remoteAnalysersRef.current.delete(peerId);
+    remoteHangoverRef.current.delete(peerId);
   }, []);
 
   const cleanupPeer = useCallback((peerId: string) => {
@@ -156,6 +152,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       dataConnsRef.current.delete(peerId);
     }
 
+    peerJoinTimesRef.current.delete(peerId);
     peersInfoRef.current.delete(peerId);
     updatePeersState();
   }, [cleanupPeerCall, updatePeersState]);
@@ -170,6 +167,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       (audio as any).webkitPlaysInline = true;
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
+      audio.muted = false;
+      audio.volume = 1.0;
+      audio.style.display = 'none';
       document.body.appendChild(audio);
       audioElementsRef.current.set(peerId, audio);
     }
@@ -178,7 +178,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       audio.srcObject = stream;
     }
 
-    // Attach Web Audio API analyser to remote stream for receiver-side VAD (green ring)
+    // Attach Web Audio API analyser to remote stream for receiver-side VAD (green ring fallback)
     const attachReceiverAnalyser = () => {
       try {
         if (audioContextRef.current && !remoteAnalysersRef.current.has(peerId)) {
@@ -241,11 +241,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
     call.on('close', () => {
       console.log(`[Call] Outgoing call closed with: ${remotePeerId}`);
-      cleanupPeerCall(remotePeerId);
+      cleanupPeerCall(remotePeerId, call);
     });
     call.on('error', (err) => {
       console.warn(`[Call] Outgoing call error with ${remotePeerId}:`, err);
-      cleanupPeerCall(remotePeerId);
+      cleanupPeerCall(remotePeerId, call);
     });
   }, [handleRemoteStream, cleanupPeerCall]);
 
@@ -287,6 +287,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         if (info) {
           info.isSpeaking = data.isSpeaking;
           peersInfoRef.current.set(conn.peer, info);
+          if (data.isSpeaking) {
+            remoteHangoverRef.current.set(conn.peer, Date.now() + 400);
+          }
           updatePeersState();
         }
       }
@@ -349,6 +352,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
           if (AudioContextClass) {
             const audioContext = new AudioContextClass();
+            if (audioContext.state === 'suspended') {
+              audioContext.resume().catch(() => {});
+            }
             const analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
             analyser.smoothingTimeConstant = 0.3;
@@ -363,6 +369,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             vadIntervalRef.current = setInterval(() => {
               const now = Date.now();
               let stateChanged = false;
+
+              // Ensure AudioContext is active if browser suspended it
+              if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+                audioContextRef.current.resume().catch(() => {});
+              }
 
               // 1. Local mic VAD
               if (analyserRef.current && streamRef.current) {
@@ -381,8 +392,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                   }
                   const average = sum / dataArray.length;
 
-                  // Speech threshold: average > 10 (out of 255)
-                  if (average > 10) {
+                  // Speech threshold: average > 6 (out of 255)
+                  if (average > 6) {
                     speechHangoverRef.current = now + 400;
                     if (!isSpeakingRef.current) {
                       isSpeakingRef.current = true;
@@ -398,25 +409,66 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
               }
 
               // 2. Remote streams VAD (receiver-side volume detection for green avatars)
-              remoteAnalysersRef.current.forEach((remoteVad, remotePeerId) => {
+              // First checks RTCRtpReceiver.getSynchronizationSources() (native WebRTC, 100% reliable in Chromium)
+              // Then falls back to remoteAnalyser (Web Audio API)
+              callsRef.current.forEach((call, remotePeerId) => {
                 const peerInfo = peersInfoRef.current.get(remotePeerId);
                 if (!peerInfo) return;
 
-                remoteVad.analyser.getByteFrequencyData(remoteVad.dataArray);
-                let sum = 0;
-                for (let i = 0; i < remoteVad.dataArray.length; i++) {
-                  sum += remoteVad.dataArray[i];
-                }
-                const avg = sum / remoteVad.dataArray.length;
+                let remoteIsSpeaking = false;
 
-                if (avg > 10) {
-                  remoteVad.hangover = now + 400;
+                // A. Native WebRTC receiver synchronization sources (RFC 6464 audio level)
+                try {
+                  const pc: any = call.peerConnection;
+                  if (pc && typeof pc.getReceivers === 'function') {
+                    const receivers = pc.getReceivers();
+                    for (const receiver of receivers) {
+                      if (receiver.track && receiver.track.kind === 'audio' && typeof receiver.getSynchronizationSources === 'function') {
+                        const syncSources = receiver.getSynchronizationSources();
+                        for (const src of syncSources) {
+                          if (typeof src.audioLevel === 'number' && src.audioLevel > 0.01) {
+                            remoteIsSpeaking = true;
+                            break;
+                          }
+                          if (src.voiceActivityFlag === true) {
+                            remoteIsSpeaking = true;
+                            break;
+                          }
+                        }
+                      }
+                      if (remoteIsSpeaking) break;
+                    }
+                  }
+                } catch (e) {
+                  // Ignore
+                }
+
+                // B. Web Audio API analyser fallback
+                if (!remoteIsSpeaking) {
+                  const remoteVad = remoteAnalysersRef.current.get(remotePeerId);
+                  if (remoteVad) {
+                    remoteVad.analyser.getByteFrequencyData(remoteVad.dataArray);
+                    let sum = 0;
+                    for (let i = 0; i < remoteVad.dataArray.length; i++) {
+                      sum += remoteVad.dataArray[i];
+                    }
+                    const avg = sum / remoteVad.dataArray.length;
+                    if (avg > 6) {
+                      remoteIsSpeaking = true;
+                    }
+                  }
+                }
+
+                let remoteHangover = remoteHangoverRef.current.get(remotePeerId) || 0;
+                if (remoteIsSpeaking) {
+                  remoteHangover = now + 400;
+                  remoteHangoverRef.current.set(remotePeerId, remoteHangover);
                   if (!peerInfo.isSpeaking) {
                     peerInfo.isSpeaking = true;
                     peersInfoRef.current.set(remotePeerId, peerInfo);
                     stateChanged = true;
                   }
-                } else if (peerInfo.isSpeaking && now > remoteVad.hangover) {
+                } else if (peerInfo.isSpeaking && now > remoteHangover) {
                   peerInfo.isSpeaking = false;
                   peersInfoRef.current.set(remotePeerId, peerInfo);
                   stateChanged = true;
@@ -468,11 +520,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
           call.on('close', () => {
             console.log(`[Call] Incoming call closed with: ${call.peer}`);
-            cleanupPeerCall(call.peer);
+            cleanupPeerCall(call.peer, call);
           });
           call.on('error', (err) => {
             console.warn(`[Call] Incoming call error with ${call.peer}:`, err);
-            cleanupPeerCall(call.peer);
+            cleanupPeerCall(call.peer, call);
           });
         });
 
@@ -496,9 +548,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
               conn.send({ type: 'info', nickname, peerId: myPeerIdRef.current });
             } catch (e) {}
 
-            // If we don't have an active call with them yet, initiate call
-            if (!callsRef.current.has(conn.peer)) {
-              console.log(`[Call] Connected to ${conn.peer} without call -> initiating call`);
+            // Deterministic caller rule: only initiate call if myId < remoteId
+            if (!callsRef.current.has(conn.peer) && shouldInitiateCall(myPeerIdRef.current, conn.peer)) {
+              console.log(`[Call] Initiating call to ${conn.peer} (deterministic caller rule)`);
               callPeer(conn.peer);
             }
           };
@@ -523,6 +575,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
               if (info) {
                 info.isSpeaking = data.isSpeaking;
                 peersInfoRef.current.set(conn.peer, info);
+                if (data.isSpeaking) {
+                  remoteHangoverRef.current.set(conn.peer, Date.now() + 400);
+                }
                 updatePeersState();
               }
             }
@@ -602,9 +657,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                     isMuted: false,
                     isSpeaking: false,
                   });
+                  peerJoinTimesRef.current.set(p.peerId, Date.now());
                   connectDataToPeer(p.peerId);
-                  // New entrant initiates call immediately to all existing peers (0 ms delay)
-                  callPeer(p.peerId);
+                  // Deterministic call: only if assignedId < p.peerId
+                  if (shouldInitiateCall(assignedId, p.peerId)) {
+                    callPeer(p.peerId);
+                  }
                 }
               });
               updatePeersState();
@@ -633,13 +691,18 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                           isMuted: false,
                           isSpeaking: false,
                         });
+                        peerJoinTimesRef.current.set(p.peerId, Date.now());
                         updatePeersState();
                       }
                       if (!dataConnsRef.current.has(p.peerId)) {
                         connectDataToPeer(p.peerId);
                       }
                       if (!callsRef.current.has(p.peerId)) {
-                        callPeer(p.peerId);
+                        const joinTime = peerJoinTimesRef.current.get(p.peerId) || Date.now();
+                        // Call if designated initiator or fallback after 6s
+                        if (shouldInitiateCall(myPeerIdRef.current, p.peerId) || (Date.now() - joinTime > 6000)) {
+                          callPeer(p.peerId);
+                        }
                       }
                     }
                   });
@@ -755,6 +818,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       dataConnsRef.current.clear();
       peersInfoRef.current.clear();
       remoteAnalysersRef.current.clear();
+      remoteHangoverRef.current.clear();
+      peerJoinTimesRef.current.clear();
     };
   }, [roomId, nickname, shouldInitiateCall, unlockAudio, callPeer, connectDataToPeer, cleanupPeer, cleanupPeerCall, handleRemoteStream, updatePeersState, broadcastSpeakingStatus, getPeerOptions]);
 
