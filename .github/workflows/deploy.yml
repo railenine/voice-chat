@@ -3,7 +3,7 @@ name: Deploy to VPS
 on:
   push:
     branches:
-      - main # Если ваша основная ветка называется master, замените на master
+      - main
 
 jobs:
   deploy:
@@ -21,10 +21,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build project
+      - name: Build frontend
         run: npm run build
 
-      - name: Deploy to VPS via SSH
+      - name: Deploy Frontend to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -33,5 +33,31 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "dist/"
           target: ${{ secrets.TARGET_DIR }}
-          strip_components: 1 # Помещает содержимое папки dist прямо в TARGET_DIR
-          rm: true # Очищает старые файлы перед загрузкой новых для чистоты
+          strip_components: 1
+          rm: true
+
+      - name: Deploy Backend to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "server/"
+          target: "/var/www/voice-chat-backend"
+          strip_components: 1
+          rm: true
+
+      - name: Restart Backend via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          port: ${{ secrets.VPS_PORT }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /var/www/voice-chat-backend
+            npm install --production
+            pm2 delete voicechat-server || true
+            pm2 start server/index.js --name voicechat-server
+            pm2 save
