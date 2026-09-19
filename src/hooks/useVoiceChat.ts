@@ -35,7 +35,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   // Get PeerJS server configuration
   const getPeerOptions = useCallback((): any => {
     const peerServerHost = window.location.hostname;
-    const peerServerPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+    const peerServerPort = window.location.port;
     
     // For dev mode (Vite), use public PeerJS server
     const isDev = peerServerPort === '5173' || peerServerPort === '5174';
@@ -57,9 +57,19 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     // PeerJS client appends '/peerjs' to the path automatically
     // Server: path: '/peerjs' + app.use(peerServer) [NO mount point!]
     // Client: path: '/peerjs' → HTTP: /peerjs/id, WebSocket: /peerjs/peerjs ✓
+    
+    // Determine port number
+    let port: number;
+    if (peerServerPort) {
+      port = parseInt(peerServerPort, 10);
+    } else {
+      // Default ports based on protocol
+      port = window.location.protocol === 'https:' ? 443 : 80;
+    }
+    
     return {
       host: peerServerHost,
-      port: parseInt(peerServerPort, 10),
+      port: port,
       path: '/peerjs',
       secure: window.location.protocol === 'https:',
       debug: 0,
@@ -262,9 +272,21 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           p.on('error', (err) => {
             console.error('Peer error:', err);
             if (err.type === 'peer-unavailable') {
-              // Peer not found, ok
+              // Peer not found, ok - will retry or become hub
+            } else if (err.type === 'unavailable-id') {
+              // ID already taken - someone else is hub, reconnect as client
+              if (!isHostRef.current) {
+                setConnectionStatus('Переподключение к хосту...');
+                // Will be handled by hub connection timeout
+              }
             } else if (err.type === 'network' || err.type === 'server-error') {
               setError('Ошибка подключения к серверу. Попробуйте обновить страницу.');
+            } else if (err.type === 'ssl-unavailable') {
+              setError('HTTPS требуется для работы голосового чата.');
+            } else if (err.type === 'browser-incompatible') {
+              setError('Ваш браузер не поддерживает WebRTC.');
+            } else if (err.type === 'invalid-id') {
+              setError('Неверный ID пользователя.');
             }
           });
 
@@ -505,25 +527,58 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             }
           });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Init error:', err);
-        setError('Не удалось получить доступ к микрофону. Разрешите доступ в настройках браузера.');
+        
+        // Handle different error types
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          setError('Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.');
+        } else if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+          setError('Микрофон не найден. Подключите микрофон и попробуйте снова.');
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          setError('Не удалось получить доступ к микрофону. Возможно, он используется другим приложением.');
+        } else if (err.name === 'OverconstrainedError') {
+          setError('Микрофон не поддерживает необходимые параметры.');
+        } else {
+          setError('Не удалось получить доступ к микрофону. Проверьте настройки браузера.');
+        }
       }
     };
 
     init();
 
     return () => {
+      // Cleanup audio stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
+      
+      // Cleanup peer connection
       if (peerRef.current) {
-        peerRef.current.destroy();
+        try {
+          peerRef.current.destroy();
+        } catch (e) {
+          // Ignore destroy errors
+        }
+        peerRef.current = null;
       }
+      
+      // Cleanup all audio elements
       audioElementsRef.current.forEach((audio) => {
-        audio.srcObject = null;
-        audio.remove();
+        try {
+          audio.srcObject = null;
+          audio.remove();
+        } catch (e) {
+          // Ignore removal errors
+        }
       });
+      audioElementsRef.current.clear();
+      
+      // Cleanup refs
+      callsRef.current.clear();
+      dataConnsRef.current.clear();
+      peersInfoRef.current.clear();
     };
   }, [roomId, nickname]); // eslint-disable-line react-hooks/exhaustive-deps
 
