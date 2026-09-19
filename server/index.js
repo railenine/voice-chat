@@ -37,7 +37,7 @@ app.get('/api/info', (req, res) => {
 // PeerJS signaling server
 const peerServer = ExpressPeerServer(server, {
   debug: 1,
-  path: '/peerjs',
+  path: '/',
   allow_discovery: true,
   concurrent_limit: 10000,
   config: {
@@ -50,6 +50,9 @@ const peerServer = ExpressPeerServer(server, {
     ]
   }
 });
+
+// Add PeerJS middleware to Express app
+app.use('/peerjs', peerServer);
 
 // Peer events logging
 peerServer.on('connection', (client) => {

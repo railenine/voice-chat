@@ -18,7 +18,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('Подключение...');
-  const [isHost, setIsHost] = useState(false);
 
   const peerRef = useRef<Peer | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -29,18 +28,35 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const myPeerIdRef = useRef<string>('');
   const isHostRef = useRef(false);
   const hostConnRef = useRef<DataConnection | null>(null);
+  const initDoneRef = useRef(false);
 
   const roomHubId = `vc-room-${roomId}`;
 
   // Get PeerJS server configuration
-  const getPeerOptions = useCallback((peerId?: string) => {
+  const getPeerOptions = useCallback((): any => {
     const peerServerHost = window.location.hostname;
     const peerServerPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
     const peerServerPath = '/peerjs';
     
-    const options: any = {
+    // For dev mode (Vite), use public PeerJS server
+    const isDev = peerServerPort === '5173' || peerServerPort === '5174';
+    
+    if (isDev && (peerServerHost === 'localhost' || peerServerHost === '127.0.0.1')) {
+      return {
+        debug: 0,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+          ],
+        },
+      };
+    }
+
+    return {
       host: peerServerHost,
-      port: peerServerPort,
+      port: parseInt(peerServerPort, 10),
       path: peerServerPath,
       secure: window.location.protocol === 'https:',
       debug: 0,
@@ -52,17 +68,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         ],
       },
     };
-
-    if (peerId) {
-      options.id = peerId;
-    }
-
-    return options;
   }, []);
 
   const updatePeersState = useCallback(() => {
     const peerList = Array.from(peersInfoRef.current.values());
-    setPeers(peerList);
+    setPeers([...peerList]);
   }, []);
 
   const cleanupPeer = useCallback((peerId: string) => {
@@ -165,6 +175,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   }, []);
 
   useEffect(() => {
+    if (initDoneRef.current) return;
+    initDoneRef.current = true;
+
     const init = async () => {
       try {
         setConnectionStatus('Запрос доступа к микрофону...');
@@ -184,6 +197,86 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         const peer = new Peer(myPeerId, getPeerOptions());
         peerRef.current = peer;
 
+        // Setup common event handlers
+        const setupPeerHandlers = (p: Peer) => {
+          // Handle incoming calls
+          p.on('call', (call) => {
+            if (!streamRef.current) return;
+            call.answer(streamRef.current);
+            callsRef.current.set(call.peer, call);
+
+            call.on('stream', (remoteStream) => {
+              handleRemoteStream(call.peer, remoteStream);
+            });
+
+            call.on('close', () => cleanupPeer(call.peer));
+            call.on('error', () => cleanupPeer(call.peer));
+          });
+
+          // Handle incoming data connections
+          p.on('connection', (conn) => {
+            dataConnsRef.current.set(conn.peer, conn);
+
+            conn.on('open', () => {
+              const remoteNickname = conn.metadata?.nickname || 'Аноним';
+              if (!peersInfoRef.current.has(conn.peer)) {
+                peersInfoRef.current.set(conn.peer, {
+                  peerId: conn.peer,
+                  nickname: remoteNickname,
+                  isMuted: false,
+                });
+                updatePeersState();
+              }
+            });
+
+            conn.on('data', (data: any) => {
+              if (data.type === 'mute-status') {
+                const info = peersInfoRef.current.get(conn.peer);
+                if (info) {
+                  info.isMuted = data.isMuted;
+                  peersInfoRef.current.set(conn.peer, info);
+                  updatePeersState();
+                }
+              }
+              if (data.type === 'info') {
+                if (!peersInfoRef.current.has(conn.peer)) {
+                  peersInfoRef.current.set(conn.peer, {
+                    peerId: conn.peer,
+                    nickname: data.nickname || 'Аноним',
+                    isMuted: false,
+                  });
+                  updatePeersState();
+                }
+              }
+            });
+
+            conn.on('close', () => {
+              dataConnsRef.current.delete(conn.peer);
+              cleanupPeer(conn.peer);
+            });
+          });
+
+          p.on('error', (err) => {
+            console.error('Peer error:', err);
+            if (err.type === 'peer-unavailable') {
+              // Peer not found, ok
+            } else if (err.type === 'network' || err.type === 'server-error') {
+              setError('Ошибка подключения к серверу. Попробуйте обновить страницу.');
+            }
+          });
+
+          p.on('disconnected', () => {
+            setConnectionStatus('Переподключение...');
+            try {
+              p.reconnect();
+            } catch (e) {
+              // ignore
+            }
+          });
+        };
+
+        setupPeerHandlers(peer);
+
         peer.on('open', () => {
           setConnectionStatus('Подключение к комнате...');
           setIsConnected(true);
@@ -195,7 +288,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           const hubTimeout = setTimeout(() => {
             if (!hubConnected) {
               // Hub not found, we become the hub
-              becomeHub(peer);
+              becomeHub();
             }
           }, 3000);
 
@@ -211,7 +304,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
           hubConn.on('data', (data: any) => {
             if (data.type === 'peer-list') {
-              // Hub sent us the list of peers to connect to
               const peerList: Array<{ peerId: string; nickname: string }> = data.peers;
               peerList.forEach((p) => {
                 if (p.peerId !== myPeerId) {
@@ -229,7 +321,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
               updatePeersState();
             }
             if (data.type === 'new-peer') {
-              // Hub tells us about a new peer
               const { peerId: newPeerId, nickname: newNickname } = data;
               if (newPeerId !== myPeerId) {
                 if (!peersInfoRef.current.has(newPeerId)) {
@@ -252,125 +343,53 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           hubConn.on('error', () => {
             if (!hubConnected) {
               clearTimeout(hubTimeout);
-              becomeHub(peer);
+              becomeHub();
             }
           });
 
           hubConn.on('close', () => {
-            // Hub disconnected, try to become hub
             hostConnRef.current = null;
-            setTimeout(() => becomeHub(peer), 1000);
-          });
-        });
-
-        // Handle incoming calls
-        peer.on('call', (call) => {
-          call.answer(stream);
-          callsRef.current.set(call.peer, call);
-
-          call.on('stream', (remoteStream) => {
-            handleRemoteStream(call.peer, remoteStream);
-          });
-
-          call.on('close', () => cleanupPeer(call.peer));
-          call.on('error', () => cleanupPeer(call.peer));
-        });
-
-        // Handle incoming data connections
-        peer.on('connection', (conn) => {
-          dataConnsRef.current.set(conn.peer, conn);
-
-          conn.on('open', () => {
-            const remoteNickname = conn.metadata?.nickname || 'Аноним';
-            if (!peersInfoRef.current.has(conn.peer)) {
-              peersInfoRef.current.set(conn.peer, {
-                peerId: conn.peer,
-                nickname: remoteNickname,
-                isMuted: false,
-              });
-              updatePeersState();
+            // Hub disconnected, try to become hub ourselves
+            if (!isHostRef.current) {
+              setTimeout(() => becomeHub(), 1000);
             }
           });
-
-          conn.on('data', (data: any) => {
-            if (data.type === 'mute-status') {
-              const info = peersInfoRef.current.get(conn.peer);
-              if (info) {
-                info.isMuted = data.isMuted;
-                peersInfoRef.current.set(conn.peer, info);
-                updatePeersState();
-              }
-            }
-            if (data.type === 'info') {
-              if (!peersInfoRef.current.has(conn.peer)) {
-                peersInfoRef.current.set(conn.peer, {
-                  peerId: conn.peer,
-                  nickname: data.nickname || 'Аноним',
-                  isMuted: false,
-                });
-                updatePeersState();
-              }
-            }
-          });
-
-          conn.on('close', () => {
-            dataConnsRef.current.delete(conn.peer);
-            cleanupPeer(conn.peer);
-          });
         });
 
-        peer.on('error', (err) => {
-          console.error('Peer error:', err);
-          if (err.type === 'unavailable-id') {
-            // Room hub ID is taken, connect as client
-            setConnectionStatus('Подключение к хосту комнаты...');
-          } else if (err.type === 'peer-unavailable') {
-            // Peer not found, ok
-          } else if (err.type === 'network' || err.type === 'server-error') {
-            setError('Ошибка подключения к серверу. Попробуйте обновить страницу.');
-          }
-        });
-
-        peer.on('disconnected', () => {
-          setConnectionStatus('Переподключение...');
-          try {
-            peer.reconnect();
-          } catch (e) {
-            // ignore
-          }
-        });
-
-        function becomeHub(p: Peer) {
+        function becomeHub() {
           if (isHostRef.current) return;
           
-          // Destroy current peer and recreate with hub ID
           setConnectionStatus('Создание комнаты...');
           
-          p.destroy();
+          // We keep our existing peer but also register as hub
+          // The hub ID is just a well-known ID that others can connect to
+          // We don't need to destroy our peer - we just need to be reachable at roomHubId
+          
+          // Actually, PeerJS doesn't allow a peer to have multiple IDs.
+          // So we need to destroy current peer and create a new one with hub ID.
+          // But we need to keep our audio stream.
+          
+          const currentPeer = peerRef.current;
+          if (currentPeer) {
+            currentPeer.destroy();
+          }
           
           const hubPeer = new Peer(roomHubId, getPeerOptions());
-          
           peerRef.current = hubPeer;
           isHostRef.current = true;
-          setIsHost(true);
           myPeerIdRef.current = roomHubId;
+
+          setupPeerHandlers(hubPeer);
 
           hubPeer.on('open', () => {
             setConnectionStatus('Комната создана ✓ Ожидание участников...');
+            
+            // Hub needs to call all connected peers
+            // But since we just became hub, there are no peers yet
+            // New peers will connect to us and we'll call them
           });
 
-          hubPeer.on('call', (call) => {
-            call.answer(stream);
-            callsRef.current.set(call.peer, call);
-
-            call.on('stream', (remoteStream) => {
-              handleRemoteStream(call.peer, remoteStream);
-            });
-
-            call.on('close', () => cleanupPeer(call.peer));
-            call.on('error', () => cleanupPeer(call.peer));
-          });
-
+          // Override connection handler for hub
           hubPeer.on('connection', (conn) => {
             dataConnsRef.current.set(conn.peer, conn);
 
@@ -398,8 +417,18 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                 conn.peer
               );
 
-              // Connect to the new peer with audio
-              callPeer(conn.peer);
+              // Call the new peer with audio
+              if (streamRef.current) {
+                const call = hubPeer.call(conn.peer, streamRef.current);
+                if (call) {
+                  callsRef.current.set(conn.peer, call);
+                  call.on('stream', (remoteStream) => {
+                    handleRemoteStream(conn.peer, remoteStream);
+                  });
+                  call.on('close', () => cleanupPeer(conn.peer));
+                  call.on('error', () => cleanupPeer(conn.peer));
+                }
+              }
             });
 
             conn.on('data', (data: any) => {
@@ -429,13 +458,14 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             if (err.type === 'unavailable-id') {
               // Someone else became hub, reconnect as client
               isHostRef.current = false;
-              setIsHost(false);
               setConnectionStatus('Переподключение к хосту...');
-              // Recreate as client
               hubPeer.destroy();
+              
               const clientPeer = new Peer(`vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`, getPeerOptions());
               peerRef.current = clientPeer;
               myPeerIdRef.current = clientPeer.id || '';
+              
+              setupPeerHandlers(clientPeer);
               
               clientPeer.on('open', () => {
                 setConnectionStatus('Подключён к комнате ✓');
@@ -467,34 +497,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                       updatePeersState();
                     }
                   }
-                });
-              });
-
-              clientPeer.on('call', (call) => {
-                call.answer(stream);
-                callsRef.current.set(call.peer, call);
-                call.on('stream', (remoteStream) => handleRemoteStream(call.peer, remoteStream));
-                call.on('close', () => cleanupPeer(call.peer));
-              });
-
-              clientPeer.on('connection', (conn) => {
-                dataConnsRef.current.set(conn.peer, conn);
-                conn.on('open', () => {
-                  const rn = conn.metadata?.nickname || 'Аноним';
-                  if (!peersInfoRef.current.has(conn.peer)) {
-                    peersInfoRef.current.set(conn.peer, { peerId: conn.peer, nickname: rn, isMuted: false });
-                    updatePeersState();
-                  }
-                });
-                conn.on('data', (data: any) => {
-                  if (data.type === 'mute-status') {
-                    const info = peersInfoRef.current.get(conn.peer);
-                    if (info) { info.isMuted = data.isMuted; updatePeersState(); }
-                  }
-                });
-                conn.on('close', () => {
-                  dataConnsRef.current.delete(conn.peer);
-                  cleanupPeer(conn.peer);
                 });
               });
             }
@@ -546,7 +548,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     peers,
     error,
     connectionStatus,
-    isHost,
     toggleMute,
   };
 }

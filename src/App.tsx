@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { generateNickname, generateRoomId } from './utils/nicknames';
-import { useVoiceChat } from './hooks/useVoiceChat';
 import { LobbyScreen } from './components/LobbyScreen';
 import { VoiceChatScreen } from './components/VoiceChatScreen';
 

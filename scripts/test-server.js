@@ -1,0 +1,114 @@
+#!/usr/bin/env node
+
+/**
+ * VoiceChat Server Test Script
+ * 
+ * This script tests the server endpoints and functionality.
+ */
+
+const http = require('http');
+
+const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
+
+async function testEndpoint(path, expectedStatus = 200) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(path, BASE_URL);
+    
+    http.get(url, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        if (res.statusCode === expectedStatus) {
+          console.log(`✅ ${path} - ${res.statusCode} OK`);
+          resolve({ status: res.statusCode, data });
+        } else {
+          console.error(`❌ ${path} - Expected ${expectedStatus}, got ${res.statusCode}`);
+          reject(new Error(`Expected ${expectedStatus}, got ${res.statusCode}`));
+        }
+      });
+    }).on('error', (err) => {
+      console.error(`❌ ${path} - Connection error: ${err.message}`);
+      reject(err);
+    });
+  });
+}
+
+async function runTests() {
+  console.log('🧪 VoiceChat Server Tests');
+  console.log('=========================\n');
+  
+  let passed = 0;
+  let failed = 0;
+  
+  try {
+    // Test health endpoint
+    console.log('Testing health endpoint...');
+    const healthResult = await testEndpoint('/health');
+    const healthData = JSON.parse(healthResult.data);
+    
+    if (healthData.status === 'ok') {
+      console.log('   ✓ Health status is OK');
+      passed++;
+    } else {
+      console.error('   ✗ Health status is not OK');
+      failed++;
+    }
+    
+    if (healthData.service === 'voicechat-server') {
+      console.log('   ✓ Service name is correct');
+      passed++;
+    } else {
+      console.error('   ✗ Service name is incorrect');
+      failed++;
+    }
+    
+    // Test API info endpoint
+    console.log('\nTesting API info endpoint...');
+    const infoResult = await testEndpoint('/api/info');
+    const infoData = JSON.parse(infoResult.data);
+    
+    if (infoData.name === 'VoiceChat Server') {
+      console.log('   ✓ API name is correct');
+      passed++;
+    } else {
+      console.error('   ✗ API name is incorrect');
+      failed++;
+    }
+    
+    if (infoData.peerServer === '/peerjs') {
+      console.log('   ✓ PeerJS path is correct');
+      passed++;
+    } else {
+      console.error('   ✗ PeerJS path is incorrect');
+      failed++;
+    }
+    
+    // Test static files
+    console.log('\nTesting static files...');
+    await testEndpoint('/');
+    console.log('   ✓ Index.html is served');
+    passed++;
+    
+    // Test SPA fallback
+    console.log('\nTesting SPA fallback...');
+    await testEndpoint('/some-random-route');
+    console.log('   ✓ SPA fallback works');
+    passed++;
+    
+  } catch (error) {
+    failed++;
+    console.error('\n❌ Test failed:', error.message);
+  }
+  
+  console.log('\n=========================');
+  console.log(`Results: ${passed} passed, ${failed} failed`);
+  console.log('=========================\n');
+  
+  process.exit(failed > 0 ? 1 : 0);
+}
+
+runTests();
