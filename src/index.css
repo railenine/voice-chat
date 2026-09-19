@@ -1,29 +1,124 @@
 @import "tailwindcss";
 
-/* Animated gradient background */
-@keyframes gradient-shift {
-  0% {
-    background-position: 0% 50%;
+/* Animated jelly gradient blobs */
+@keyframes blob-1 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(100px, -50px) scale(1.1);
   }
   50% {
-    background-position: 100% 50%;
+    transform: translate(50px, 100px) scale(0.9);
   }
-  100% {
-    background-position: 0% 50%;
+  75% {
+    transform: translate(-50px, 50px) scale(1.05);
   }
 }
 
-.animated-gradient {
-  background: linear-gradient(
-    -45deg,
-    #0f172a,
-    #1e3a5f,
-    #2c5282,
-    #1a365d,
-    #2d3748
-  );
-  background-size: 400% 400%;
-  animation: gradient-shift 15s ease infinite;
+@keyframes blob-2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(-80px, 80px) scale(1.15);
+  }
+  50% {
+    transform: translate(-120px, -40px) scale(0.95);
+  }
+  75% {
+    transform: translate(60px, -80px) scale(1.1);
+  }
+}
+
+@keyframes blob-3 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(60px, 60px) scale(1.05);
+  }
+  50% {
+    transform: translate(-80px, 40px) scale(1.1);
+  }
+  75% {
+    transform: translate(40px, -100px) scale(0.95);
+  }
+}
+
+@keyframes blob-4 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  25% {
+    transform: translate(-100px, -60px) scale(1.1);
+  }
+  50% {
+    transform: translate(80px, -80px) scale(0.9);
+  }
+  75% {
+    transform: translate(-40px, 100px) scale(1.15);
+  }
+}
+
+.jelly-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: 0;
+  background: #000000;
+}
+
+.jelly-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.6;
+  mix-blend-mode: screen;
+}
+
+.jelly-blob-1 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #1e3a8a 0%, #1e40af 50%, transparent 70%);
+  top: -10%;
+  left: -10%;
+  animation: blob-1 20s ease-in-out infinite;
+}
+
+.jelly-blob-2 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #172554 0%, #1e3a5f 50%, transparent 70%);
+  top: 50%;
+  right: -15%;
+  animation: blob-2 25s ease-in-out infinite;
+}
+
+.jelly-blob-3 {
+  width: 450px;
+  height: 450px;
+  background: radial-gradient(circle, #312e81 0%, #1e1b4b 50%, transparent 70%);
+  bottom: -10%;
+  left: 30%;
+  animation: blob-3 22s ease-in-out infinite;
+}
+
+.jelly-blob-4 {
+  width: 550px;
+  height: 550px;
+  background: radial-gradient(circle, #164e63 0%, #155e75 50%, transparent 70%);
+  top: 30%;
+  left: 20%;
+  animation: blob-4 28s ease-in-out infinite;
+}
+
+.content-wrapper {
+  position: relative;
+  z-index: 10;
 }
 
 @keyframes pulse-ring {
@@ -148,6 +243,7 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background: #000000;
 }
 
 /* Mobile optimizations */
@@ -164,5 +260,17 @@ body {
   
   input {
     font-size: 16px;
+  }
+  
+  .jelly-blob {
+    filter: blur(60px);
+  }
+  
+  .jelly-blob-1,
+  .jelly-blob-2,
+  .jelly-blob-3,
+  .jelly-blob-4 {
+    width: 300px;
+    height: 300px;
   }
 }
