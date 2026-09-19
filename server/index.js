@@ -17,11 +17,13 @@ app.get('/health', (req, res) => {
   });
 });
 
-// ПРАВИЛЬНАЯ КОНФИГУРАЦИЯ PeerJS v1.x
-// Мы явно указываем path: '/peerjs' и монтируем на '/peerjs'
+// ИДЕАЛЬНАЯ КОНФИГУРАЦИЯ PeerJS:
+// 1. Внутри указываем path: '/'
+// 2. Снаружи монтируем на '/peerjs'
+// В итоге сервер будет ждать запросы ровно по адресу /peerjs/id
 const peerServer = ExpressPeerServer(server, {
   debug: 2,
-  path: '/peerjs', 
+  path: '/', 
   allow_discovery: true,
   concurrent_limit: 10000,
   config: {
@@ -29,13 +31,10 @@ const peerServer = ExpressPeerServer(server, {
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
       { urls: 'stun:stun2.l.google.com:19302' },
-      { urls: 'stun:stun3.l.google.com:19302' },
-      { urls: 'stun:stun4.l.google.com:19302' },
     ]
   }
 });
 
-// Монтируем сервер
 app.use('/peerjs', peerServer);
 
 peerServer.on('connection', (client) => {
@@ -49,5 +48,5 @@ peerServer.on('disconnect', (client) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`🎤 VoiceChat Server is running on port ${PORT}`);
-  console.log(`📡 PeerJS: http://localhost:${PORT}/peerjs`);
+  console.log(`📡 PeerJS available at: http://localhost:${PORT}/peerjs`);
 });
