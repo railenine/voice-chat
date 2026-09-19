@@ -36,7 +36,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const getPeerOptions = useCallback((): any => {
     const peerServerHost = window.location.hostname;
     const peerServerPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
-    const peerServerPath = '/peerjs';
     
     // For dev mode (Vite), use public PeerJS server
     const isDev = peerServerPort === '5173' || peerServerPort === '5174';
@@ -54,10 +53,13 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       };
     }
 
+    // For production, connect to our own PeerJS server
+    // Note: PeerJS client appends '/peerjs' to the path automatically
+    // So we use empty path to get /peerjs endpoint
     return {
       host: peerServerHost,
       port: parseInt(peerServerPort, 10),
-      path: peerServerPath,
+      path: '',
       secure: window.location.protocol === 'https:',
       debug: 0,
       config: {

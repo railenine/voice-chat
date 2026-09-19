@@ -35,8 +35,11 @@ app.get('/api/info', (req, res) => {
 });
 
 // PeerJS signaling server
+// path: '/' means PeerJS handles requests at the mount point
+// app.use('/peerjs', ...) mounts it at /peerjs
+// So client connects to /peerjs and PeerJS handles it
 const peerServer = ExpressPeerServer(server, {
-  debug: 1,
+  debug: 2,
   path: '/',
   allow_discovery: true,
   concurrent_limit: 10000,
@@ -51,7 +54,7 @@ const peerServer = ExpressPeerServer(server, {
   }
 });
 
-// Add PeerJS middleware to Express app
+// Mount PeerJS at /peerjs path
 app.use('/peerjs', peerServer);
 
 // Peer events logging
