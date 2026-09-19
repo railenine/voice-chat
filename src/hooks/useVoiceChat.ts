@@ -108,24 +108,21 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     }
 
     // Determine port number
-    let port: number;
-    if (peerServerPort) {
-      port = parseInt(peerServerPort, 10);
-    } else {
-      // Default ports based on protocol
-      port = window.location.protocol === 'https:' ? 443 : 80;
-    }
-    
-    return {
+    const peerOptions: any = {
       host: peerServerHost,
-      port: port,
       path: '/peerjs',
       secure: window.location.protocol === 'https:',
-      debug: 0,
+      debug: 1,
       config: {
         iceServers: defaultIceServers,
       },
     };
+
+    if (peerServerPort && peerServerPort !== '443' && peerServerPort !== '80') {
+      peerOptions.port = parseInt(peerServerPort, 10);
+    }
+
+    return peerOptions;
   }, []);
 
   const updatePeersState = useCallback(() => {
@@ -182,23 +179,27 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     }
 
     // Attach Web Audio API analyser to remote stream for receiver-side VAD (green ring)
-    try {
-      if (audioContextRef.current && !remoteAnalysersRef.current.has(peerId)) {
-        const remoteAnalyser = audioContextRef.current.createAnalyser();
-        remoteAnalyser.fftSize = 256;
-        remoteAnalyser.smoothingTimeConstant = 0.3;
-        const remoteSource = audioContextRef.current.createMediaStreamSource(stream);
-        remoteSource.connect(remoteAnalyser);
-        remoteAnalysersRef.current.set(peerId, {
-          analyser: remoteAnalyser,
-          dataArray: new Uint8Array(remoteAnalyser.frequencyBinCount),
-          hangover: 0,
-        });
-        console.log(`[VAD] Attached receiver VAD analyser to remote stream of: ${peerId}`);
+    const attachReceiverAnalyser = () => {
+      try {
+        if (audioContextRef.current && !remoteAnalysersRef.current.has(peerId)) {
+          const remoteAnalyser = audioContextRef.current.createAnalyser();
+          remoteAnalyser.fftSize = 256;
+          remoteAnalyser.smoothingTimeConstant = 0.3;
+          const remoteSource = audioContextRef.current.createMediaStreamSource(stream);
+          remoteSource.connect(remoteAnalyser);
+          remoteAnalysersRef.current.set(peerId, {
+            analyser: remoteAnalyser,
+            dataArray: new Uint8Array(remoteAnalyser.frequencyBinCount),
+            hangover: 0,
+          });
+          console.log(`[VAD] Attached receiver VAD analyser to remote stream of: ${peerId}`);
+        }
+      } catch (vadErr) {
+        console.warn(`[VAD] Failed to attach receiver VAD for ${peerId}:`, vadErr);
       }
-    } catch (vadErr) {
-      console.warn(`[VAD] Failed to attach receiver VAD for ${peerId}:`, vadErr);
-    }
+    };
+
+    attachReceiverAnalyser();
 
     const playAudio = () => {
       if (!audio) return;
@@ -218,6 +219,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       track.enabled = true;
       track.onunmute = () => {
         console.log(`[Stream] Track unmuted for peer: ${peerId}`);
+        attachReceiverAnalyser();
         playAudio();
       };
     });
@@ -302,10 +304,13 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     });
 
     conn.on('close', () => {
+      // ONLY remove from dataConns, NEVER kill the peer connection on data close
       dataConnsRef.current.delete(conn.peer);
-      cleanupPeer(conn.peer);
     });
-  }, [nickname, cleanupPeer, updatePeersState]);
+    conn.on('error', () => {
+      dataConnsRef.current.delete(conn.peer);
+    });
+  }, [nickname, updatePeersState]);
 
   useEffect(() => {
     if (initDoneRef.current) return;
@@ -313,6 +318,10 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
     const init = async () => {
       try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Ваш браузер не поддерживает доступ к микрофону или страница открыта не по HTTPS.');
+        }
+
         setConnectionStatus('Запрос доступа к микрофону...');
         let stream: MediaStream;
         try {
@@ -437,6 +446,18 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             console.warn('[Call] Cannot answer incoming call: local stream not available');
             return;
           }
+
+          // Immediately ensure peer is in peersInfoRef so receiver VAD can update their avatar
+          if (!peersInfoRef.current.has(call.peer)) {
+            peersInfoRef.current.set(call.peer, {
+              peerId: call.peer,
+              nickname: 'Участник',
+              isMuted: false,
+              isSpeaking: false,
+            });
+            updatePeersState();
+          }
+
           call.answer(streamRef.current);
           callsRef.current.set(call.peer, call);
 
@@ -518,27 +539,34 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           });
 
           conn.on('close', () => {
+            // ONLY remove data connection, NEVER kill the peer or audio
             dataConnsRef.current.delete(conn.peer);
-            cleanupPeer(conn.peer);
           });
           conn.on('error', () => {
             dataConnsRef.current.delete(conn.peer);
-            cleanupPeer(conn.peer);
           });
         });
 
-        peer.on('error', (err) => {
+        peer.on('error', (err: any) => {
           console.error('[Peer] Error:', err);
-          if (err.type === 'peer-unavailable') {
-            // Remote peer not available or left
-          } else if (err.type === 'network' || err.type === 'server-error') {
-            setError('Ошибка подключения к серверу. Попробуйте обновить страницу.');
-          } else if (err.type === 'ssl-unavailable') {
+          const errType = err?.type || '';
+          const errMsg = err?.message || errType || 'Неизвестная ошибка';
+
+          if (errType === 'peer-unavailable') {
+            // Remote peer not available or left - non-fatal
+            return;
+          }
+
+          if (errType === 'network' || errType === 'server-error' || errType === 'socket-error' || errType === 'socket-closed') {
+            setError('Ошибка подключения к серверу сигнализации. Попробуйте обновить страницу.');
+          } else if (errType === 'ssl-unavailable') {
             setError('HTTPS требуется для работы голосового чата.');
-          } else if (err.type === 'browser-incompatible') {
+          } else if (errType === 'browser-incompatible') {
             setError('Ваш браузер не поддерживает WebRTC.');
-          } else if (err.type === 'invalid-id') {
+          } else if (errType === 'invalid-id') {
             setError('Неверный ID пользователя.');
+          } else {
+            setError(`Ошибка подключения (${errType}): ${errMsg}`);
           }
         });
 
