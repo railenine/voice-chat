@@ -7,7 +7,17 @@ interface VoiceChatScreenProps {
 }
 
 export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, roomId }) => {
-  const { isConnected, isMuted, isSpeaking, peers, error, connectionStatus, toggleMute } = useVoiceChat({
+  const {
+    isConnected,
+    isMuted,
+    isSpeaking,
+    peers,
+    error,
+    connectionStatus,
+    needsAudioUnlock,
+    unlockAudio,
+    toggleMute,
+  } = useVoiceChat({
     roomId,
     nickname,
   });
@@ -45,7 +55,34 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
       </div>
 
       {/* Content */}
-      <div className="content-wrapper min-h-screen flex flex-col">
+      <div
+        className="content-wrapper min-h-screen flex flex-col"
+        onClick={() => {
+          if (needsAudioUnlock) unlockAudio();
+        }}
+      >
+        {/* Audio Unlock Banner */}
+        {needsAudioUnlock && (
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              unlockAudio();
+            }}
+            className="cursor-pointer bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-600 hover:from-amber-500 hover:to-yellow-500 text-white px-4 py-3 text-center text-xs sm:text-sm font-medium shadow-lg flex items-center justify-center gap-2 border-b border-amber-400/40 transition-all z-50 animate-pulse"
+          >
+            <span className="text-lg">🔊</span>
+            <span>
+              Браузер приостановил звук собеседников. <strong className="underline">Нажмите сюда</strong>, чтобы включить звук.
+            </span>
+            <button
+              type="button"
+              className="ml-2 px-3 py-1 bg-white text-amber-900 rounded-md font-bold text-xs shadow hover:bg-amber-100 transition-all flex-shrink-0"
+            >
+              Включить
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <header className="p-3 sm:p-4 border-b border-white/10 backdrop-blur-sm bg-black/30">
           <div className="max-w-2xl mx-auto flex items-center justify-between gap-2">

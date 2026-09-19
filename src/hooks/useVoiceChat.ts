@@ -20,6 +20,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('Подключение...');
+  const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
 
   const peerRef = useRef<Peer | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -38,10 +39,46 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const isSpeakingRef = useRef(false);
   const speechHangoverRef = useRef<number>(0);
 
+  // Deterministic caller rule to prevent call collisions (glare) in P2P mesh
+  const shouldInitiateCall = useCallback((myId: string, remoteId: string): boolean => {
+    return myId < remoteId;
+  }, []);
+
+  // Unlock audio playback (resumes AudioContext and starts any paused <audio> elements)
+  const unlockAudio = useCallback(() => {
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch((err) => console.warn('AudioContext resume failed:', err));
+    }
+
+    let allPlaying = true;
+    audioElementsRef.current.forEach((audio, peerId) => {
+      if (audio.paused) {
+        audio.play().then(() => {
+          console.log(`[Audio] Unlocked playback for ${peerId}`);
+        }).catch((err) => {
+          console.warn(`[Audio] Unlock play failed for ${peerId}:`, err);
+          allPlaying = false;
+        });
+      }
+    });
+
+    if (allPlaying) {
+      setNeedsAudioUnlock(false);
+    }
+  }, []);
+
   // Get PeerJS server configuration
   const getPeerOptions = useCallback((): any => {
     const peerServerHost = window.location.hostname;
     const peerServerPort = window.location.port;
+
+    const defaultIceServers = [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun.cloudflare.com:3478' },
+      { urls: 'stun:global.stun.twilio.com:3478' },
+    ];
     
     // For dev mode (Vite), use public PeerJS server
     const isDev = peerServerPort === '5173' || peerServerPort === '5174';
@@ -50,20 +87,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       return {
         debug: 0,
         config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-          ],
+          iceServers: defaultIceServers,
         },
       };
     }
 
-    // For production, connect to our own PeerJS server
-    // CORRECT CONFIGURATION:
-    // - Client: path: '/peerjs' → HTTP: /peerjs/id, WebSocket: /peerjs/peerjs
-    // - Server: path: '/peerjs' + app.use(peerServer) → handles /peerjs/* ✓
-    
     // Determine port number
     let port: number;
     if (peerServerPort) {
@@ -80,11 +108,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       secure: window.location.protocol === 'https:',
       debug: 0,
       config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-          { urls: 'stun:stun2.l.google.com:19302' },
-        ],
+        iceServers: defaultIceServers,
       },
     };
   }, []);
@@ -94,17 +118,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     setPeers([...peerList]);
   }, []);
 
-  const cleanupPeer = useCallback((peerId: string) => {
+  const cleanupPeerCall = useCallback((peerId: string) => {
     const call = callsRef.current.get(peerId);
     if (call) {
       call.close();
       callsRef.current.delete(peerId);
-    }
-
-    const dataConn = dataConnsRef.current.get(peerId);
-    if (dataConn) {
-      dataConn.close();
-      dataConnsRef.current.delete(peerId);
     }
 
     const audio = audioElementsRef.current.get(peerId);
@@ -113,38 +131,85 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       audio.remove();
       audioElementsRef.current.delete(peerId);
     }
+  }, []);
+
+  const cleanupPeer = useCallback((peerId: string) => {
+    cleanupPeerCall(peerId);
+
+    const dataConn = dataConnsRef.current.get(peerId);
+    if (dataConn) {
+      dataConn.close();
+      dataConnsRef.current.delete(peerId);
+    }
 
     peersInfoRef.current.delete(peerId);
     updatePeersState();
-  }, [updatePeersState]);
+  }, [cleanupPeerCall, updatePeersState]);
 
   const handleRemoteStream = useCallback((peerId: string, stream: MediaStream) => {
+    console.log(`[Stream] Received remote stream for peer: ${peerId}`);
     let audio = audioElementsRef.current.get(peerId);
     if (!audio) {
       audio = document.createElement('audio');
       audio.autoplay = true;
+      (audio as any).playsInline = true;
+      (audio as any).webkitPlaysInline = true;
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('autoplay', 'true');
       document.body.appendChild(audio);
       audioElementsRef.current.set(peerId, audio);
     }
-    audio.srcObject = stream;
-    audio.play().catch(() => {});
+    
+    if (audio.srcObject !== stream) {
+      audio.srcObject = stream;
+    }
+
+    const playAudio = () => {
+      if (!audio) return;
+      audio.play().then(() => {
+        console.log(`[Audio] Playing audio for peer ${peerId}`);
+        setNeedsAudioUnlock(false);
+      }).catch((err) => {
+        console.warn(`[Audio] Autoplay blocked for peer ${peerId}:`, err);
+        setNeedsAudioUnlock(true);
+      });
+    };
+
+    playAudio();
+
+    // Ensure tracks are unmuted and enabled
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = true;
+      track.onunmute = () => {
+        console.log(`[Stream] Track unmuted for peer: ${peerId}`);
+        playAudio();
+      };
+    });
   }, []);
 
   const callPeer = useCallback((remotePeerId: string) => {
     if (!peerRef.current || !streamRef.current || callsRef.current.has(remotePeerId)) return;
 
+    console.log(`[Call] Calling peer: ${remotePeerId}`);
     const call = peerRef.current.call(remotePeerId, streamRef.current);
     if (!call) return;
 
     callsRef.current.set(remotePeerId, call);
 
     call.on('stream', (remoteStream) => {
+      console.log(`[Call] Stream received from outgoing call to: ${remotePeerId}`);
       handleRemoteStream(remotePeerId, remoteStream);
     });
 
-    call.on('close', () => cleanupPeer(remotePeerId));
-    call.on('error', () => cleanupPeer(remotePeerId));
-  }, [handleRemoteStream, cleanupPeer]);
+    call.on('close', () => {
+      console.log(`[Call] Outgoing call closed with: ${remotePeerId}`);
+      cleanupPeerCall(remotePeerId);
+    });
+    call.on('error', (err) => {
+      console.warn(`[Call] Outgoing call error with ${remotePeerId}:`, err);
+      cleanupPeerCall(remotePeerId);
+    });
+  }, [handleRemoteStream, cleanupPeerCall]);
 
   const broadcastToAllPeers = useCallback((message: any, excludePeerId?: string) => {
     dataConnsRef.current.forEach((conn, peerId) => {
@@ -213,13 +278,25 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     const init = async () => {
       try {
         setConnectionStatus('Запрос доступа к микрофону...');
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+            },
+          });
+        } catch (firstErr) {
+          console.warn('Advanced audio constraints failed, falling back to basic audio: true', firstErr);
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+
+        const audioTrack = stream.getAudioTracks()[0];
+        if (!audioTrack) {
+          throw new Error('Микрофон не вернул аудиодорожку.');
+        }
+        audioTrack.enabled = true;
         streamRef.current = stream;
 
         // Set up Web Audio API for Voice Activity Detection (VAD)
@@ -241,12 +318,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             vadIntervalRef.current = setInterval(() => {
               if (!analyserRef.current || !streamRef.current) return;
 
-              if (audioContext.state === 'suspended') {
-                audioContext.resume().catch(() => {});
-              }
-
-              const audioTrack = streamRef.current.getAudioTracks()[0];
-              if (!audioTrack || !audioTrack.enabled) {
+              const track = streamRef.current.getAudioTracks()[0];
+              if (!track || !track.enabled) {
                 if (isSpeakingRef.current) {
                   isSpeakingRef.current = false;
                   setIsSpeaking(false);
@@ -263,9 +336,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
               const average = sum / dataArray.length;
               const now = Date.now();
 
-              // Speech threshold: average > 14 (out of 255)
-              if (average > 14) {
-                speechHangoverRef.current = now + 350;
+              // Speech threshold: average > 10 (out of 255)
+              if (average > 10) {
+                speechHangoverRef.current = now + 400;
                 if (!isSpeakingRef.current) {
                   isSpeakingRef.current = true;
                   setIsSpeaking(true);
@@ -292,19 +365,25 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         // Setup peer event handlers
         peer.on('call', (call) => {
           console.log(`[Call] Incoming call from: ${call.peer}`);
-          if (!streamRef.current) return;
+          if (!streamRef.current) {
+            console.warn('[Call] Cannot answer incoming call: local stream not available');
+            return;
+          }
           call.answer(streamRef.current);
           callsRef.current.set(call.peer, call);
 
           call.on('stream', (remoteStream) => {
-            console.log(`[Call] Stream received from: ${call.peer}`);
+            console.log(`[Call] Stream received from incoming call: ${call.peer}`);
             handleRemoteStream(call.peer, remoteStream);
           });
 
-          call.on('close', () => cleanupPeer(call.peer));
+          call.on('close', () => {
+            console.log(`[Call] Incoming call closed with: ${call.peer}`);
+            cleanupPeerCall(call.peer);
+          });
           call.on('error', (err) => {
-            console.warn(`[Call] Error with ${call.peer}:`, err);
-            cleanupPeer(call.peer);
+            console.warn(`[Call] Incoming call error with ${call.peer}:`, err);
+            cleanupPeerCall(call.peer);
           });
         });
 
@@ -325,6 +404,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
             // Send our info back
             conn.send({ type: 'info', nickname, peerId: myPeerIdRef.current });
+
+            // If we are designated caller and haven't called yet, initiate call now
+            if (shouldInitiateCall(myPeerIdRef.current, conn.peer) && !callsRef.current.has(conn.peer)) {
+              console.log(`[Call] Incoming data connection from ${conn.peer} -> initiating call`);
+              callPeer(conn.peer);
+            }
           });
 
           conn.on('data', (data: any) => {
@@ -413,8 +498,10 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                     isMuted: false,
                     isSpeaking: false,
                   });
-                  callPeer(p.peerId);
                   connectDataToPeer(p.peerId);
+                  if (shouldInitiateCall(assignedId, p.peerId)) {
+                    callPeer(p.peerId);
+                  }
                 }
               });
               updatePeersState();
@@ -445,11 +532,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                         });
                         updatePeersState();
                       }
-                      if (!callsRef.current.has(p.peerId)) {
-                        callPeer(p.peerId);
-                      }
                       if (!dataConnsRef.current.has(p.peerId)) {
                         connectDataToPeer(p.peerId);
+                      }
+                      if (shouldInitiateCall(myPeerIdRef.current, p.peerId) && !callsRef.current.has(p.peerId)) {
+                        callPeer(p.peerId);
                       }
                     }
                   });
@@ -490,23 +577,15 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
     init();
 
-    // Unlock audio on first user interaction
-    const unlockAudio = () => {
-      audioElementsRef.current.forEach((audio) => {
-        if (audio.paused) {
-          audio.play().catch(() => {});
-        }
-      });
-      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
-      }
-    };
+    // Unlock audio on any user interaction
     window.addEventListener('click', unlockAudio);
     window.addEventListener('touchstart', unlockAudio);
+    window.addEventListener('keydown', unlockAudio);
 
     return () => {
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
+      window.removeEventListener('keydown', unlockAudio);
 
       // Stop heartbeat timer
       if (heartbeatTimerRef.current) {
@@ -573,7 +652,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       dataConnsRef.current.clear();
       peersInfoRef.current.clear();
     };
-  }, [roomId, nickname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [roomId, nickname, shouldInitiateCall, unlockAudio, callPeer, connectDataToPeer, cleanupPeer, cleanupPeerCall, handleRemoteStream, updatePeersState, broadcastSpeakingStatus, getPeerOptions]);
 
   const toggleMute = useCallback(() => {
     if (streamRef.current) {
@@ -606,6 +685,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     peers,
     error,
     connectionStatus,
+    needsAudioUnlock,
+    unlockAudio,
     toggleMute,
   };
 }
