@@ -7,7 +7,7 @@ interface VoiceChatScreenProps {
 }
 
 export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, roomId }) => {
-  const { isConnected, isMuted, peers, error, connectionStatus, toggleMute } = useVoiceChat({
+  const { isConnected, isMuted, isSpeaking, peers, error, connectionStatus, toggleMute } = useVoiceChat({
     roomId,
     nickname,
   });
@@ -129,13 +129,19 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
               
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
                 {/* Current User */}
-                <div className="relative bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 border border-white/10 text-center transition-all hover:bg-white/10 animate-bounce-in">
+                <div className={`relative bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 border text-center transition-all hover:bg-white/10 animate-bounce-in ${
+                  isSpeaking && !isMuted
+                    ? 'border-green-400/60 shadow-lg shadow-green-500/20 ring-2 ring-green-400/50'
+                    : 'border-white/10'
+                }`}>
                   <div className={`w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full flex items-center justify-center text-xl sm:text-2xl mb-2 sm:mb-3 transition-all ${
                     isMuted 
                       ? 'bg-red-500/20 border-2 border-red-500/50' 
+                      : isSpeaking
+                      ? 'bg-gradient-to-br from-green-600 to-emerald-800 ring-4 ring-green-400 ring-offset-2 ring-offset-black/50 shadow-lg shadow-green-500/50 scale-105'
                       : 'bg-gradient-to-br from-blue-700 to-blue-900 shadow-lg shadow-blue-900/50'
                   }`}>
-                    {isMuted ? '🔇' : '🎤'}
+                    {isMuted ? '🔇' : isSpeaking ? '🗣️' : '🎤'}
                   </div>
                   <p className="text-white font-semibold text-xs sm:text-sm truncate">{nickname}</p>
                   <p className="text-blue-400 text-xs mt-1">Вы</p>
@@ -144,7 +150,15 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
                       <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30">Muted</span>
                     </div>
                   )}
-                  {!isMuted && isConnected && (
+                  {!isMuted && isSpeaking && (
+                    <div className="absolute top-2 right-2">
+                      <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full border border-green-500/40 flex items-center gap-1 font-medium animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+                        Говорит
+                      </span>
+                    </div>
+                  )}
+                  {!isMuted && !isSpeaking && isConnected && (
                     <div className="absolute top-2 right-2">
                       <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full border border-green-500/30">Live</span>
                     </div>
@@ -153,19 +167,33 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
 
                 {/* Other Peers */}
                 {peers.map((peer) => (
-                  <div key={peer.peerId} className="relative bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 border border-white/10 text-center transition-all hover:bg-white/10 animate-fade-in">
+                  <div key={peer.peerId} className={`relative bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 border text-center transition-all hover:bg-white/10 animate-fade-in ${
+                    peer.isSpeaking && !peer.isMuted
+                      ? 'border-green-400/60 shadow-lg shadow-green-500/20 ring-2 ring-green-400/50'
+                      : 'border-white/10'
+                  }`}>
                     <div className={`w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full flex items-center justify-center text-xl sm:text-2xl mb-2 sm:mb-3 transition-all ${
                       peer.isMuted 
                         ? 'bg-red-500/20 border-2 border-red-500/50' 
+                        : peer.isSpeaking
+                        ? 'bg-gradient-to-br from-green-600 to-emerald-800 ring-4 ring-green-400 ring-offset-2 ring-offset-black/50 shadow-lg shadow-green-500/50 scale-105'
                         : 'bg-gradient-to-br from-blue-700 to-blue-900 shadow-lg shadow-blue-900/50'
                     }`}>
-                      {peer.isMuted ? '🔇' : '🎧'}
+                      {peer.isMuted ? '🔇' : peer.isSpeaking ? '🗣️' : '🎧'}
                     </div>
                     <p className="text-white font-semibold text-xs sm:text-sm truncate">{peer.nickname}</p>
                     <p className="text-gray-500 text-xs mt-1">Участник</p>
                     {peer.isMuted && (
                       <div className="absolute top-2 right-2">
                         <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30">Muted</span>
+                      </div>
+                    )}
+                    {!peer.isMuted && peer.isSpeaking && (
+                      <div className="absolute top-2 right-2">
+                        <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full border border-green-500/40 flex items-center gap-1 font-medium animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+                          Говорит
+                        </span>
                       </div>
                     )}
                   </div>
@@ -230,14 +258,20 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
                 {[...Array(5)].map((_, i) => (
                   <div
                     key={i}
-                    className="w-1 bg-blue-500 rounded-full sound-wave-bar"
-                    style={{ height: '4px' }}
+                    className={`w-1 rounded-full transition-all duration-150 ${
+                      isSpeaking
+                        ? 'bg-green-400 sound-wave-bar'
+                        : 'bg-blue-500/40'
+                    }`}
+                    style={{ height: isSpeaking ? undefined : '4px' }}
                   />
                 ))}
               </div>
             )}
-            <p className={`text-xs sm:text-sm font-medium ${isMuted ? 'text-red-400' : 'text-blue-400'}`}>
-              {isMuted ? '🔇 Микрофон выключен' : '🎤 Микрофон включён'}
+            <p className={`text-xs sm:text-sm font-medium transition-colors ${
+              isMuted ? 'text-red-400' : isSpeaking ? 'text-green-400' : 'text-blue-400'
+            }`}>
+              {isMuted ? '🔇 Микрофон выключен' : isSpeaking ? '🗣️ Вы говорите...' : '🎤 Микрофон включён'}
             </p>
             <p className="text-gray-500 text-xs">
               {peers.length === 0 ? 'Вы единственный участник' : `${peers.length} участник(ов) в комнате`}

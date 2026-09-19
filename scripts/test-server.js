@@ -6,7 +6,7 @@
  * This script tests the server endpoints and functionality.
  */
 
-const http = require('http');
+import http from 'http';
 
 const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
 

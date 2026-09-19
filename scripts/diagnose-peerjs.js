@@ -9,8 +9,8 @@
  * 3. Можно ли получить UUID
  */
 
-const http = require('http');
-const https = require('https');
+import http from 'http';
+import https from 'https';
 
 const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
 

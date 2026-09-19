@@ -5,6 +5,7 @@ export interface PeerInfo {
   peerId: string;
   nickname: string;
   isMuted: boolean;
+  isSpeaking: boolean;
 }
 
 interface UseVoiceChatOptions {
@@ -15,6 +16,7 @@ interface UseVoiceChatOptions {
 export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('Подключение...');
@@ -29,6 +31,13 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const isHostRef = useRef(false);
   const hostConnRef = useRef<DataConnection | null>(null);
   const initDoneRef = useRef(false);
+
+  // VAD (Voice Activity Detection) refs
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const vadIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isSpeakingRef = useRef(false);
+  const speechHangoverRef = useRef<number>(0);
 
   const roomHubId = `vc-room-${roomId}`;
 
@@ -140,6 +149,18 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     call.on('error', () => cleanupPeer(remotePeerId));
   }, [handleRemoteStream, cleanupPeer]);
 
+  const broadcastToAllPeers = useCallback((message: any, excludePeerId?: string) => {
+    dataConnsRef.current.forEach((conn, peerId) => {
+      if (conn.open && peerId !== excludePeerId) {
+        conn.send(message);
+      }
+    });
+  }, []);
+
+  const broadcastSpeakingStatus = useCallback((speaking: boolean) => {
+    broadcastToAllPeers({ type: 'speaking-status', isSpeaking: speaking });
+  }, [broadcastToAllPeers]);
+
   const connectDataToPeer = useCallback((remotePeerId: string) => {
     if (!peerRef.current || dataConnsRef.current.has(remotePeerId)) return;
 
@@ -161,12 +182,21 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           updatePeersState();
         }
       }
+      if (data.type === 'speaking-status') {
+        const info = peersInfoRef.current.get(conn.peer);
+        if (info) {
+          info.isSpeaking = data.isSpeaking;
+          peersInfoRef.current.set(conn.peer, info);
+          updatePeersState();
+        }
+      }
       if (data.type === 'info') {
         if (!peersInfoRef.current.has(conn.peer)) {
           peersInfoRef.current.set(conn.peer, {
             peerId: conn.peer,
             nickname: data.nickname || 'Аноним',
             isMuted: false,
+            isSpeaking: false,
           });
           updatePeersState();
         }
@@ -178,14 +208,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       cleanupPeer(conn.peer);
     });
   }, [nickname, cleanupPeer, updatePeersState]);
-
-  const broadcastToAllPeers = useCallback((message: any, excludePeerId?: string) => {
-    dataConnsRef.current.forEach((conn, peerId) => {
-      if (conn.open && peerId !== excludePeerId) {
-        conn.send(message);
-      }
-    });
-  }, []);
 
   useEffect(() => {
     if (initDoneRef.current) return;
@@ -202,6 +224,66 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           },
         });
         streamRef.current = stream;
+
+        // Set up Web Audio API for Voice Activity Detection (VAD)
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            const audioContext = new AudioContextClass();
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            analyser.smoothingTimeConstant = 0.3;
+            const source = audioContext.createMediaStreamSource(stream);
+            source.connect(analyser);
+
+            audioContextRef.current = audioContext;
+            analyserRef.current = analyser;
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+            vadIntervalRef.current = setInterval(() => {
+              if (!analyserRef.current || !streamRef.current) return;
+
+              if (audioContext.state === 'suspended') {
+                audioContext.resume().catch(() => {});
+              }
+
+              const audioTrack = streamRef.current.getAudioTracks()[0];
+              if (!audioTrack || !audioTrack.enabled) {
+                if (isSpeakingRef.current) {
+                  isSpeakingRef.current = false;
+                  setIsSpeaking(false);
+                  broadcastSpeakingStatus(false);
+                }
+                return;
+              }
+
+              analyserRef.current.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) {
+                sum += dataArray[i];
+              }
+              const average = sum / dataArray.length;
+              const now = Date.now();
+
+              // Speech threshold: average > 14 (out of 255)
+              if (average > 14) {
+                speechHangoverRef.current = now + 350;
+                if (!isSpeakingRef.current) {
+                  isSpeakingRef.current = true;
+                  setIsSpeaking(true);
+                  broadcastSpeakingStatus(true);
+                }
+              } else if (isSpeakingRef.current && now > speechHangoverRef.current) {
+                isSpeakingRef.current = false;
+                setIsSpeaking(false);
+                broadcastSpeakingStatus(false);
+              }
+            }, 60);
+          }
+        } catch (vadErr) {
+          console.warn('VAD initialization failed:', vadErr);
+        }
 
         setConnectionStatus('Подключение к серверу...');
         const myPeerId = `vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
@@ -237,6 +319,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                   peerId: conn.peer,
                   nickname: remoteNickname,
                   isMuted: false,
+                  isSpeaking: false,
                 });
                 updatePeersState();
               }
@@ -251,12 +334,21 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                   updatePeersState();
                 }
               }
+              if (data.type === 'speaking-status') {
+                const info = peersInfoRef.current.get(conn.peer);
+                if (info) {
+                  info.isSpeaking = data.isSpeaking;
+                  peersInfoRef.current.set(conn.peer, info);
+                  updatePeersState();
+                }
+              }
               if (data.type === 'info') {
                 if (!peersInfoRef.current.has(conn.peer)) {
                   peersInfoRef.current.set(conn.peer, {
                     peerId: conn.peer,
                     nickname: data.nickname || 'Аноним',
                     isMuted: false,
+                    isSpeaking: false,
                   });
                   updatePeersState();
                 }
@@ -337,6 +429,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                       peerId: p.peerId,
                       nickname: p.nickname,
                       isMuted: false,
+                      isSpeaking: false,
                     });
                   }
                   callPeer(p.peerId);
@@ -353,6 +446,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                     peerId: newPeerId,
                     nickname: newNickname,
                     isMuted: false,
+                    isSpeaking: false,
                   });
                 }
                 callPeer(newPeerId);
@@ -425,6 +519,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                   peerId: conn.peer,
                   nickname: remoteNickname,
                   isMuted: false,
+                  isSpeaking: false,
                 });
               }
               updatePeersState();
@@ -461,6 +556,14 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                 const info = peersInfoRef.current.get(conn.peer);
                 if (info) {
                   info.isMuted = data.isMuted;
+                  peersInfoRef.current.set(conn.peer, info);
+                  updatePeersState();
+                }
+              }
+              if (data.type === 'speaking-status') {
+                const info = peersInfoRef.current.get(conn.peer);
+                if (info) {
+                  info.isSpeaking = data.isSpeaking;
                   peersInfoRef.current.set(conn.peer, info);
                   updatePeersState();
                 }
@@ -504,7 +607,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                     data.peers.forEach((p: any) => {
                       if (p.peerId !== myPeerIdRef.current) {
                         if (!peersInfoRef.current.has(p.peerId)) {
-                          peersInfoRef.current.set(p.peerId, { peerId: p.peerId, nickname: p.nickname, isMuted: false });
+                          peersInfoRef.current.set(p.peerId, {
+                            peerId: p.peerId,
+                            nickname: p.nickname,
+                            isMuted: false,
+                            isSpeaking: false,
+                          });
                         }
                         callPeer(p.peerId);
                         connectDataToPeer(p.peerId);
@@ -515,7 +623,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                   if (data.type === 'new-peer') {
                     if (data.peerId !== myPeerIdRef.current) {
                       if (!peersInfoRef.current.has(data.peerId)) {
-                        peersInfoRef.current.set(data.peerId, { peerId: data.peerId, nickname: data.nickname, isMuted: false });
+                        peersInfoRef.current.set(data.peerId, {
+                          peerId: data.peerId,
+                          nickname: data.nickname,
+                          isMuted: false,
+                          isSpeaking: false,
+                        });
                       }
                       callPeer(data.peerId);
                       connectDataToPeer(data.peerId);
@@ -548,6 +661,21 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     init();
 
     return () => {
+      // Cleanup VAD interval and AudioContext
+      if (vadIntervalRef.current) {
+        clearInterval(vadIntervalRef.current);
+        vadIntervalRef.current = null;
+      }
+      if (audioContextRef.current) {
+        try {
+          audioContextRef.current.close();
+        } catch (e) {
+          // Ignore
+        }
+        audioContextRef.current = null;
+        analyserRef.current = null;
+      }
+
       // Cleanup audio stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -591,6 +719,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       const newMuted = !audioTracks[0]?.enabled;
       setIsMuted(newMuted);
 
+      if (newMuted && isSpeakingRef.current) {
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        broadcastSpeakingStatus(false);
+      }
+
       // Broadcast mute status
       dataConnsRef.current.forEach((conn) => {
         if (conn.open) {
@@ -598,11 +732,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         }
       });
     }
-  }, []);
+  }, [broadcastSpeakingStatus]);
 
   return {
     isConnected,
     isMuted,
+    isSpeaking,
     peers,
     error,
     connectionStatus,
