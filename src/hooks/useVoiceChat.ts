@@ -28,8 +28,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const peersInfoRef = useRef<Map<string, PeerInfo>>(new Map());
   const myPeerIdRef = useRef<string>('');
-  const isHostRef = useRef(false);
-  const hostConnRef = useRef<DataConnection | null>(null);
+  const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
   const initDoneRef = useRef(false);
 
   // VAD (Voice Activity Detection) refs
@@ -38,8 +37,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const vadIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef(false);
   const speechHangoverRef = useRef<number>(0);
-
-  const roomHubId = `vc-room-${roomId}`;
 
   // Get PeerJS server configuration
   const getPeerOptions = useCallback((): any => {
@@ -292,354 +289,187 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         const peer = new Peer(myPeerId, getPeerOptions());
         peerRef.current = peer;
 
-        // Setup common event handlers
-        const setupPeerHandlers = (p: Peer) => {
-          // Handle incoming calls
-          p.on('call', (call) => {
-            if (!streamRef.current) return;
-            call.answer(streamRef.current);
-            callsRef.current.set(call.peer, call);
+        // Setup peer event handlers
+        peer.on('call', (call) => {
+          console.log(`[Call] Incoming call from: ${call.peer}`);
+          if (!streamRef.current) return;
+          call.answer(streamRef.current);
+          callsRef.current.set(call.peer, call);
 
-            call.on('stream', (remoteStream) => {
-              handleRemoteStream(call.peer, remoteStream);
-            });
-
-            call.on('close', () => cleanupPeer(call.peer));
-            call.on('error', () => cleanupPeer(call.peer));
+          call.on('stream', (remoteStream) => {
+            console.log(`[Call] Stream received from: ${call.peer}`);
+            handleRemoteStream(call.peer, remoteStream);
           });
 
-          // Handle incoming data connections
-          p.on('connection', (conn) => {
-            dataConnsRef.current.set(conn.peer, conn);
+          call.on('close', () => cleanupPeer(call.peer));
+          call.on('error', (err) => {
+            console.warn(`[Call] Error with ${call.peer}:`, err);
+            cleanupPeer(call.peer);
+          });
+        });
 
-            conn.on('open', () => {
-              const remoteNickname = conn.metadata?.nickname || 'Аноним';
-              if (!peersInfoRef.current.has(conn.peer)) {
-                peersInfoRef.current.set(conn.peer, {
-                  peerId: conn.peer,
-                  nickname: remoteNickname,
-                  isMuted: false,
-                  isSpeaking: false,
-                });
+        peer.on('connection', (conn) => {
+          console.log(`[Data] Incoming connection from: ${conn.peer}`);
+          dataConnsRef.current.set(conn.peer, conn);
+
+          conn.on('open', () => {
+            const remoteNickname = conn.metadata?.nickname || 'Аноним';
+            const existing = peersInfoRef.current.get(conn.peer);
+            peersInfoRef.current.set(conn.peer, {
+              peerId: conn.peer,
+              nickname: existing?.nickname || remoteNickname,
+              isMuted: existing?.isMuted || false,
+              isSpeaking: existing?.isSpeaking || false,
+            });
+            updatePeersState();
+
+            // Send our info back
+            conn.send({ type: 'info', nickname, peerId: myPeerIdRef.current });
+          });
+
+          conn.on('data', (data: any) => {
+            if (data.type === 'mute-status') {
+              const info = peersInfoRef.current.get(conn.peer);
+              if (info) {
+                info.isMuted = data.isMuted;
+                peersInfoRef.current.set(conn.peer, info);
                 updatePeersState();
               }
-            });
+            }
+            if (data.type === 'speaking-status') {
+              const info = peersInfoRef.current.get(conn.peer);
+              if (info) {
+                info.isSpeaking = data.isSpeaking;
+                peersInfoRef.current.set(conn.peer, info);
+                updatePeersState();
+              }
+            }
+            if (data.type === 'info') {
+              const existing = peersInfoRef.current.get(conn.peer);
+              peersInfoRef.current.set(conn.peer, {
+                peerId: conn.peer,
+                nickname: data.nickname || existing?.nickname || 'Аноним',
+                isMuted: existing?.isMuted || false,
+                isSpeaking: existing?.isSpeaking || false,
+              });
+              updatePeersState();
+            }
+          });
 
-            conn.on('data', (data: any) => {
-              if (data.type === 'mute-status') {
-                const info = peersInfoRef.current.get(conn.peer);
-                if (info) {
-                  info.isMuted = data.isMuted;
-                  peersInfoRef.current.set(conn.peer, info);
-                  updatePeersState();
-                }
-              }
-              if (data.type === 'speaking-status') {
-                const info = peersInfoRef.current.get(conn.peer);
-                if (info) {
-                  info.isSpeaking = data.isSpeaking;
-                  peersInfoRef.current.set(conn.peer, info);
-                  updatePeersState();
-                }
-              }
-              if (data.type === 'info') {
-                if (!peersInfoRef.current.has(conn.peer)) {
-                  peersInfoRef.current.set(conn.peer, {
-                    peerId: conn.peer,
-                    nickname: data.nickname || 'Аноним',
+          conn.on('close', () => {
+            dataConnsRef.current.delete(conn.peer);
+            cleanupPeer(conn.peer);
+          });
+          conn.on('error', () => {
+            dataConnsRef.current.delete(conn.peer);
+            cleanupPeer(conn.peer);
+          });
+        });
+
+        peer.on('error', (err) => {
+          console.error('[Peer] Error:', err);
+          if (err.type === 'peer-unavailable') {
+            // Remote peer not available or left
+          } else if (err.type === 'network' || err.type === 'server-error') {
+            setError('Ошибка подключения к серверу. Попробуйте обновить страницу.');
+          } else if (err.type === 'ssl-unavailable') {
+            setError('HTTPS требуется для работы голосового чата.');
+          } else if (err.type === 'browser-incompatible') {
+            setError('Ваш браузер не поддерживает WebRTC.');
+          } else if (err.type === 'invalid-id') {
+            setError('Неверный ID пользователя.');
+          }
+        });
+
+        peer.on('disconnected', () => {
+          setConnectionStatus('Переподключение...');
+          try {
+            peer.reconnect();
+          } catch (e) {}
+        });
+
+        peer.on('open', async (assignedId) => {
+          setConnectionStatus('Подключение к комнате...');
+          setIsConnected(true);
+          myPeerIdRef.current = assignedId;
+
+          try {
+            // Join room on backend
+            const joinRes = await fetch(`/peerjs/rooms/${roomId}/join`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ peerId: assignedId, nickname }),
+            });
+            const joinData = await joinRes.json();
+            setConnectionStatus('В комнате ✓');
+
+            // Connect to each existing peer in the room
+            if (joinData.peers && Array.isArray(joinData.peers)) {
+              joinData.peers.forEach((p: { peerId: string; nickname: string }) => {
+                if (p.peerId !== assignedId) {
+                  peersInfoRef.current.set(p.peerId, {
+                    peerId: p.peerId,
+                    nickname: p.nickname || 'Аноним',
                     isMuted: false,
                     isSpeaking: false,
                   });
-                  updatePeersState();
-                }
-              }
-            });
-
-            conn.on('close', () => {
-              dataConnsRef.current.delete(conn.peer);
-              cleanupPeer(conn.peer);
-            });
-          });
-
-          p.on('error', (err) => {
-            console.error('Peer error:', err);
-            if (err.type === 'peer-unavailable') {
-              // Peer not found, ok - will retry or become hub
-            } else if (err.type === 'unavailable-id') {
-              // ID already taken - someone else is hub, reconnect as client
-              if (!isHostRef.current) {
-                setConnectionStatus('Переподключение к хосту...');
-                // Will be handled by hub connection timeout
-              }
-            } else if (err.type === 'network' || err.type === 'server-error') {
-              setError('Ошибка подключения к серверу. Попробуйте обновить страницу.');
-            } else if (err.type === 'ssl-unavailable') {
-              setError('HTTPS требуется для работы голосового чата.');
-            } else if (err.type === 'browser-incompatible') {
-              setError('Ваш браузер не поддерживает WebRTC.');
-            } else if (err.type === 'invalid-id') {
-              setError('Неверный ID пользователя.');
-            }
-          });
-
-          p.on('disconnected', () => {
-            setConnectionStatus('Переподключение...');
-            try {
-              p.reconnect();
-            } catch (e) {
-              // ignore
-            }
-          });
-        };
-
-        setupPeerHandlers(peer);
-
-        peer.on('open', () => {
-          setConnectionStatus('Подключение к комнате...');
-          setIsConnected(true);
-
-          // Try to connect to room hub
-          const hubConn = peer.connect(roomHubId, { reliable: true, metadata: { nickname } });
-          let hubConnected = false;
-
-          const hubTimeout = setTimeout(() => {
-            if (!hubConnected) {
-              // Hub not found, we become the hub
-              becomeHub();
-            }
-          }, 3000);
-
-          hubConn.on('open', () => {
-            hubConnected = true;
-            clearTimeout(hubTimeout);
-            hostConnRef.current = hubConn;
-            setConnectionStatus('Подключён к комнате ✓');
-
-            // Send our info to hub
-            hubConn.send({ type: 'join', nickname, peerId: myPeerId });
-          });
-
-          hubConn.on('data', (data: any) => {
-            if (data.type === 'peer-list') {
-              const peerList: Array<{ peerId: string; nickname: string }> = data.peers;
-              peerList.forEach((p) => {
-                if (p.peerId !== myPeerId) {
-                  if (!peersInfoRef.current.has(p.peerId)) {
-                    peersInfoRef.current.set(p.peerId, {
-                      peerId: p.peerId,
-                      nickname: p.nickname,
-                      isMuted: false,
-                      isSpeaking: false,
-                    });
-                  }
                   callPeer(p.peerId);
                   connectDataToPeer(p.peerId);
                 }
               });
               updatePeersState();
             }
-            if (data.type === 'new-peer') {
-              const { peerId: newPeerId, nickname: newNickname } = data;
-              if (newPeerId !== myPeerId) {
-                if (!peersInfoRef.current.has(newPeerId)) {
-                  peersInfoRef.current.set(newPeerId, {
-                    peerId: newPeerId,
-                    nickname: newNickname,
-                    isMuted: false,
-                    isSpeaking: false,
-                  });
-                }
-                callPeer(newPeerId);
-                connectDataToPeer(newPeerId);
-                updatePeersState();
-              }
-            }
-            if (data.type === 'peer-left') {
-              cleanupPeer(data.peerId);
-            }
-          });
 
-          hubConn.on('error', () => {
-            if (!hubConnected) {
-              clearTimeout(hubTimeout);
-              becomeHub();
-            }
-          });
-
-          hubConn.on('close', () => {
-            hostConnRef.current = null;
-            // Hub disconnected, try to become hub ourselves
-            if (!isHostRef.current) {
-              setTimeout(() => becomeHub(), 1000);
-            }
-          });
-        });
-
-        function becomeHub() {
-          if (isHostRef.current) return;
-          
-          setConnectionStatus('Создание комнаты...');
-          
-          // We keep our existing peer but also register as hub
-          // The hub ID is just a well-known ID that others can connect to
-          // We don't need to destroy our peer - we just need to be reachable at roomHubId
-          
-          // Actually, PeerJS doesn't allow a peer to have multiple IDs.
-          // So we need to destroy current peer and create a new one with hub ID.
-          // But we need to keep our audio stream.
-          
-          const currentPeer = peerRef.current;
-          if (currentPeer) {
-            currentPeer.destroy();
-          }
-          
-          const hubPeer = new Peer(roomHubId, getPeerOptions());
-          peerRef.current = hubPeer;
-          isHostRef.current = true;
-          myPeerIdRef.current = roomHubId;
-
-          setupPeerHandlers(hubPeer);
-
-          hubPeer.on('open', () => {
-            setConnectionStatus('Комната создана ✓ Ожидание участников...');
-            
-            // Hub needs to call all connected peers
-            // But since we just became hub, there are no peers yet
-            // New peers will connect to us and we'll call them
-          });
-
-          // Override connection handler for hub
-          hubPeer.on('connection', (conn) => {
-            dataConnsRef.current.set(conn.peer, conn);
-
-            conn.on('open', () => {
-              const remoteNickname = conn.metadata?.nickname || 'Аноним';
-              if (!peersInfoRef.current.has(conn.peer)) {
-                peersInfoRef.current.set(conn.peer, {
-                  peerId: conn.peer,
-                  nickname: remoteNickname,
-                  isMuted: false,
-                  isSpeaking: false,
+            // Start heartbeat polling every 3 seconds
+            heartbeatTimerRef.current = setInterval(async () => {
+              if (!peerRef.current || peerRef.current.destroyed) return;
+              try {
+                const hbRes = await fetch(`/peerjs/rooms/${roomId}/heartbeat`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ peerId: myPeerIdRef.current }),
                 });
-              }
-              updatePeersState();
+                const hbData = await hbRes.json();
+                if (hbData.peers && Array.isArray(hbData.peers)) {
+                  const activePeerIds = new Set(hbData.peers.map((p: any) => p.peerId));
 
-              // Send current peer list to new connection
-              const peerList = Array.from(peersInfoRef.current.entries())
-                .filter(([id]) => id !== conn.peer)
-                .map(([, info]) => ({ peerId: info.peerId, nickname: info.nickname }));
-              
-              conn.send({ type: 'peer-list', peers: peerList });
-
-              // Notify others about new peer
-              broadcastToAllPeers(
-                { type: 'new-peer', peerId: conn.peer, nickname: remoteNickname },
-                conn.peer
-              );
-
-              // Call the new peer with audio
-              if (streamRef.current) {
-                const call = hubPeer.call(conn.peer, streamRef.current);
-                if (call) {
-                  callsRef.current.set(conn.peer, call);
-                  call.on('stream', (remoteStream) => {
-                    handleRemoteStream(conn.peer, remoteStream);
-                  });
-                  call.on('close', () => cleanupPeer(conn.peer));
-                  call.on('error', () => cleanupPeer(conn.peer));
-                }
-              }
-            });
-
-            conn.on('data', (data: any) => {
-              if (data.type === 'mute-status') {
-                const info = peersInfoRef.current.get(conn.peer);
-                if (info) {
-                  info.isMuted = data.isMuted;
-                  peersInfoRef.current.set(conn.peer, info);
-                  updatePeersState();
-                }
-              }
-              if (data.type === 'speaking-status') {
-                const info = peersInfoRef.current.get(conn.peer);
-                if (info) {
-                  info.isSpeaking = data.isSpeaking;
-                  peersInfoRef.current.set(conn.peer, info);
-                  updatePeersState();
-                }
-              }
-            });
-
-            conn.on('close', () => {
-              dataConnsRef.current.delete(conn.peer);
-              peersInfoRef.current.delete(conn.peer);
-              updatePeersState();
-
-              // Notify others
-              broadcastToAllPeers({ type: 'peer-left', peerId: conn.peer });
-              cleanupPeer(conn.peer);
-            });
-          });
-
-          hubPeer.on('error', (err) => {
-            console.error('Hub peer error:', err);
-            if (err.type === 'unavailable-id') {
-              // Someone else became hub, reconnect as client
-              isHostRef.current = false;
-              setConnectionStatus('Переподключение к хосту...');
-              hubPeer.destroy();
-              
-              const clientPeer = new Peer(`vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`, getPeerOptions());
-              peerRef.current = clientPeer;
-              myPeerIdRef.current = clientPeer.id || '';
-              
-              setupPeerHandlers(clientPeer);
-              
-              clientPeer.on('open', () => {
-                setConnectionStatus('Подключён к комнате ✓');
-                setIsConnected(true);
-                const hubConn2 = clientPeer.connect(roomHubId, { reliable: true, metadata: { nickname } });
-                hubConn2.on('open', () => {
-                  hubConn2.send({ type: 'join', nickname, peerId: myPeerIdRef.current });
-                });
-                hubConn2.on('data', (data: any) => {
-                  if (data.type === 'peer-list') {
-                    data.peers.forEach((p: any) => {
-                      if (p.peerId !== myPeerIdRef.current) {
-                        if (!peersInfoRef.current.has(p.peerId)) {
-                          peersInfoRef.current.set(p.peerId, {
-                            peerId: p.peerId,
-                            nickname: p.nickname,
-                            isMuted: false,
-                            isSpeaking: false,
-                          });
-                        }
-                        callPeer(p.peerId);
-                        connectDataToPeer(p.peerId);
-                      }
-                    });
-                    updatePeersState();
-                  }
-                  if (data.type === 'new-peer') {
-                    if (data.peerId !== myPeerIdRef.current) {
-                      if (!peersInfoRef.current.has(data.peerId)) {
-                        peersInfoRef.current.set(data.peerId, {
-                          peerId: data.peerId,
-                          nickname: data.nickname,
+                  // Connect to any new peers
+                  hbData.peers.forEach((p: { peerId: string; nickname: string }) => {
+                    if (p.peerId !== myPeerIdRef.current) {
+                      if (!peersInfoRef.current.has(p.peerId)) {
+                        peersInfoRef.current.set(p.peerId, {
+                          peerId: p.peerId,
+                          nickname: p.nickname || 'Аноним',
                           isMuted: false,
                           isSpeaking: false,
                         });
+                        updatePeersState();
                       }
-                      callPeer(data.peerId);
-                      connectDataToPeer(data.peerId);
-                      updatePeersState();
+                      if (!callsRef.current.has(p.peerId)) {
+                        callPeer(p.peerId);
+                      }
+                      if (!dataConnsRef.current.has(p.peerId)) {
+                        connectDataToPeer(p.peerId);
+                      }
                     }
-                  }
-                });
-              });
-            }
-          });
-        }
+                  });
+
+                  // Remove peers that have left the room
+                  peersInfoRef.current.forEach((_, id) => {
+                    if (!activePeerIds.has(id)) {
+                      cleanupPeer(id);
+                    }
+                  });
+                }
+              } catch (hbErr) {
+                // Heartbeat error ignored
+              }
+            }, 3000);
+          } catch (joinErr) {
+            console.error('[Room] Join error:', joinErr);
+            setError('Не удалось подключиться к комнате.');
+          }
+        });
       } catch (err: any) {
         console.error('Init error:', err);
         
@@ -660,7 +490,42 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
     init();
 
+    // Unlock audio on first user interaction
+    const unlockAudio = () => {
+      audioElementsRef.current.forEach((audio) => {
+        if (audio.paused) {
+          audio.play().catch(() => {});
+        }
+      });
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+    };
+    window.addEventListener('click', unlockAudio);
+    window.addEventListener('touchstart', unlockAudio);
+
     return () => {
+      window.removeEventListener('click', unlockAudio);
+      window.removeEventListener('touchstart', unlockAudio);
+
+      // Stop heartbeat timer
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+        heartbeatTimerRef.current = null;
+      }
+
+      // Notify backend we left
+      if (myPeerIdRef.current) {
+        try {
+          fetch(`/peerjs/rooms/${roomId}/leave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ peerId: myPeerIdRef.current }),
+            keepalive: true,
+          }).catch(() => {});
+        } catch (e) {}
+      }
+
       // Cleanup VAD interval and AudioContext
       if (vadIntervalRef.current) {
         clearInterval(vadIntervalRef.current);

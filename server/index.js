@@ -36,6 +36,75 @@ app.get('/api/info', (req, res) => {
   });
 });
 
+// In-memory room registry
+// roomId -> Map<peerId, { peerId, nickname, lastSeen: number }>
+const rooms = new Map();
+
+function getActiveRoomPeers(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return [];
+  const now = Date.now();
+  const activePeers = [];
+  for (const [peerId, peer] of room.entries()) {
+    if (now - peer.lastSeen > 15000) {
+      room.delete(peerId);
+    } else {
+      activePeers.push({ peerId: peer.peerId, nickname: peer.nickname });
+    }
+  }
+  if (room.size === 0) {
+    rooms.delete(roomId);
+  }
+  return activePeers;
+}
+
+// Room endpoints (under /peerjs/rooms to ensure Nginx proxies them to Node)
+app.post('/peerjs/rooms/:roomId/join', (req, res) => {
+  const { roomId } = req.params;
+  const { peerId, nickname } = req.body;
+  if (!peerId) {
+    return res.status(400).json({ error: 'peerId is required' });
+  }
+
+  if (!rooms.has(roomId)) {
+    rooms.set(roomId, new Map());
+  }
+
+  const room = rooms.get(roomId);
+  room.set(peerId, {
+    peerId,
+    nickname: nickname || 'Аноним',
+    lastSeen: Date.now()
+  });
+
+  const peers = getActiveRoomPeers(roomId).filter(p => p.peerId !== peerId);
+  console.log(`[Rooms] Peer ${peerId} (${nickname}) joined room ${roomId}. Active peers: ${peers.length}`);
+  res.json({ peers });
+});
+
+app.post('/peerjs/rooms/:roomId/heartbeat', (req, res) => {
+  const { roomId } = req.params;
+  const { peerId } = req.body;
+  const room = rooms.get(roomId);
+  if (room && peerId && room.has(peerId)) {
+    room.get(peerId).lastSeen = Date.now();
+  }
+  const peers = getActiveRoomPeers(roomId).filter(p => p.peerId !== peerId);
+  res.json({ peers });
+});
+
+app.post('/peerjs/rooms/:roomId/leave', (req, res) => {
+  const { roomId } = req.params;
+  const { peerId } = req.body;
+  const room = rooms.get(roomId);
+  if (room && peerId) {
+    room.delete(peerId);
+    if (room.size === 0) rooms.delete(roomId);
+    console.log(`[Rooms] Peer ${peerId} left room ${roomId}`);
+  }
+  res.json({ status: 'ok' });
+});
+
 // PeerJS signaling server
 // CORRECT CONFIGURATION:
 // - path: '/peerjs' - полный путь для PeerJS
@@ -67,7 +136,15 @@ peerServer.on('connection', (client) => {
 });
 
 peerServer.on('disconnect', (client) => {
-  console.log(`[PeerJS] Client disconnected: ${client.getId()}`);
+  const peerId = client.getId();
+  console.log(`[PeerJS] Client disconnected: ${peerId}`);
+  for (const [roomId, room] of rooms.entries()) {
+    if (room.has(peerId)) {
+      room.delete(peerId);
+      if (room.size === 0) rooms.delete(roomId);
+      console.log(`[Rooms] Cleaned up disconnected peer ${peerId} from room ${roomId}`);
+    }
+  }
 });
 
 // Serve static files from dist if available
