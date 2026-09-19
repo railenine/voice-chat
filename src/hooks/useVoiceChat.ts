@@ -38,6 +38,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const vadIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isSpeakingRef = useRef(false);
   const speechHangoverRef = useRef<number>(0);
+  const remoteAnalysersRef = useRef<Map<string, { analyser: AnalyserNode; dataArray: any; hangover: number }>>(new Map());
 
   // Deterministic caller rule to prevent call collisions (glare) in P2P mesh
   const shouldInitiateCall = useCallback((myId: string, remoteId: string): boolean => {
@@ -75,9 +76,23 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     const defaultIceServers = [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'stun:stun2.l.google.com:19302' },
       { urls: 'stun:stun.cloudflare.com:3478' },
-      { urls: 'stun:global.stun.twilio.com:3478' },
+      { urls: 'stun:openrelay.metered.ca:80' },
+      {
+        urls: 'turn:openrelay.metered.ca:80',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
+      {
+        urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+        username: 'openrelayproject',
+        credential: 'openrelayproject',
+      },
     ];
     
     // For dev mode (Vite), use public PeerJS server
@@ -131,6 +146,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       audio.remove();
       audioElementsRef.current.delete(peerId);
     }
+
+    remoteAnalysersRef.current.delete(peerId);
   }, []);
 
   const cleanupPeer = useCallback((peerId: string) => {
@@ -162,6 +179,25 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     
     if (audio.srcObject !== stream) {
       audio.srcObject = stream;
+    }
+
+    // Attach Web Audio API analyser to remote stream for receiver-side VAD (green ring)
+    try {
+      if (audioContextRef.current && !remoteAnalysersRef.current.has(peerId)) {
+        const remoteAnalyser = audioContextRef.current.createAnalyser();
+        remoteAnalyser.fftSize = 256;
+        remoteAnalyser.smoothingTimeConstant = 0.3;
+        const remoteSource = audioContextRef.current.createMediaStreamSource(stream);
+        remoteSource.connect(remoteAnalyser);
+        remoteAnalysersRef.current.set(peerId, {
+          analyser: remoteAnalyser,
+          dataArray: new Uint8Array(remoteAnalyser.frequencyBinCount),
+          hangover: 0,
+        });
+        console.log(`[VAD] Attached receiver VAD analyser to remote stream of: ${peerId}`);
+      }
+    } catch (vadErr) {
+      console.warn(`[VAD] Failed to attach receiver VAD for ${peerId}:`, vadErr);
     }
 
     const playAudio = () => {
@@ -316,38 +352,70 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
             vadIntervalRef.current = setInterval(() => {
-              if (!analyserRef.current || !streamRef.current) return;
-
-              const track = streamRef.current.getAudioTracks()[0];
-              if (!track || !track.enabled) {
-                if (isSpeakingRef.current) {
-                  isSpeakingRef.current = false;
-                  setIsSpeaking(false);
-                  broadcastSpeakingStatus(false);
-                }
-                return;
-              }
-
-              analyserRef.current.getByteFrequencyData(dataArray);
-              let sum = 0;
-              for (let i = 0; i < dataArray.length; i++) {
-                sum += dataArray[i];
-              }
-              const average = sum / dataArray.length;
               const now = Date.now();
+              let stateChanged = false;
 
-              // Speech threshold: average > 10 (out of 255)
-              if (average > 10) {
-                speechHangoverRef.current = now + 400;
-                if (!isSpeakingRef.current) {
-                  isSpeakingRef.current = true;
-                  setIsSpeaking(true);
-                  broadcastSpeakingStatus(true);
+              // 1. Local mic VAD
+              if (analyserRef.current && streamRef.current) {
+                const track = streamRef.current.getAudioTracks()[0];
+                if (!track || !track.enabled) {
+                  if (isSpeakingRef.current) {
+                    isSpeakingRef.current = false;
+                    setIsSpeaking(false);
+                    broadcastSpeakingStatus(false);
+                  }
+                } else {
+                  analyserRef.current.getByteFrequencyData(dataArray);
+                  let sum = 0;
+                  for (let i = 0; i < dataArray.length; i++) {
+                    sum += dataArray[i];
+                  }
+                  const average = sum / dataArray.length;
+
+                  // Speech threshold: average > 10 (out of 255)
+                  if (average > 10) {
+                    speechHangoverRef.current = now + 400;
+                    if (!isSpeakingRef.current) {
+                      isSpeakingRef.current = true;
+                      setIsSpeaking(true);
+                      broadcastSpeakingStatus(true);
+                    }
+                  } else if (isSpeakingRef.current && now > speechHangoverRef.current) {
+                    isSpeakingRef.current = false;
+                    setIsSpeaking(false);
+                    broadcastSpeakingStatus(false);
+                  }
                 }
-              } else if (isSpeakingRef.current && now > speechHangoverRef.current) {
-                isSpeakingRef.current = false;
-                setIsSpeaking(false);
-                broadcastSpeakingStatus(false);
+              }
+
+              // 2. Remote streams VAD (receiver-side volume detection for green avatars)
+              remoteAnalysersRef.current.forEach((remoteVad, remotePeerId) => {
+                const peerInfo = peersInfoRef.current.get(remotePeerId);
+                if (!peerInfo) return;
+
+                remoteVad.analyser.getByteFrequencyData(remoteVad.dataArray);
+                let sum = 0;
+                for (let i = 0; i < remoteVad.dataArray.length; i++) {
+                  sum += remoteVad.dataArray[i];
+                }
+                const avg = sum / remoteVad.dataArray.length;
+
+                if (avg > 10) {
+                  remoteVad.hangover = now + 400;
+                  if (!peerInfo.isSpeaking) {
+                    peerInfo.isSpeaking = true;
+                    peersInfoRef.current.set(remotePeerId, peerInfo);
+                    stateChanged = true;
+                  }
+                } else if (peerInfo.isSpeaking && now > remoteVad.hangover) {
+                  peerInfo.isSpeaking = false;
+                  peersInfoRef.current.set(remotePeerId, peerInfo);
+                  stateChanged = true;
+                }
+              });
+
+              if (stateChanged) {
+                updatePeersState();
               }
             }, 60);
           }
@@ -391,7 +459,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           console.log(`[Data] Incoming connection from: ${conn.peer}`);
           dataConnsRef.current.set(conn.peer, conn);
 
-          conn.on('open', () => {
+          const setupConn = () => {
             const remoteNickname = conn.metadata?.nickname || 'Аноним';
             const existing = peersInfoRef.current.get(conn.peer);
             peersInfoRef.current.set(conn.peer, {
@@ -403,14 +471,22 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             updatePeersState();
 
             // Send our info back
-            conn.send({ type: 'info', nickname, peerId: myPeerIdRef.current });
+            try {
+              conn.send({ type: 'info', nickname, peerId: myPeerIdRef.current });
+            } catch (e) {}
 
-            // If we are designated caller and haven't called yet, initiate call now
-            if (shouldInitiateCall(myPeerIdRef.current, conn.peer) && !callsRef.current.has(conn.peer)) {
-              console.log(`[Call] Incoming data connection from ${conn.peer} -> initiating call`);
+            // If we don't have an active call with them yet, initiate call
+            if (!callsRef.current.has(conn.peer)) {
+              console.log(`[Call] Connected to ${conn.peer} without call -> initiating call`);
               callPeer(conn.peer);
             }
-          });
+          };
+
+          if (conn.open) {
+            setupConn();
+          } else {
+            conn.on('open', setupConn);
+          }
 
           conn.on('data', (data: any) => {
             if (data.type === 'mute-status') {
@@ -488,7 +564,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             const joinData = await joinRes.json();
             setConnectionStatus('В комнате ✓');
 
-            // Connect to each existing peer in the room
+            // Connect to each existing peer in the room immediately
             if (joinData.peers && Array.isArray(joinData.peers)) {
               joinData.peers.forEach((p: { peerId: string; nickname: string }) => {
                 if (p.peerId !== assignedId) {
@@ -499,9 +575,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                     isSpeaking: false,
                   });
                   connectDataToPeer(p.peerId);
-                  if (shouldInitiateCall(assignedId, p.peerId)) {
-                    callPeer(p.peerId);
-                  }
+                  // New entrant initiates call immediately to all existing peers (0 ms delay)
+                  callPeer(p.peerId);
                 }
               });
               updatePeersState();
@@ -535,7 +610,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                       if (!dataConnsRef.current.has(p.peerId)) {
                         connectDataToPeer(p.peerId);
                       }
-                      if (shouldInitiateCall(myPeerIdRef.current, p.peerId) && !callsRef.current.has(p.peerId)) {
+                      if (!callsRef.current.has(p.peerId)) {
                         callPeer(p.peerId);
                       }
                     }
@@ -651,6 +726,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       callsRef.current.clear();
       dataConnsRef.current.clear();
       peersInfoRef.current.clear();
+      remoteAnalysersRef.current.clear();
     };
   }, [roomId, nickname, shouldInitiateCall, unlockAudio, callPeer, connectDataToPeer, cleanupPeer, cleanupPeerCall, handleRemoteStream, updatePeersState, broadcastSpeakingStatus, getPeerOptions]);
 
