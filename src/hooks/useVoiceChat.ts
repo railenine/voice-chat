@@ -54,9 +54,10 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     }
 
     // For production, connect to our own PeerJS server
-    // PeerJS client appends '/peerjs' to the path automatically
-    // Server: path: '/peerjs' + app.use(peerServer) [NO mount point!]
-    // Client: path: '/peerjs' → HTTP: /peerjs/id, WebSocket: /peerjs/peerjs ✓
+    // CORRECT CONFIGURATION:
+    // - Client: path: '' → WebSocket: /peerjs
+    // - Server: path: '' + mount '/peerjs' → checks '/peerjs' ✓
+    // - HTTP: /peerjs/id, /peerjs/peers
     
     // Determine port number
     let port: number;
@@ -70,7 +71,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     return {
       host: peerServerHost,
       port: port,
-      path: '/peerjs',
+      path: '',
       secure: window.location.protocol === 'https:',
       debug: 0,
       config: {
