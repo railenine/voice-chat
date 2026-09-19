@@ -41,6 +41,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const remoteAnalysersRef = useRef<Map<string, { analyser: AnalyserNode; dataArray: any; hangover: number }>>(new Map());
   const remoteHangoverRef = useRef<Map<string, number>>(new Map());
   const peerJoinTimesRef = useRef<Map<string, number>>(new Map());
+  const lastBroadcastSpeakingRef = useRef<number>(0);
 
   // Deterministic caller rule to prevent call collisions (glare) in P2P mesh
   const shouldInitiateCall = useCallback((myId: string, remoteId: string): boolean => {
@@ -169,7 +170,14 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       audio.setAttribute('autoplay', 'true');
       audio.muted = false;
       audio.volume = 1.0;
-      audio.style.display = 'none';
+      // Position off-screen so the browser keeps it in render tree
+      // DO NOT use display: none, as Firefox and Chrome suspend audio processing for display: none elements!
+      audio.style.position = 'fixed';
+      audio.style.top = '-9999px';
+      audio.style.left = '-9999px';
+      audio.style.width = '1px';
+      audio.style.height = '1px';
+      audio.style.opacity = '0.01';
       document.body.appendChild(audio);
       audioElementsRef.current.set(peerId, audio);
     }
@@ -285,11 +293,14 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       if (data.type === 'speaking-status') {
         const info = peersInfoRef.current.get(conn.peer);
         if (info) {
-          info.isSpeaking = data.isSpeaking;
-          peersInfoRef.current.set(conn.peer, info);
           if (data.isSpeaking) {
-            remoteHangoverRef.current.set(conn.peer, Date.now() + 400);
+            info.isSpeaking = true;
+            remoteHangoverRef.current.set(conn.peer, Date.now() + 500);
+          } else {
+            info.isSpeaking = false;
+            remoteHangoverRef.current.delete(conn.peer);
           }
+          peersInfoRef.current.set(conn.peer, info);
           updatePeersState();
         }
       }
@@ -399,6 +410,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                       isSpeakingRef.current = true;
                       setIsSpeaking(true);
                       broadcastSpeakingStatus(true);
+                      lastBroadcastSpeakingRef.current = now;
+                    } else if (now - lastBroadcastSpeakingRef.current > 150) {
+                      // Periodically keep-alive broadcast while speaking so receiver knows speech continues
+                      broadcastSpeakingStatus(true);
+                      lastBroadcastSpeakingRef.current = now;
                     }
                   } else if (isSpeakingRef.current && now > speechHangoverRef.current) {
                     isSpeakingRef.current = false;
@@ -415,7 +431,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                 const peerInfo = peersInfoRef.current.get(remotePeerId);
                 if (!peerInfo) return;
 
-                let remoteIsSpeaking = false;
+                let audioDetected = false;
 
                 // A. Native WebRTC receiver synchronization sources (RFC 6464 audio level)
                 try {
@@ -427,16 +443,16 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                         const syncSources = receiver.getSynchronizationSources();
                         for (const src of syncSources) {
                           if (typeof src.audioLevel === 'number' && src.audioLevel > 0.01) {
-                            remoteIsSpeaking = true;
+                            audioDetected = true;
                             break;
                           }
                           if (src.voiceActivityFlag === true) {
-                            remoteIsSpeaking = true;
+                            audioDetected = true;
                             break;
                           }
                         }
                       }
-                      if (remoteIsSpeaking) break;
+                      if (audioDetected) break;
                     }
                   }
                 } catch (e) {
@@ -444,7 +460,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                 }
 
                 // B. Web Audio API analyser fallback
-                if (!remoteIsSpeaking) {
+                if (!audioDetected) {
                   const remoteVad = remoteAnalysersRef.current.get(remotePeerId);
                   if (remoteVad) {
                     remoteVad.analyser.getByteFrequencyData(remoteVad.dataArray);
@@ -454,13 +470,13 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                     }
                     const avg = sum / remoteVad.dataArray.length;
                     if (avg > 6) {
-                      remoteIsSpeaking = true;
+                      audioDetected = true;
                     }
                   }
                 }
 
                 let remoteHangover = remoteHangoverRef.current.get(remotePeerId) || 0;
-                if (remoteIsSpeaking) {
+                if (audioDetected) {
                   remoteHangover = now + 400;
                   remoteHangoverRef.current.set(remotePeerId, remoteHangover);
                   if (!peerInfo.isSpeaking) {
@@ -510,6 +526,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             updatePeersState();
           }
 
+          // Close stale call if exists
+          const existingCall = callsRef.current.get(call.peer);
+          if (existingCall && existingCall !== call) {
+            try { existingCall.close(); } catch (e) {}
+          }
+
           call.answer(streamRef.current);
           callsRef.current.set(call.peer, call);
 
@@ -547,12 +569,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             try {
               conn.send({ type: 'info', nickname, peerId: myPeerIdRef.current });
             } catch (e) {}
-
-            // Deterministic caller rule: only initiate call if myId < remoteId
-            if (!callsRef.current.has(conn.peer) && shouldInitiateCall(myPeerIdRef.current, conn.peer)) {
-              console.log(`[Call] Initiating call to ${conn.peer} (deterministic caller rule)`);
-              callPeer(conn.peer);
-            }
           };
 
           if (conn.open) {
@@ -573,11 +589,14 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             if (data.type === 'speaking-status') {
               const info = peersInfoRef.current.get(conn.peer);
               if (info) {
-                info.isSpeaking = data.isSpeaking;
-                peersInfoRef.current.set(conn.peer, info);
                 if (data.isSpeaking) {
-                  remoteHangoverRef.current.set(conn.peer, Date.now() + 400);
+                  info.isSpeaking = true;
+                  remoteHangoverRef.current.set(conn.peer, Date.now() + 500);
+                } else {
+                  info.isSpeaking = false;
+                  remoteHangoverRef.current.delete(conn.peer);
                 }
+                peersInfoRef.current.set(conn.peer, info);
                 updatePeersState();
               }
             }
@@ -659,10 +678,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                   });
                   peerJoinTimesRef.current.set(p.peerId, Date.now());
                   connectDataToPeer(p.peerId);
-                  // Deterministic call: only if assignedId < p.peerId
-                  if (shouldInitiateCall(assignedId, p.peerId)) {
-                    callPeer(p.peerId);
-                  }
+                  // New entrant initiates call to all existing peers immediately
+                  callPeer(p.peerId);
                 }
               });
               updatePeersState();
@@ -699,8 +716,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
                       }
                       if (!callsRef.current.has(p.peerId)) {
                         const joinTime = peerJoinTimesRef.current.get(p.peerId) || Date.now();
-                        // Call if designated initiator or fallback after 6s
-                        if (shouldInitiateCall(myPeerIdRef.current, p.peerId) || (Date.now() - joinTime > 6000)) {
+                        // Fallback: only call if peer has been around for > 5s and still no call was established
+                        if (Date.now() - joinTime > 5000) {
+                          console.log(`[Call] Heartbeat fallback call to ${p.peerId}`);
                           callPeer(p.peerId);
                         }
                       }
