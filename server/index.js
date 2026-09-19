@@ -37,6 +37,48 @@ app.get('/peerjs/info', (req, res) => {
   });
 });
 
+// Metered TURN credentials caching
+let cachedIceServers = null;
+let cachedIceServersExpiry = 0;
+
+async function getIceServers() {
+  const now = Date.now();
+  if (cachedIceServers && now < cachedIceServersExpiry) {
+    return cachedIceServers;
+  }
+
+  const fallbackStuns = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+  ];
+
+  try {
+    const apiKey = process.env.METERED_API_KEY || '8b6ae7ebb9d50b9b18c93ae356e001dd6b44';
+    const appName = process.env.METERED_APP_NAME || 'rvxis';
+    const res = await fetch(`https://${appName}.metered.live/api/v1/turn/credentials?apiKey=${apiKey}`, {
+      signal: AbortSignal.timeout(6000),
+    });
+    if (res.ok) {
+      const meteredServers = await res.json();
+      cachedIceServers = [...fallbackStuns, ...meteredServers];
+      cachedIceServersExpiry = now + 3600000; // Cache for 1 hour
+      console.log(`[ICE] Successfully fetched ${meteredServers.length} TURN servers from Metered`);
+      return cachedIceServers;
+    }
+  } catch (err) {
+    console.warn('[ICE] Failed to fetch TURN credentials from Metered, using fallback:', err);
+  }
+
+  return fallbackStuns;
+}
+
+app.get('/peerjs/ice-servers', async (req, res) => {
+  const servers = await getIceServers();
+  res.json({ iceServers: servers });
+});
+
 // In-memory room manager
 // roomId -> Map<peerId, { ws: WebSocket, peerId: string, nickname: string, isMuted: boolean, isSpeaking: boolean }>
 const rooms = new Map();
@@ -116,7 +158,7 @@ wss.on('connection', (ws) => {
     ws.isAlive = true;
   });
 
-  ws.on('message', (raw) => {
+  ws.on('message', async (raw) => {
     let msg;
     try {
       msg = JSON.parse(raw.toString());
@@ -162,10 +204,14 @@ wss.on('connection', (ws) => {
 
       console.log(`[Room ${roomId}] Peer ${peerId} (${nickname}) joined. Total peers: ${room.size}`);
 
-      // Send existing peers to joining client
+      // Fetch cached/live ICE servers including Metered TURN
+      const iceServers = await getIceServers();
+
+      // Send existing peers and iceServers to joining client
       ws.send(JSON.stringify({
         type: 'room-state',
         peers: existingPeers,
+        iceServers,
       }));
 
       // Broadcast user-joined to all other peers in the room

@@ -32,6 +32,13 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const ignoreOfferRef = useRef<Map<string, boolean>>(new Map());
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const initDoneRef = useRef(false);
+  const iceServersRef = useRef<RTCIceServer[]>([
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:global.stun.twilio.com:3478' },
+  ]);
 
   // VAD refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -41,15 +48,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const speechHangoverRef = useRef<number>(0);
   const lastBroadcastSpeakingRef = useRef<number>(0);
   const remoteHangoverRef = useRef<Map<string, number>>(new Map());
-
-  // ICE configuration
-  const iceServers = [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-  ];
 
   const updatePeersState = useCallback(() => {
     setPeers(Array.from(peersInfoRef.current.values()));
@@ -171,7 +169,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     if (pc) return pc;
 
     console.log(`[WebRTC] Creating RTCPeerConnection for: ${remotePeerId}`);
-    pc = new RTCPeerConnection({ iceServers });
+    pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
     peerConnectionsRef.current.set(remotePeerId, pc);
 
     // Polite peer determination (symmetric & deterministic)
@@ -321,6 +319,20 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error('Ваш браузер не поддерживает доступ к микрофону или страница открыта не по HTTPS.');
+        }
+
+        // Pre-fetch ICE servers from backend
+        try {
+          const iceRes = await fetch('/peerjs/ice-servers');
+          if (iceRes.ok) {
+            const iceData = await iceRes.json();
+            if (Array.isArray(iceData?.iceServers) && iceData.iceServers.length > 0) {
+              iceServersRef.current = iceData.iceServers;
+              console.log(`[ICE] Pre-fetched ${iceData.iceServers.length} ICE servers (Metered TURN ready)`);
+            }
+          }
+        } catch (iceErr) {
+          console.warn('[ICE] Pre-fetch failed, will use room-state or fallback:', iceErr);
         }
 
         setConnectionStatus('Запрос доступа к микрофону...');
@@ -498,7 +510,11 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
           // Initial room state: list of existing peers
           if (type === 'room-state') {
-            console.log(`[WS] Received room-state with ${msg.peers.length} peers`);
+            console.log(`[WS] Received room-state with ${msg.peers?.length || 0} peers`);
+            if (Array.isArray(msg.iceServers) && msg.iceServers.length > 0) {
+              iceServersRef.current = msg.iceServers;
+              console.log(`[ICE] Updated ICE servers from room-state: ${msg.iceServers.length} servers`);
+            }
             if (Array.isArray(msg.peers)) {
               msg.peers.forEach((p: PeerInfo) => {
                 peersInfoRef.current.set(p.peerId, p);
