@@ -17,6 +17,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
+  const [peerVolumes, setPeerVolumes] = useState<Record<string, number>>({});
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('Подключение...');
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
@@ -27,6 +28,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const currentNicknameRef = useRef<string>(nickname);
   const streamRef = useRef<MediaStream | null>(null);
   const peersInfoRef = useRef<Map<string, PeerInfo>>(new Map());
+  const peerVolumesRef = useRef<Map<string, number>>(new Map());
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const makingOfferRef = useRef<Map<string, boolean>>(new Map());
   const ignoreOfferRef = useRef<Map<string, boolean>>(new Map());
@@ -82,10 +84,44 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     }
   }, []);
 
+  // Helper to read saved volume by nickname from localStorage
+  const getSavedVolume = useCallback((nick: string): number => {
+    try {
+      const saved = localStorage.getItem(`peer_volume_${nick}`);
+      if (saved !== null) {
+        const val = Number(saved);
+        if (!isNaN(val) && val >= 0 && val <= 100) {
+          return val;
+        }
+      }
+    } catch (e) {}
+    return 100;
+  }, []);
+
+  // Set volume for a remote peer (0 to 100)
+  const setPeerVolume = useCallback((peerId: string, volume: number) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(volume)));
+    peerVolumesRef.current.set(peerId, clamped);
+    setPeerVolumes((prev) => ({ ...prev, [peerId]: clamped }));
+
+    const audio = audioElementsRef.current.get(peerId);
+    if (audio) {
+      audio.volume = clamped / 100;
+    }
+
+    const peerInfo = peersInfoRef.current.get(peerId);
+    if (peerInfo?.nickname) {
+      try {
+        localStorage.setItem(`peer_volume_${peerInfo.nickname}`, String(clamped));
+      } catch (e) {}
+    }
+  }, []);
+
   // Handle incoming remote audio stream
   const handleRemoteStream = useCallback((peerId: string, stream: MediaStream) => {
     console.log(`[Audio] Received remote audio stream for peer: ${peerId}`);
     let audio = audioElementsRef.current.get(peerId);
+    const currentVol = (peerVolumesRef.current.get(peerId) ?? 100) / 100;
 
     if (!audio) {
       audio = document.createElement('audio');
@@ -95,7 +131,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
       audio.muted = false;
-      audio.volume = 1.0;
+      audio.volume = currentVol;
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
       audio.style.top = '-9999px';
@@ -114,7 +150,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     const playAudio = () => {
       if (!audio) return;
       audio.muted = false;
-      audio.volume = 1.0;
+      audio.volume = (peerVolumesRef.current.get(peerId) ?? 100) / 100;
       audio.play().then(() => {
         console.log(`[Audio] Playing remote audio for peer ${peerId}`);
         setNeedsAudioUnlock(false);
@@ -160,6 +196,13 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     }
 
     peersInfoRef.current.delete(peerId);
+    peerVolumesRef.current.delete(peerId);
+    setPeerVolumes((prev) => {
+      if (!(peerId in prev)) return prev;
+      const copy = { ...prev };
+      delete copy[peerId];
+      return copy;
+    });
     updatePeersState();
   }, [updatePeersState]);
 
@@ -516,11 +559,16 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
               console.log(`[ICE] Updated ICE servers from room-state: ${msg.iceServers.length} servers`);
             }
             if (Array.isArray(msg.peers)) {
+              const newVols: Record<string, number> = {};
               msg.peers.forEach((p: PeerInfo) => {
                 peersInfoRef.current.set(p.peerId, p);
+                const savedVol = getSavedVolume(p.nickname);
+                peerVolumesRef.current.set(p.peerId, savedVol);
+                newVols[p.peerId] = savedVol;
                 // Create PeerConnection for existing peer (triggers negotiation)
                 getOrCreatePeerConnection(p.peerId);
               });
+              setPeerVolumes((prev) => ({ ...prev, ...newVols }));
               updatePeersState();
             }
           }
@@ -529,6 +577,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
           else if (type === 'user-joined') {
             console.log(`[WS] Peer joined: ${msg.peer.peerId} (${msg.peer.nickname})`);
             peersInfoRef.current.set(msg.peer.peerId, msg.peer);
+            const savedVol = getSavedVolume(msg.peer.nickname);
+            peerVolumesRef.current.set(msg.peer.peerId, savedVol);
+            setPeerVolumes((prev) => ({ ...prev, [msg.peer.peerId]: savedVol }));
             getOrCreatePeerConnection(msg.peer.peerId);
             updatePeersState();
           }
@@ -544,6 +595,13 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
             if (info) {
               info.nickname = msg.nickname;
               peersInfoRef.current.set(msg.peerId, info);
+              const savedVol = getSavedVolume(msg.nickname);
+              peerVolumesRef.current.set(msg.peerId, savedVol);
+              setPeerVolumes((prev) => ({ ...prev, [msg.peerId]: savedVol }));
+              const audio = audioElementsRef.current.get(msg.peerId);
+              if (audio) {
+                audio.volume = savedVol / 100;
+              }
               updatePeersState();
             }
           }
@@ -676,5 +734,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     unlockAudio,
     toggleMute,
     changeNickname,
+    peerVolumes,
+    setPeerVolume,
   };
 }

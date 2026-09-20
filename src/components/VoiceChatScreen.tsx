@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 
 interface VoiceChatScreenProps {
@@ -18,10 +18,14 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
     unlockAudio,
     toggleMute,
     changeNickname,
+    peerVolumes,
+    setPeerVolume,
   } = useVoiceChat({
     roomId,
     nickname,
   });
+
+  const prevVolumesRef = useRef<Map<string, number>>(new Map());
 
   const [copied, setCopied] = useState(false);
   const [showShare, setShowShare] = useState(false);
@@ -273,6 +277,52 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
                         </span>
                       </div>
                     )}
+
+                    {/* Individual Volume Control */}
+                    <div
+                      className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-1.5 text-left"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between text-[11px] text-gray-400 select-none">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = peerVolumes[peer.peerId] ?? 100;
+                            if (current > 0) {
+                              prevVolumesRef.current.set(peer.peerId, current);
+                              setPeerVolume(peer.peerId, 0);
+                            } else {
+                              const prev = prevVolumesRef.current.get(peer.peerId) || 100;
+                              setPeerVolume(peer.peerId, prev);
+                            }
+                          }}
+                          className="hover:text-white transition-colors flex items-center gap-1 focus:outline-none"
+                          title={(peerVolumes[peer.peerId] ?? 100) === 0 ? 'Включить звук' : 'Заглушить'}
+                        >
+                          <span className="text-xs">
+                            {(peerVolumes[peer.peerId] ?? 100) === 0
+                              ? '🔇'
+                              : (peerVolumes[peer.peerId] ?? 100) < 50
+                              ? '🔉'
+                              : '🔊'}
+                          </span>
+                          <span className="text-[10px] sm:text-xs text-gray-300">Громкость</span>
+                        </button>
+                        <span className={`font-mono text-[10px] sm:text-xs font-semibold ${
+                          (peerVolumes[peer.peerId] ?? 100) === 0 ? 'text-red-400' : 'text-blue-300'
+                        }`}>
+                          {peerVolumes[peer.peerId] ?? 100}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={peerVolumes[peer.peerId] ?? 100}
+                        onChange={(e) => setPeerVolume(peer.peerId, Number(e.target.value))}
+                        className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
+                      />
+                    </div>
                   </div>
                 ))}
 

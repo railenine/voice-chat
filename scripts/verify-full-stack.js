@@ -26,20 +26,31 @@ function sleep(ms) {
 
 async function runTests() {
   try {
-    // Wait for server to boot
-    await sleep(1500);
+    // Wait for server to boot with retry
+    let ready = false;
+    for (let i = 0; i < 30; i++) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${TEST_PORT}/health`);
+        if (res.ok) {
+          ready = true;
+          break;
+        }
+      } catch (e) {}
+      await sleep(200);
+    }
+    if (!ready) throw new Error('Server did not start in time');
 
     // 2. Test HTTP Endpoints
     console.log('\n--- 1. Testing HTTP Endpoints ---');
-    const health = await (await fetch(`http://localhost:${TEST_PORT}/health`)).json();
+    const health = await (await fetch(`http://127.0.0.1:${TEST_PORT}/health`)).json();
     console.log('✓ /health:', health.status, 'version:', health.version);
     if (health.status !== 'ok') throw new Error('Health status not ok');
 
-    const info = await (await fetch(`http://localhost:${TEST_PORT}/peerjs/info`)).json();
+    const info = await (await fetch(`http://127.0.0.1:${TEST_PORT}/peerjs/info`)).json();
     console.log('✓ /peerjs/info:', info.signaling, 'path:', info.path);
     if (info.signaling !== 'websocket') throw new Error('Signaling is not websocket');
 
-    const ice = await (await fetch(`http://localhost:${TEST_PORT}/peerjs/ice-servers`)).json();
+    const ice = await (await fetch(`http://127.0.0.1:${TEST_PORT}/peerjs/ice-servers`)).json();
     console.log(`✓ /peerjs/ice-servers: Received ${ice.iceServers.length} ICE servers`);
     const hasCoturnTurn = ice.iceServers.some(s => 
       Array.isArray(s.urls) ? s.urls.some(u => u.includes('rvxis.site')) : (s.urls && s.urls.includes('rvxis.site'))
@@ -49,7 +60,7 @@ async function runTests() {
 
     // 3. Test Multi-User Room (3 Users: Alice, Bob, Charlie)
     console.log('\n--- 2. Testing Multi-User WebSocket Signaling (3 Users) ---');
-    const wsUrl = `ws://localhost:${TEST_PORT}/peerjs/ws`;
+    const wsUrl = `ws://127.0.0.1:${TEST_PORT}/peerjs/ws`;
 
     // Connect Alice
     const aliceWs = new WebSocket(wsUrl);
