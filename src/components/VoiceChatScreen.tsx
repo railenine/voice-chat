@@ -1,5 +1,7 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useVoiceChat } from '../hooks/useVoiceChat';
+import { useHotkey, isHotkeyMatch } from '../hooks/useHotkey';
 
 interface VoiceChatScreenProps {
   nickname: string;
@@ -26,6 +28,84 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
     roomId,
     nickname,
   });
+
+  const {
+    hotkey,
+    isRecording,
+    startRecording,
+    cancelRecording,
+    resetHotkey,
+  } = useHotkey({
+    onTrigger: toggleMute,
+    enabled: true,
+  });
+
+  const [showHotkeyModal, setShowHotkeyModal] = useState(false);
+  const [pipWindow, setPipWindow] = useState<Window | null>(null);
+
+  const isPipSupported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
+
+  const togglePip = useCallback(async () => {
+    if (!isPipSupported) return;
+
+    if (pipWindow) {
+      pipWindow.close();
+      setPipWindow(null);
+      return;
+    }
+
+    try {
+      const win = await (window as any).documentPictureInPicture.requestWindow({
+        width: 240,
+        height: 160,
+      });
+
+      // Copy document stylesheets to PiP window
+      [...document.styleSheets].forEach((styleSheet) => {
+        try {
+          const cssRules = [...styleSheet.cssRules].map((rule) => rule.cssText).join('');
+          const style = win.document.createElement('style');
+          style.textContent = cssRules;
+          win.document.head.appendChild(style);
+        } catch (e) {
+          const link = win.document.createElement('link');
+          link.rel = 'stylesheet';
+          link.type = styleSheet.type;
+          link.media = styleSheet.media;
+          link.href = (styleSheet as any).href;
+          win.document.head.appendChild(link);
+        }
+      });
+
+      win.document.title = `VoiceChat — Оверлей`;
+      win.document.body.className = 'bg-slate-900 text-white flex flex-col items-center justify-center m-0 p-3 h-screen select-none font-sans overflow-hidden';
+
+      win.addEventListener('pagehide', () => {
+        setPipWindow(null);
+      });
+
+      setPipWindow(win);
+    } catch (err) {
+      console.error('Failed to open PiP window:', err);
+    }
+  }, [isPipSupported, pipWindow]);
+
+  // Handle hotkey inside PiP window when focused
+  useEffect(() => {
+    if (!pipWindow) return;
+
+    const handlePipKeyDown = (e: KeyboardEvent) => {
+      if (isHotkeyMatch(e, hotkey)) {
+        e.preventDefault();
+        toggleMute();
+      }
+    };
+
+    pipWindow.addEventListener('keydown', handlePipKeyDown);
+    return () => {
+      pipWindow.removeEventListener('keydown', handlePipKeyDown);
+    };
+  }, [pipWindow, hotkey, toggleMute]);
 
   const prevVolumesRef = useRef<Map<string, number>>(new Map());
 
@@ -107,12 +187,24 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
                 <p className="text-gray-400 text-xs font-mono truncate">Комната: {roomId}</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowShare(!showShare)}
-              className="px-3 sm:px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all text-xs sm:text-sm border border-white/10 flex-shrink-0"
-            >
-              📤 <span className="hidden sm:inline">Поделиться</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowHotkeyModal(true)}
+                className="px-2.5 sm:px-3 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all text-xs sm:text-sm border border-white/10 flex items-center gap-1.5 flex-shrink-0"
+                title={`Горячая клавиша: ${hotkey.label} (нажмите для настройки)`}
+              >
+                <span>⌨️</span>
+                <span className="font-mono bg-white/10 px-1.5 py-0.5 rounded text-[11px] sm:text-xs font-semibold">
+                  {hotkey.label}
+                </span>
+              </button>
+              <button
+                onClick={() => setShowShare(!showShare)}
+                className="px-3 sm:px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all text-xs sm:text-sm border border-white/10 flex-shrink-0"
+              >
+                📤 <span className="hidden sm:inline">Поделиться</span>
+              </button>
+            </div>
           </div>
         </header>
 
@@ -431,6 +523,181 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
           </div>
         </footer>
       </div>
+
+      {/* Hotkey & Background Controls Modal */}
+      {showHotkeyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900/95 border border-white/20 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-5 text-white">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">⌨️</span>
+                <h3 className="font-bold text-base sm:text-lg">Горячая клавиша микрофона</h3>
+              </div>
+              <button
+                onClick={() => {
+                  cancelRecording();
+                  setShowHotkeyModal(false);
+                }}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Key Binding Section */}
+            <div className="space-y-3">
+              <p className="text-xs sm:text-sm text-gray-300">
+                Нажмите назначенную клавишу, чтобы мгновенно включить или выключить микрофон.
+              </p>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-white/5 border border-white/10 rounded-xl">
+                <div>
+                  <div className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">
+                    Текущая клавиша:
+                  </div>
+                  <div className="text-lg font-mono font-bold text-blue-400 mt-0.5">
+                    {isRecording ? 'Ожидание клавиши...' : hotkey.label}
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={isRecording ? cancelRecording : startRecording}
+                    className={`px-3 py-2 rounded-lg font-medium text-xs transition-all flex-1 sm:flex-none ${
+                      isRecording
+                        ? 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
+                        : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
+                    }`}
+                  >
+                    {isRecording ? 'Отмена' : 'Изменить клавишу'}
+                  </button>
+                  <button
+                    onClick={resetHotkey}
+                    className="px-3 py-2 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg text-xs transition-all"
+                    title="Сбросить на Ё / `"
+                  >
+                    Сброс (Ё)
+                  </button>
+                </div>
+              </div>
+
+              {isRecording && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs animate-pulse text-center">
+                  Нажмите любую клавишу на клавиатуре (например: <strong>Ё</strong>, <strong>Пробел</strong>, <strong>M</strong>, <strong>F4</strong>)...
+                </div>
+              )}
+            </div>
+
+            {/* Document Picture-in-Picture Section */}
+            <div className="space-y-2 border-t border-white/10 pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-base">🪟</span>
+                  <h4 className="font-semibold text-xs sm:text-sm">Оверлей поверх всех окон (PiP)</h4>
+                </div>
+                {isPipSupported && (
+                  <button
+                    onClick={togglePip}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                      pipWindow
+                        ? 'bg-red-600 hover:bg-red-500 text-white'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30'
+                    }`}
+                  >
+                    {pipWindow ? 'Закрыть оверлей' : 'Открыть оверлей'}
+                  </button>
+                )}
+              </div>
+
+              {isPipSupported ? (
+                <p className="text-xs text-gray-400 leading-relaxed">
+                  Открывает компактное плавающее мини-окно, которое висит <strong>поверх всех ваших программ и игр</strong>. В нем отображается статус микрофона и большая кнопка для быстрого переключения.
+                </p>
+              ) : (
+                <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-200 text-xs space-y-1.5">
+                  <div className="flex items-center gap-2 font-semibold text-amber-300">
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                    <span>Ваш браузер не поддерживает Document Picture-in-Picture</span>
+                  </div>
+                  <p className="text-gray-300 leading-relaxed">
+                    В вашем текущем браузере (например, Safari или Firefox) <strong>недоступна функция выноса плавающего мини-окна (оверлея) поверх других окон и игр</strong>.
+                  </p>
+                  <p className="text-gray-400 leading-relaxed">
+                    Горячая клавиша <strong>{hotkey.label}</strong> по-прежнему работает в активном окне браузера. Для использования плавающего оверлея поверх всех окон используйте Google Chrome, Microsoft Edge или Яндекс.Браузер.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Info about Background Mute & Browser Sandbox */}
+            <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-gray-300 text-xs space-y-1.5">
+              <p className="font-semibold text-white flex items-center gap-1.5">
+                <span>🛡️</span> Работа в фоновом режиме:
+              </p>
+              <p className="text-gray-400 leading-relaxed">
+                По стандартам безопасности W3C браузеры <strong>запрещают сайтам перехватывать нажатия клавиатуры в фоне</strong>, чтобы защитить ваши данные и пароли от кейлоггинга.
+              </p>
+              <p className="text-gray-400 leading-relaxed">
+                Для выключения микрофона без переключения на браузер вы можете использовать <strong>кнопку Mute на гарнитуре</strong> или <strong>мультимедийные клавиши</strong> — они работают в фоне через системный MediaSession API.
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => {
+                  cancelRecording();
+                  setShowHotkeyModal(false);
+                }}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-medium transition-all"
+              >
+                Готово
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Picture-in-Picture Overlay Portal */}
+      {pipWindow &&
+        createPortal(
+          <div className="w-full h-full flex flex-col items-center justify-center p-3 bg-slate-900 select-none text-white">
+            <div className="text-[11px] font-semibold text-gray-400 mb-2 truncate max-w-full">
+              VoiceChat • {roomId}
+            </div>
+            <button
+              onClick={toggleMute}
+              className={`w-16 h-16 rounded-full flex items-center justify-center transition-all active:scale-95 ${
+                isMuted
+                  ? 'bg-red-700 hover:bg-red-800 shadow-lg shadow-red-900/50'
+                  : 'bg-white/10 hover:bg-white/20 border-2 border-white/30'
+              }`}
+              title={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+            >
+              {isMuted ? (
+                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+              ) : (
+                <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                </svg>
+              )}
+            </button>
+            <div className="mt-2 text-center">
+              <span className={`text-xs font-semibold ${isMuted ? 'text-red-400' : 'text-green-400'}`}>
+                {isMuted ? 'Микрофон ВЫКЛ' : 'Микрофон ВКЛ'}
+              </span>
+              <span className="text-[10px] text-gray-500 block font-mono">
+                Клавиша: [{hotkey.label}]
+              </span>
+            </div>
+          </div>,
+          pipWindow.document.body
+        )}
     </>
   );
 };

@@ -490,6 +490,35 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     });
   }, [isMuted, sendWsMessage]);
 
+  // MediaSession API integration (background hardware / OS mute toggle)
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+
+    try {
+      if ('MediaMetadata' in window) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: `VoiceChat — Комната ${roomId}`,
+          artist: nickname,
+          album: isMuted ? 'Микрофон выключен' : 'Микрофон включен',
+        });
+      }
+
+      navigator.mediaSession.setActionHandler('togglemicrophone' as any, () => {
+        toggleMute();
+      });
+    } catch (e) {
+      console.warn('[MediaSession] togglemicrophone not supported:', e);
+    }
+
+    return () => {
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        try {
+          navigator.mediaSession.setActionHandler('togglemicrophone' as any, null);
+        } catch (e) {}
+      }
+    };
+  }, [roomId, nickname, isMuted, toggleMute]);
+
   // Main initialization effect
   useEffect(() => {
     if (initDoneRef.current) return;
