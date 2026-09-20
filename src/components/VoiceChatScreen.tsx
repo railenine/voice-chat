@@ -426,11 +426,23 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
 
                 {/* Empty slots */}
                 {peers.length === 0 && isConnected && (
-                  <div className="bg-white/5 rounded-2xl p-4 sm:p-5 border border-dashed border-white/20 text-center flex items-center justify-center min-h-[140px] sm:min-h-[160px]">
+                  <div
+                    onClick={copyRoomId}
+                    role="button"
+                    tabIndex={0}
+                    title="Нажмите, чтобы скопировать ссылку на комнату"
+                    className="bg-white/5 hover:bg-white/10 active:scale-[0.98] cursor-pointer transition-all rounded-2xl p-4 sm:p-5 border border-dashed border-white/20 hover:border-white/30 text-center flex items-center justify-center min-h-[140px] sm:min-h-[160px] select-none"
+                  >
                     <div>
-                      <div className="text-2xl sm:text-3xl mb-2">👋</div>
-                      <p className="text-gray-500 text-xs sm:text-sm">Ожидание участников...</p>
-                      <p className="text-gray-600 text-xs mt-1 hidden sm:block">Поделитесь ссылкой</p>
+                      <div className="text-2xl sm:text-3xl mb-2 transition-transform">
+                        {copied ? '📋' : '👋'}
+                      </div>
+                      <p className={`text-xs sm:text-sm font-medium transition-colors ${copied ? 'text-green-400 font-semibold' : 'text-gray-500'}`}>
+                        {copied ? '✓ Ссылка скопирована!' : 'Ожидание участников...'}
+                      </p>
+                      <p className="text-gray-600 text-xs mt-1">
+                        {copied ? 'Отправьте её друзьям' : 'Поделитесь ссылкой'}
+                      </p>
                     </div>
                   </div>
                 )}
