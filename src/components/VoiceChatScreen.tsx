@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { useHotkey, isHotkeyMatch } from '../hooks/useHotkey';
+import { getShareUrl, isTauri } from '../config';
 
 interface VoiceChatScreenProps {
   nickname: string;
@@ -117,7 +118,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
   const [newNickInput, setNewNickInput] = useState(nickname);
 
   const copyRoomId = useCallback(() => {
-    const url = `${window.location.origin}?room=${roomId}`;
+    const url = getShareUrl(roomId);
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -133,7 +134,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
     });
   }, [roomId]);
 
-  const shareLink = `${window.location.origin}?room=${roomId}`;
+  const shareLink = getShareUrl(roomId);
 
   return (
     <>
@@ -501,7 +502,12 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
             <button
               onClick={() => {
                 if (confirm('Выйти из голосового чата?')) {
-                  window.location.href = window.location.origin;
+                  if (isTauri()) {
+                    window.history.replaceState({}, '', window.location.pathname);
+                    window.location.reload();
+                  } else {
+                    window.location.href = window.location.origin;
+                  }
                 }
               }}
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-red-500/10 hover:bg-red-700 border-2 border-red-500/30 hover:border-red-700 flex items-center justify-center transition-all active:scale-90"

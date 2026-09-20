@@ -3,6 +3,7 @@ import { RnnoiseWorkletNode, loadRnnoise } from '@sapphi-red/web-noise-suppresso
 import rnnoiseWorkletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url';
 import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
+import { getBackendBaseUrl, getWebSocketUrl } from '../config';
 
 export interface PeerInfo {
   peerId: string;
@@ -535,7 +536,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
         // Pre-fetch ICE servers from backend
         try {
-          const iceRes = await fetch('/peerjs/ice-servers');
+          const iceRes = await fetch(`${getBackendBaseUrl()}/peerjs/ice-servers`);
           if (iceRes.ok) {
             const iceData = await iceRes.json();
             if (Array.isArray(iceData?.iceServers) && iceData.iceServers.length > 0) {
@@ -708,12 +709,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
         // Connect to WebSocket signaling server
         setConnectionStatus('Подключение к серверу...');
-        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsHost = window.location.host;
-        const isDev = window.location.port === '5173' || window.location.port === '5174';
-        const wsUrl = isDev
-          ? `ws://${window.location.hostname}:3000/peerjs/ws`
-          : `${wsProtocol}//${wsHost}/peerjs/ws`;
+        const wsUrl = getWebSocketUrl();
 
         console.log(`[WS] Connecting to: ${wsUrl}`);
         const ws = new WebSocket(wsUrl);
