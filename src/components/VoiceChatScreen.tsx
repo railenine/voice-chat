@@ -20,6 +20,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
     changeNickname,
     peerVolumes,
     setPeerVolume,
+    isNoiseSuppression,
+    toggleNoiseSuppression,
   } = useVoiceChat({
     roomId,
     nickname,
@@ -369,6 +371,24 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
               )}
             </button>
             
+            {/* Noise Suppression (RNNoise) Toggle */}
+            <button
+              onClick={toggleNoiseSuppression}
+              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex flex-col items-center justify-center transition-all active:scale-90 ${
+                isNoiseSuppression
+                  ? 'bg-gradient-to-br from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 text-white shadow-lg shadow-indigo-900/50 border-2 border-indigo-400/50'
+                  : 'bg-white/5 hover:bg-white/10 text-gray-400 border-2 border-white/10 hover:border-white/20'
+              }`}
+              title={isNoiseSuppression ? 'Шумоподавление (RNNoise): ВКЛ' : 'Шумоподавление (RNNoise): ВЫКЛ'}
+            >
+              <span className="text-lg sm:text-xl">
+                {isNoiseSuppression ? '✨' : '🛡️'}
+              </span>
+              <span className="text-[9px] sm:text-[10px] font-semibold mt-0.5 tracking-tight uppercase">
+                {isNoiseSuppression ? 'Шум: Вкл' : 'Шум: Выкл'}
+              </span>
+            </button>
+
             <button
               onClick={() => {
                 if (confirm('Выйти из голосового чата?')) {

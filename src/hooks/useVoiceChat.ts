@@ -1,4 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { RnnoiseWorkletNode, loadRnnoise } from '@sapphi-red/web-noise-suppressor';
+import rnnoiseWorkletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url';
+import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
+import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 
 export interface PeerInfo {
   peerId: string;
@@ -21,12 +25,26 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('Подключение...');
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
+  const [isNoiseSuppression, setIsNoiseSuppression] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('voice_chat_rnnoise');
+      return saved !== null ? saved === 'true' : true;
+    } catch (e) {
+      return true;
+    }
+  });
+  const [isNoiseSuppressionReady, setIsNoiseSuppressionReady] = useState(false);
 
   // References
   const wsRef = useRef<WebSocket | null>(null);
   const myPeerIdRef = useRef<string>('');
   const currentNicknameRef = useRef<string>(nickname);
+  const rawMicStreamRef = useRef<MediaStream | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const rnnoiseNodeRef = useRef<RnnoiseWorkletNode | null>(null);
+  const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const isNoiseSuppressionRef = useRef(isNoiseSuppression);
   const peersInfoRef = useRef<Map<string, PeerInfo>>(new Map());
   const peerVolumesRef = useRef<Map<string, number>>(new Map());
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -401,27 +419,75 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     });
   }, [sendWsMessage]);
 
+  // Connect/reconnect mic audio graph based on isNoiseSuppression
+  const connectMicGraph = useCallback(() => {
+    const micSource = micSourceNodeRef.current;
+    const rnnoiseNode = rnnoiseNodeRef.current;
+    const mediaStreamDest = mediaStreamDestRef.current;
+    const analyser = analyserRef.current;
+
+    if (!micSource || !mediaStreamDest) return;
+
+    try { micSource.disconnect(); } catch (e) {}
+    if (rnnoiseNode) {
+      try { rnnoiseNode.disconnect(); } catch (e) {}
+    }
+
+    if (isNoiseSuppressionRef.current && rnnoiseNode) {
+      // RNNoise active: micSource -> rnnoiseNode -> mediaStreamDest
+      micSource.connect(rnnoiseNode);
+      rnnoiseNode.connect(mediaStreamDest);
+      if (analyser) {
+        // VAD listens to filtered audio (no false positives from keyboard clicks or fans)
+        rnnoiseNode.connect(analyser);
+      }
+      console.log('[RNNoise] Filter active');
+    } else {
+      // RNNoise bypassed: direct pass-through
+      micSource.connect(mediaStreamDest);
+      if (analyser) {
+        micSource.connect(analyser);
+      }
+      console.log('[RNNoise] Filter bypassed');
+    }
+  }, []);
+
+  const toggleNoiseSuppression = useCallback(() => {
+    const next = !isNoiseSuppressionRef.current;
+    isNoiseSuppressionRef.current = next;
+    setIsNoiseSuppression(next);
+    try {
+      localStorage.setItem('voice_chat_rnnoise', String(next));
+    } catch (e) {}
+    connectMicGraph();
+  }, [connectMicGraph]);
+
   // Toggle microphone mute
   const toggleMute = useCallback(() => {
+    const newMuted = !isMuted;
+    setIsMuted(newMuted);
+
     if (streamRef.current) {
-      const audioTracks = streamRef.current.getAudioTracks();
-      const newMuted = !isMuted;
-      audioTracks.forEach((track) => {
+      streamRef.current.getAudioTracks().forEach((track) => {
         track.enabled = !newMuted;
       });
-      setIsMuted(newMuted);
-
-      if (newMuted && isSpeakingRef.current) {
-        isSpeakingRef.current = false;
-        setIsSpeaking(false);
-        sendWsMessage({ type: 'speaking', isSpeaking: false });
-      }
-
-      sendWsMessage({
-        type: 'update-mute',
-        isMuted: newMuted,
+    }
+    if (rawMicStreamRef.current) {
+      rawMicStreamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = !newMuted;
       });
     }
+
+    if (newMuted && isSpeakingRef.current) {
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      sendWsMessage({ type: 'speaking', isSpeaking: false });
+    }
+
+    sendWsMessage({
+      type: 'update-mute',
+      isMuted: newMuted,
+    });
   }, [isMuted, sendWsMessage]);
 
   // Main initialization effect
@@ -453,43 +519,66 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         }
 
         setConnectionStatus('Запрос доступа к микрофону...');
-        let stream: MediaStream;
+        let rawStream: MediaStream;
         try {
-          stream = await navigator.mediaDevices.getUserMedia({
+          rawStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
-              noiseSuppression: true,
+              noiseSuppression: false, // Using RNNoise for neural noise suppression
               autoGainControl: true,
             },
           });
         } catch (firstErr) {
           console.warn('Advanced audio constraints failed, falling back to basic audio: true', firstErr);
-          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
 
-        const audioTrack = stream.getAudioTracks()[0];
-        if (!audioTrack) {
+        const rawAudioTrack = rawStream.getAudioTracks()[0];
+        if (!rawAudioTrack) {
           throw new Error('Микрофон не вернул аудиодорожку.');
         }
-        audioTrack.enabled = true;
-        streamRef.current = stream;
+        rawAudioTrack.enabled = true;
+        rawMicStreamRef.current = rawStream;
 
-        // Setup Web Audio API for local VAD
+        // Setup Web Audio API and RNNoise Worklet
         try {
-          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-          if (AudioContextClass) {
-            const audioContext = new AudioContextClass();
-            if (audioContext.state === 'suspended') {
-              audioContext.resume().catch(() => {});
-            }
+          const audioContext = getAudioContext();
+          if (audioContext) {
+            const micSource = audioContext.createMediaStreamSource(rawStream);
+            micSourceNodeRef.current = micSource;
+
+            const mediaStreamDest = audioContext.createMediaStreamDestination();
+            mediaStreamDestRef.current = mediaStreamDest;
+
             const analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
             analyser.smoothingTimeConstant = 0.3;
-            const source = audioContext.createMediaStreamSource(stream);
-            source.connect(analyser);
-
-            audioContextRef.current = audioContext;
             analyserRef.current = analyser;
+
+            // Attempt loading RNNoise WASM + Worklet
+            try {
+              console.log('[RNNoise] Loading WASM and AudioWorklet module...');
+              const wasmBinary = await loadRnnoise({
+                url: rnnoiseWasmUrl,
+                simdUrl: rnnoiseSimdWasmUrl,
+              });
+              await audioContext.audioWorklet.addModule(rnnoiseWorkletUrl);
+              const rnnoiseNode = new RnnoiseWorkletNode(audioContext, {
+                maxChannels: 1,
+                wasmBinary,
+              });
+              rnnoiseNodeRef.current = rnnoiseNode;
+              setIsNoiseSuppressionReady(true);
+              console.log('[RNNoise] Initialized successfully');
+            } catch (rnErr) {
+              console.warn('[RNNoise] Initialization failed, will use direct pass-through:', rnErr);
+            }
+
+            // Connect audio graph
+            connectMicGraph();
+
+            // Outbound stream for WebRTC
+            streamRef.current = mediaStreamDest.stream;
 
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
@@ -793,9 +882,17 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       remoteStreamsRef.current.clear();
 
       // Stop local microphone stream
+      if (rawMicStreamRef.current) {
+        rawMicStreamRef.current.getTracks().forEach((track) => track.stop());
+        rawMicStreamRef.current = null;
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
+      }
+      if (rnnoiseNodeRef.current) {
+        try { rnnoiseNodeRef.current.destroy(); } catch (e) {}
+        rnnoiseNodeRef.current = null;
       }
 
       peersInfoRef.current.clear();
@@ -816,5 +913,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     changeNickname,
     peerVolumes,
     setPeerVolume,
+    isNoiseSuppression,
+    isNoiseSuppressionReady,
+    toggleNoiseSuppression,
   };
 }
