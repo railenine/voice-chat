@@ -1,5 +1,5 @@
 /**
- * Sound effects utility for UI audio cues (mute, unmute, test sound)
+ * Sound effects utility for UI audio cues (mute, unmute, join, leave, test sound)
  * Uses Web Audio API oscillator synthesis - zero external audio files required, zero latency.
  */
 
@@ -50,26 +50,62 @@ export function setSoundOutputDevice(sinkId: string) {
 }
 
 /**
- * Play a smooth synthesized tone with gain envelope
+ * Play a polyphonic harmonic chime note (multiple frequencies at once)
+ * Produces rich acoustic bell/chime tones with exponential decay
  */
-function playTone(
+function playHarmonicChime(
   ctx: AudioContext,
-  frequency: number,
+  frequencies: number[],
   startTime: number,
   duration: number,
-  volume = 0.22,
+  volume = 0.25,
   type: OscillatorType = 'sine'
+) {
+  try {
+    const gain = ctx.createGain();
+    const perVoiceVolume = volume / Math.sqrt(frequencies.length);
+
+    // Fast attack (12ms), long exponential bell decay
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.linearRampToValueAtTime(perVoiceVolume, startTime + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+    frequencies.forEach((freq) => {
+      const osc = ctx.createOscillator();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, startTime);
+      osc.connect(gain);
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.02);
+    });
+
+    gain.connect(ctx.destination);
+  } catch (e) {
+    console.warn('[SoundEffects] playHarmonicChime error:', e);
+  }
+}
+
+/**
+ * Play a short tactile UI click/chirp with frequency sweep (for mic buttons)
+ */
+function playTactileSweep(
+  ctx: AudioContext,
+  startFreq: number,
+  endFreq: number,
+  startTime: number,
+  duration: number,
+  volume = 0.18
 ) {
   try {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
 
-    osc.type = type;
-    osc.frequency.setValueAtTime(frequency, startTime);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(startFreq, startTime);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), startTime + duration);
 
-    // Smooth envelope: 15ms linear attack, smooth exponential decay to avoid clicks
     gain.gain.setValueAtTime(0.0001, startTime);
-    gain.gain.linearRampToValueAtTime(volume, startTime + 0.015);
+    gain.gain.linearRampToValueAtTime(volume, startTime + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
     osc.connect(gain);
@@ -78,13 +114,14 @@ function playTone(
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);
   } catch (e) {
-    console.warn('[SoundEffects] Failed to play tone:', e);
+    console.warn('[SoundEffects] playTactileSweep error:', e);
   }
 }
 
 /**
- * Sound when muting (turning mic off):
- * Two descending soft tones (540 Hz -> 380 Hz)
+ * Mute sound (Microphone OFF):
+ * Short, subtle tactile click down (360 Hz -> 180 Hz, 55ms)
+ * Sounds like a physical switch clicking off.
  */
 export async function playMuteSound() {
   const ctx = getFallbackAudioContext();
@@ -95,16 +132,16 @@ export async function playMuteSound() {
       await ctx.resume();
     }
     const now = ctx.currentTime;
-    playTone(ctx, 540, now, 0.09, 0.25, 'sine');
-    playTone(ctx, 380, now + 0.08, 0.12, 0.25, 'sine');
+    playTactileSweep(ctx, 360, 180, now, 0.055, 0.22);
   } catch (e) {
     console.warn('[SoundEffects] playMuteSound error:', e);
   }
 }
 
 /**
- * Sound when unmuting (turning mic on):
- * Two ascending soft tones (380 Hz -> 540 Hz)
+ * Unmute sound (Microphone ON):
+ * Short, crisp tactile click up (220 Hz -> 480 Hz, 55ms)
+ * Sounds like a physical switch clicking on.
  */
 export async function playUnmuteSound() {
   const ctx = getFallbackAudioContext();
@@ -115,10 +152,57 @@ export async function playUnmuteSound() {
       await ctx.resume();
     }
     const now = ctx.currentTime;
-    playTone(ctx, 380, now, 0.09, 0.25, 'sine');
-    playTone(ctx, 540, now + 0.08, 0.12, 0.25, 'sine');
+    playTactileSweep(ctx, 220, 480, now, 0.055, 0.22);
   } catch (e) {
     console.warn('[SoundEffects] playUnmuteSound error:', e);
+  }
+}
+
+/**
+ * Sound when user or a peer joins the room:
+ * Rich two-stage harmonic entrance chime (Discord / Slack style):
+ * - Stage 1 (0ms): Warm fifth interval [C5: 523.25 Hz + G5: 783.99 Hz]
+ * - Stage 2 (120ms): Bright major triad [E5: 659.25 Hz + B5: 987.77 Hz + E6: 1318.51 Hz] with ringing decay (380ms)
+ */
+export async function playJoinSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    // Step 1: Warm opening chord
+    playHarmonicChime(ctx, [523.25, 783.99], now, 0.16, 0.22, 'sine');
+    // Step 2: Sparkling resolution chord with shimmering decay
+    playHarmonicChime(ctx, [659.25, 987.77, 1318.51], now + 0.12, 0.38, 0.26, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playJoinSound error:', e);
+  }
+}
+
+/**
+ * Sound when user or a peer leaves the room:
+ * Two-stage downward warm chord:
+ * - Stage 1 (0ms): High fifth [E5: 659.25 Hz + B5: 987.77 Hz] (120ms)
+ * - Stage 2 (110ms): Low warm resonant resolution [A4: 440 Hz + E5: 659.25 Hz + A3: 220 Hz] (320ms decay)
+ */
+export async function playLeaveSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    // Step 1: Descending intro
+    playHarmonicChime(ctx, [659.25, 987.77], now, 0.14, 0.22, 'sine');
+    // Step 2: Low warm departure chord
+    playHarmonicChime(ctx, [440.0, 659.25, 220.0], now + 0.11, 0.32, 0.24, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playLeaveSound error:', e);
   }
 }
 
@@ -135,52 +219,10 @@ export async function playTestSound() {
       await ctx.resume();
     }
     const now = ctx.currentTime;
-    playTone(ctx, 440, now, 0.12, 0.22, 'sine');
-    playTone(ctx, 554, now + 0.10, 0.12, 0.22, 'sine');
-    playTone(ctx, 659, now + 0.20, 0.18, 0.25, 'sine');
+    playHarmonicChime(ctx, [440, 880], now, 0.14, 0.20, 'sine');
+    playHarmonicChime(ctx, [554.37, 1108.73], now + 0.11, 0.14, 0.20, 'sine');
+    playHarmonicChime(ctx, [659.25, 1318.51], now + 0.22, 0.28, 0.24, 'sine');
   } catch (e) {
     console.warn('[SoundEffects] playTestSound error:', e);
-  }
-}
-
-/**
- * Sound when a user joins the room (for self and peers):
- * Three quick bright ascending notes (D4 -> F#4 -> A4: 293.66Hz -> 369.99Hz -> 440Hz)
- */
-export async function playJoinSound() {
-  const ctx = getFallbackAudioContext();
-  if (!ctx) return;
-
-  try {
-    if (ctx.state === 'suspended') {
-      await ctx.resume();
-    }
-    const now = ctx.currentTime;
-    playTone(ctx, 330, now, 0.08, 0.22, 'sine');
-    playTone(ctx, 440, now + 0.07, 0.08, 0.22, 'sine');
-    playTone(ctx, 660, now + 0.14, 0.16, 0.25, 'sine');
-  } catch (e) {
-    console.warn('[SoundEffects] playJoinSound error:', e);
-  }
-}
-
-/**
- * Sound when a user leaves the room (for self and peers):
- * Three quick soft descending notes (660Hz -> 440Hz -> 330Hz)
- */
-export async function playLeaveSound() {
-  const ctx = getFallbackAudioContext();
-  if (!ctx) return;
-
-  try {
-    if (ctx.state === 'suspended') {
-      await ctx.resume();
-    }
-    const now = ctx.currentTime;
-    playTone(ctx, 660, now, 0.08, 0.22, 'sine');
-    playTone(ctx, 440, now + 0.07, 0.08, 0.22, 'sine');
-    playTone(ctx, 330, now + 0.14, 0.16, 0.20, 'sine');
-  } catch (e) {
-    console.warn('[SoundEffects] playLeaveSound error:', e);
   }
 }
