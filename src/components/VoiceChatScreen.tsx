@@ -282,11 +282,14 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
                     <div
                       className="mt-3 pt-2.5 border-t border-white/10 flex flex-col gap-1.5 text-left"
                       onClick={(e) => e.stopPropagation()}
+                      onTouchStart={(e) => e.stopPropagation()}
+                      onTouchEnd={(e) => e.stopPropagation()}
                     >
                       <div className="flex items-center justify-between text-[11px] text-gray-400 select-none">
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation();
                             const current = peerVolumes[peer.peerId] ?? 100;
                             if (current > 0) {
                               prevVolumesRef.current.set(peer.peerId, current);
@@ -296,7 +299,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
                               setPeerVolume(peer.peerId, prev);
                             }
                           }}
-                          className="hover:text-white transition-colors flex items-center gap-1 focus:outline-none"
+                          className="hover:text-white transition-colors flex items-center gap-1 focus:outline-none p-1 -m-1 touch-manipulation cursor-pointer"
                           title={(peerVolumes[peer.peerId] ?? 100) === 0 ? 'Включить звук' : 'Заглушить'}
                         >
                           <span className="text-xs">
@@ -320,7 +323,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
                         max="100"
                         value={peerVolumes[peer.peerId] ?? 100}
                         onChange={(e) => setPeerVolume(peer.peerId, Number(e.target.value))}
-                        className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all"
+                        onInput={(e) => setPeerVolume(peer.peerId, Number((e.target as HTMLInputElement).value))}
+                        className="w-full h-2 bg-white/15 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:accent-blue-400 transition-all touch-none py-1"
                       />
                     </div>
                   </div>
@@ -399,9 +403,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
               isMuted ? 'text-red-400' : isSpeaking ? 'text-green-400' : 'text-blue-400'
             }`}>
               {isMuted ? '🔇 Микрофон выключен' : isSpeaking ? '🗣️ Вы говорите...' : '🎤 Микрофон включён'}
-            </p>
-            <p className="text-gray-500 text-xs">
-              {peers.length === 0 ? 'Вы единственный участник' : `${peers.length} участник(ов) в комнате`}
             </p>
           </div>
         </footer>

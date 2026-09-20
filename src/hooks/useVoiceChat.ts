@@ -33,6 +33,8 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const makingOfferRef = useRef<Map<string, boolean>>(new Map());
   const ignoreOfferRef = useRef<Map<string, boolean>>(new Map());
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const gainNodesRef = useRef<Map<string, GainNode>>(new Map());
+  const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const initDoneRef = useRef(false);
   const iceServersRef = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
@@ -84,6 +86,20 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     }
   }, []);
 
+  // Helper to ensure AudioContext is initialized and active
+  const getAudioContext = useCallback(() => {
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass) {
+        audioContextRef.current = new AudioContextClass();
+      }
+    }
+    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+      audioContextRef.current.resume().catch(() => {});
+    }
+    return audioContextRef.current;
+  }, []);
+
   // Helper to read saved volume by nickname from localStorage
   const getSavedVolume = useCallback((nick: string): number => {
     try {
@@ -98,15 +114,38 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     return 100;
   }, []);
 
-  // Set volume for a remote peer (0 to 100)
+  // Set volume for a remote peer (0 to 100) - supports iOS Safari, Chrome, Edge, Firefox
   const setPeerVolume = useCallback((peerId: string, volume: number) => {
     const clamped = Math.max(0, Math.min(100, Math.round(volume)));
     peerVolumesRef.current.set(peerId, clamped);
     setPeerVolumes((prev) => ({ ...prev, [peerId]: clamped }));
 
+    const isMuted = clamped === 0;
+
+    // 1. Web Audio GainNode (controls volume on iOS Safari & desktop)
+    const gainNode = gainNodesRef.current.get(peerId);
+    if (gainNode) {
+      gainNode.gain.value = clamped / 100;
+    }
+
+    // 2. Hardware/track level mute (works 100% on iOS Safari)
+    const stream = remoteStreamsRef.current.get(peerId);
+    if (stream) {
+      stream.getAudioTracks().forEach((track) => {
+        track.enabled = !isMuted;
+      });
+    }
+
+    // 3. Audio element
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
-      audio.volume = clamped / 100;
+      if (gainNode) {
+        // GainNode routes to speakers, keep audio element muted to avoid double audio/echo
+        audio.muted = true;
+      } else {
+        audio.muted = isMuted;
+        audio.volume = clamped / 100;
+      }
     }
 
     const peerInfo = peersInfoRef.current.get(peerId);
@@ -120,9 +159,36 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   // Handle incoming remote audio stream
   const handleRemoteStream = useCallback((peerId: string, stream: MediaStream) => {
     console.log(`[Audio] Received remote audio stream for peer: ${peerId}`);
-    let audio = audioElementsRef.current.get(peerId);
-    const currentVol = (peerVolumesRef.current.get(peerId) ?? 100) / 100;
+    remoteStreamsRef.current.set(peerId, stream);
 
+    const currentVol = peerVolumesRef.current.get(peerId) ?? 100;
+    const isMuted = currentVol === 0;
+
+    // Track-level mute (essential for iOS Safari)
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = !isMuted;
+    });
+
+    // Setup Web Audio GainNode for volume control (essential for iOS Safari)
+    const ctx = getAudioContext();
+    let gainNode = gainNodesRef.current.get(peerId);
+    if (ctx && !gainNode) {
+      try {
+        const source = ctx.createMediaStreamSource(stream);
+        gainNode = ctx.createGain();
+        gainNode.gain.value = currentVol / 100;
+        source.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        gainNodesRef.current.set(peerId, gainNode);
+        console.log(`[Audio] Web Audio GainNode connected for peer ${peerId}`);
+      } catch (err) {
+        console.warn(`[Audio] Could not create GainNode for ${peerId}:`, err);
+      }
+    } else if (gainNode) {
+      gainNode.gain.value = currentVol / 100;
+    }
+
+    let audio = audioElementsRef.current.get(peerId);
     if (!audio) {
       audio = document.createElement('audio');
       audio.autoplay = true;
@@ -130,8 +196,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       (audio as any).webkitPlaysInline = true;
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
-      audio.muted = false;
-      audio.volume = currentVol;
+      // If GainNode is routing to speakers, keep audio element muted to prevent echo
+      audio.muted = gainNode ? true : isMuted;
+      audio.volume = gainNode ? 1.0 : currentVol / 100;
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
       audio.style.top = '-9999px';
@@ -141,6 +208,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       audio.style.opacity = '0.01';
       document.body.appendChild(audio);
       audioElementsRef.current.set(peerId, audio);
+    } else {
+      audio.muted = gainNode ? true : isMuted;
+      audio.volume = gainNode ? 1.0 : currentVol / 100;
     }
 
     if (audio.srcObject !== stream) {
@@ -149,8 +219,6 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
     const playAudio = () => {
       if (!audio) return;
-      audio.muted = false;
-      audio.volume = (peerVolumesRef.current.get(peerId) ?? 100) / 100;
       audio.play().then(() => {
         console.log(`[Audio] Playing remote audio for peer ${peerId}`);
         setNeedsAudioUnlock(false);
@@ -163,13 +231,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     playAudio();
 
     stream.getAudioTracks().forEach((track) => {
-      track.enabled = true;
       track.onunmute = () => {
         console.log(`[Audio] Track unmuted for peer: ${peerId}`);
         playAudio();
       };
     });
-  }, []);
+  }, [getAudioContext]);
 
   // Cleanup a peer connection and audio
   const cleanupPeer = useCallback((peerId: string) => {
@@ -185,6 +252,13 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     makingOfferRef.current.delete(peerId);
     ignoreOfferRef.current.delete(peerId);
     remoteHangoverRef.current.delete(peerId);
+
+    const gainNode = gainNodesRef.current.get(peerId);
+    if (gainNode) {
+      try { gainNode.disconnect(); } catch (e) {}
+      gainNodesRef.current.delete(peerId);
+    }
+    remoteStreamsRef.current.delete(peerId);
 
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
@@ -703,7 +777,7 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       makingOfferRef.current.clear();
       ignoreOfferRef.current.clear();
 
-      // Remove all audio elements
+      // Remove all audio elements and gain nodes
       audioElementsRef.current.forEach((audio) => {
         try {
           audio.srcObject = null;
@@ -711,6 +785,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
         } catch (e) {}
       });
       audioElementsRef.current.clear();
+
+      gainNodesRef.current.forEach((gn) => {
+        try { gn.disconnect(); } catch (e) {}
+      });
+      gainNodesRef.current.clear();
+      remoteStreamsRef.current.clear();
 
       // Stop local microphone stream
       if (streamRef.current) {
