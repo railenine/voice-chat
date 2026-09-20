@@ -4,6 +4,7 @@ import rnnoiseWorkletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.j
 import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 import { getBackendBaseUrl, getWebSocketUrl } from '../config';
+import { playMuteSound, playUnmuteSound } from '../utils/soundEffects';
 
 export interface PeerInfo {
   peerId: string;
@@ -467,6 +468,12 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
   const toggleMute = useCallback(() => {
     const newMuted = !isMuted;
     setIsMuted(newMuted);
+
+    if (newMuted) {
+      playMuteSound(audioCtxRef.current);
+    } else {
+      playUnmuteSound(audioCtxRef.current);
+    }
 
     if (streamRef.current) {
       streamRef.current.getAudioTracks().forEach((track) => {
