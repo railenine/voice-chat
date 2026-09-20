@@ -49,6 +49,21 @@ export function isHotkeyMatch(e: KeyboardEvent, hotkey: HotkeyConfig): boolean {
   return false;
 }
 
+export const isTauri = (): boolean =>
+  typeof window !== 'undefined' &&
+  ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+
+export function toTauriShortcut(config: HotkeyConfig): string {
+  if (config.code === 'Backquote' || config.key.toLowerCase() === 'ё' || config.key === '`' || config.key === '~') {
+    return 'Backquote';
+  }
+  if (config.code === 'Space') return 'Space';
+  if (config.code.startsWith('Key')) return config.code.replace('Key', '').toUpperCase();
+  if (config.code.startsWith('Digit')) return config.code.replace('Digit', '');
+  if (/^F\d{1,2}$/i.test(config.code)) return config.code.toUpperCase();
+  return config.code || config.key;
+}
+
 interface UseHotkeyOptions {
   onTrigger: () => void;
   enabled?: boolean;
@@ -112,7 +127,7 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
     };
   }, [isRecording, updateHotkey]);
 
-  // Listener for triggering hotkey during normal operation
+  // Web Listener for triggering hotkey during normal operation in browser window
   useEffect(() => {
     if (!enabled || isRecording) return;
 
@@ -140,9 +155,54 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
     };
   }, [enabled, isRecording, hotkey, onTrigger]);
 
+  // Tauri OS-wide Global Shortcut registration (works in any full-screen game or background window)
+  useEffect(() => {
+    if (!enabled || !isTauri()) return;
+
+    let activeShortcut: string | null = null;
+    let isCancelled = false;
+
+    const setupTauriShortcut = async () => {
+      try {
+        const { register, unregister, isRegistered } = await import('@tauri-apps/plugin-global-shortcut');
+        const shortcut = toTauriShortcut(hotkey);
+
+        if (isCancelled) return;
+
+        const alreadyRegistered = await isRegistered(shortcut);
+        if (alreadyRegistered) {
+          await unregister(shortcut);
+        }
+
+        await register(shortcut, (event) => {
+          if (event.state === 'Pressed') {
+            onTrigger();
+          }
+        });
+
+        activeShortcut = shortcut;
+        console.log(`[Tauri] Global shortcut registered in Windows OS: ${shortcut}`);
+      } catch (err) {
+        console.warn('[Tauri] Failed to register global shortcut:', err);
+      }
+    };
+
+    setupTauriShortcut();
+
+    return () => {
+      isCancelled = true;
+      if (activeShortcut) {
+        import('@tauri-apps/plugin-global-shortcut').then(({ unregister }) => {
+          unregister(activeShortcut!).catch(() => {});
+        });
+      }
+    };
+  }, [enabled, hotkey, onTrigger]);
+
   return {
     hotkey,
     isRecording,
+    isDesktop: isTauri(),
     startRecording: () => setIsRecording(true),
     cancelRecording: () => setIsRecording(false),
     updateHotkey,

@@ -32,6 +32,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
   const {
     hotkey,
     isRecording,
+    isDesktop,
     startRecording,
     cancelRecording,
     resetHotkey,
@@ -644,18 +645,34 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
               )}
             </div>
 
-            {/* Info about Background Mute & Browser Sandbox */}
-            <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-gray-300 text-xs space-y-1.5">
-              <p className="font-semibold text-white flex items-center gap-1.5">
-                <span>🛡️</span> Работа в фоновом режиме:
-              </p>
-              <p className="text-gray-400 leading-relaxed">
-                По стандартам безопасности W3C браузеры <strong>запрещают сайтам перехватывать нажатия клавиатуры в фоне</strong>, чтобы защитить ваши данные и пароли от кейлоггинга.
-              </p>
-              <p className="text-gray-400 leading-relaxed">
-                Для выключения микрофона без переключения на браузер вы можете использовать <strong>кнопку Mute на гарнитуре</strong> или <strong>мультимедийные клавиши</strong> — они работают в фоне через системный MediaSession API.
-              </p>
-            </div>
+            {/* Desktop Mode or Browser Info */}
+            {isDesktop ? (
+              <div className="p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-200 text-xs space-y-1.5">
+                <div className="flex items-center gap-2 font-semibold text-emerald-300">
+                  <span className="text-base">🖥️</span>
+                  <span>Десктоп-режим активен (Tauri)</span>
+                </div>
+                <p className="text-gray-300 leading-relaxed">
+                  Горячая клавиша <strong>[{hotkey.label}]</strong> перехватывается на уровне операционной системы Windows. Она работает <strong>в любых полноэкранных играх и свернутом приложении</strong>!
+                </p>
+                <p className="text-gray-400 text-[11px] leading-relaxed">
+                  Приложение также доступно в системном трее Windows возле часов.
+                </p>
+              </div>
+            ) : (
+              /* Info about Background Mute & Browser Sandbox */
+              <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-gray-300 text-xs space-y-1.5">
+                <p className="font-semibold text-white flex items-center gap-1.5">
+                  <span>🛡️</span> Работа в фоновом режиме:
+                </p>
+                <p className="text-gray-400 leading-relaxed">
+                  По стандартам безопасности W3C браузеры <strong>запрещают сайтам перехватывать нажатия клавиатуры в фоне</strong>, чтобы защитить ваши данные и пароли от кейлоггинга.
+                </p>
+                <p className="text-gray-400 leading-relaxed">
+                  Для выключения микрофона без переключения на браузер вы можете использовать <strong>кнопку Mute на гарнитуре</strong> или <strong>мультимедийные клавиши</strong> — они работают в фоне через системный MediaSession API.
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-end pt-1">
               <button
