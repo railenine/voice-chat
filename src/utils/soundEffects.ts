@@ -142,3 +142,45 @@ export async function playTestSound() {
     console.warn('[SoundEffects] playTestSound error:', e);
   }
 }
+
+/**
+ * Sound when a user joins the room (for self and peers):
+ * Three quick bright ascending notes (D4 -> F#4 -> A4: 293.66Hz -> 369.99Hz -> 440Hz)
+ */
+export async function playJoinSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playTone(ctx, 330, now, 0.08, 0.22, 'sine');
+    playTone(ctx, 440, now + 0.07, 0.08, 0.22, 'sine');
+    playTone(ctx, 660, now + 0.14, 0.16, 0.25, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playJoinSound error:', e);
+  }
+}
+
+/**
+ * Sound when a user leaves the room (for self and peers):
+ * Three quick soft descending notes (660Hz -> 440Hz -> 330Hz)
+ */
+export async function playLeaveSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playTone(ctx, 660, now, 0.08, 0.22, 'sine');
+    playTone(ctx, 440, now + 0.07, 0.08, 0.22, 'sine');
+    playTone(ctx, 330, now + 0.14, 0.16, 0.20, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playLeaveSound error:', e);
+  }
+}

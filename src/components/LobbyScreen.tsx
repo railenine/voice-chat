@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { AudioDeviceSettings } from './AudioDeviceSettings';
+import { extractRoomId } from '../utils/nicknames';
 
 interface LobbyScreenProps {
   nickname: string;
@@ -142,10 +143,15 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                 <input
                   type="text"
                   value={joinRoomId}
-                  onChange={(e) => setJoinRoomId(e.target.value.toUpperCase())}
-                  placeholder="ID КОМНАТЫ"
+                  onChange={(e) => setJoinRoomId(extractRoomId(e.target.value))}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const text = e.clipboardData.getData('text');
+                    setJoinRoomId(extractRoomId(text));
+                  }}
+                  placeholder="ID КОМНАТЫ ИЛИ ССЫЛКА"
                   className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-white text-center text-base sm:text-lg font-mono tracking-widest placeholder:text-gray-600 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 mb-4"
-                  maxLength={6}
+                  maxLength={128}
                 />
                 <button
                   onClick={onJoinRoom}

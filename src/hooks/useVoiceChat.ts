@@ -4,7 +4,7 @@ import rnnoiseWorkletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.j
 import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 import { getBackendBaseUrl, getWebSocketUrl } from '../config';
-import { playMuteSound, playUnmuteSound } from '../utils/soundEffects';
+import { playMuteSound, playUnmuteSound, playJoinSound, playLeaveSound } from '../utils/soundEffects';
 
 export interface PeerInfo {
   peerId: string;
@@ -63,6 +63,9 @@ export function useVoiceChat({
   const gainNodesRef = useRef<Map<string, GainNode>>(new Map());
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const initDoneRef = useRef(false);
+  const wasConnectedRef = useRef(false);
+  const isIntentionalDisconnectRef = useRef(false);
+  const reconnectTimerRef = useRef<any>(null);
   const iceServersRef = useRef<RTCIceServer[]>([
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
@@ -802,136 +805,176 @@ export function useVoiceChat({
           console.warn('[VAD] Init failed:', vadErr);
         }
 
-        // Connect to WebSocket signaling server
-        setConnectionStatus('Подключение к серверу...');
-        const wsUrl = getWebSocketUrl();
+        // Connect to WebSocket signaling server with auto-reconnect and join/leave sounds
+        const connectWs = () => {
+          if (isIntentionalDisconnectRef.current) return;
 
-        console.log(`[WS] Connecting to: ${wsUrl}`);
-        const ws = new WebSocket(wsUrl);
-        wsRef.current = ws;
+          setConnectionStatus(wasConnectedRef.current ? 'Переподключение...' : 'Подключение к серверу...');
+          const wsUrl = getWebSocketUrl();
 
-        ws.onopen = () => {
-          console.log('[WS] Connected successfully');
-          setIsConnected(true);
-          setConnectionStatus('В комнате ✓');
-
-          // Join room message
-          ws.send(JSON.stringify({
-            type: 'join',
-            roomId,
-            peerId: myPeerIdRef.current,
-            nickname: currentNicknameRef.current,
-          }));
-        };
-
-        ws.onmessage = (event) => {
-          let msg: any;
+          console.log(`[WS] Connecting to: ${wsUrl}`);
           try {
-            msg = JSON.parse(event.data);
-          } catch (e) {
-            return;
-          }
-
-          const { type } = msg;
-
-          // Initial room state: list of existing peers
-          if (type === 'room-state') {
-            console.log(`[WS] Received room-state with ${msg.peers?.length || 0} peers`);
-            if (Array.isArray(msg.iceServers) && msg.iceServers.length > 0) {
-              iceServersRef.current = msg.iceServers;
-              console.log(`[ICE] Updated ICE servers from room-state: ${msg.iceServers.length} servers`);
+            if (wsRef.current) {
+              try {
+                wsRef.current.onclose = null;
+                wsRef.current.close();
+              } catch (e) {}
             }
-            if (Array.isArray(msg.peers)) {
-              const newVols: Record<string, number> = {};
-              msg.peers.forEach((p: PeerInfo) => {
-                peersInfoRef.current.set(p.peerId, p);
-                const savedVol = getSavedVolume(p.nickname);
-                peerVolumesRef.current.set(p.peerId, savedVol);
-                newVols[p.peerId] = savedVol;
-                // Create PeerConnection for existing peer (triggers negotiation)
-                getOrCreatePeerConnection(p.peerId);
-              });
-              setPeerVolumes((prev) => ({ ...prev, ...newVols }));
-              updatePeersState();
-            }
-          }
 
-          // Another peer joined the room
-          else if (type === 'user-joined') {
-            console.log(`[WS] Peer joined: ${msg.peer.peerId} (${msg.peer.nickname})`);
-            peersInfoRef.current.set(msg.peer.peerId, msg.peer);
-            const savedVol = getSavedVolume(msg.peer.nickname);
-            peerVolumesRef.current.set(msg.peer.peerId, savedVol);
-            setPeerVolumes((prev) => ({ ...prev, [msg.peer.peerId]: savedVol }));
-            getOrCreatePeerConnection(msg.peer.peerId);
-            updatePeersState();
-          }
+            const ws = new WebSocket(wsUrl);
+            wsRef.current = ws;
 
-          // WebRTC signaling message
-          else if (type === 'signal') {
-            handleSignal(msg.from, msg.data);
-          }
+            ws.onopen = () => {
+              console.log('[WS] Connected successfully');
+              setIsConnected(true);
+              setConnectionStatus('В комнате ✓');
 
-          // Peer updated nickname
-          else if (type === 'user-updated') {
-            const info = peersInfoRef.current.get(msg.peerId);
-            if (info) {
-              info.nickname = msg.nickname;
-              peersInfoRef.current.set(msg.peerId, info);
-              const savedVol = getSavedVolume(msg.nickname);
-              peerVolumesRef.current.set(msg.peerId, savedVol);
-              setPeerVolumes((prev) => ({ ...prev, [msg.peerId]: savedVol }));
-              const audio = audioElementsRef.current.get(msg.peerId);
-              if (audio) {
-                audio.volume = savedVol / 100;
+              // Join room message
+              ws.send(JSON.stringify({
+                type: 'join',
+                roomId,
+                peerId: myPeerIdRef.current,
+                nickname: currentNicknameRef.current,
+              }));
+            };
+
+            ws.onmessage = (event) => {
+              let msg: any;
+              try {
+                msg = JSON.parse(event.data);
+              } catch (e) {
+                return;
               }
-              updatePeersState();
-            }
-          }
 
-          // Peer updated mute status
-          else if (type === 'user-muted') {
-            const info = peersInfoRef.current.get(msg.peerId);
-            if (info) {
-              info.isMuted = msg.isMuted;
-              peersInfoRef.current.set(msg.peerId, info);
-              updatePeersState();
-            }
-          }
+              const { type } = msg;
 
-          // Peer speaking status
-          else if (type === 'user-speaking') {
-            const info = peersInfoRef.current.get(msg.peerId);
-            if (info) {
-              if (msg.isSpeaking) {
-                info.isSpeaking = true;
-                remoteHangoverRef.current.set(msg.peerId, Date.now() + 500);
-              } else {
-                info.isSpeaking = false;
-                remoteHangoverRef.current.delete(msg.peerId);
+              // Initial room state: list of existing peers
+              if (type === 'room-state') {
+                console.log(`[WS] Received room-state with ${msg.peers?.length || 0} peers`);
+                playJoinSound();
+                wasConnectedRef.current = true;
+
+                if (Array.isArray(msg.iceServers) && msg.iceServers.length > 0) {
+                  iceServersRef.current = msg.iceServers;
+                  console.log(`[ICE] Updated ICE servers from room-state: ${msg.iceServers.length} servers`);
+                }
+                if (Array.isArray(msg.peers)) {
+                  const newVols: Record<string, number> = {};
+                  msg.peers.forEach((p: PeerInfo) => {
+                    peersInfoRef.current.set(p.peerId, p);
+                    const savedVol = getSavedVolume(p.nickname);
+                    peerVolumesRef.current.set(p.peerId, savedVol);
+                    newVols[p.peerId] = savedVol;
+                    // Create PeerConnection for existing peer (triggers negotiation)
+                    getOrCreatePeerConnection(p.peerId);
+                  });
+                  setPeerVolumes((prev) => ({ ...prev, ...newVols }));
+                  updatePeersState();
+                }
               }
-              peersInfoRef.current.set(msg.peerId, info);
-              updatePeersState();
+
+              // Another peer joined the room
+              else if (type === 'user-joined') {
+                console.log(`[WS] Peer joined: ${msg.peer.peerId} (${msg.peer.nickname})`);
+                playJoinSound();
+                peersInfoRef.current.set(msg.peer.peerId, msg.peer);
+                const savedVol = getSavedVolume(msg.peer.nickname);
+                peerVolumesRef.current.set(msg.peer.peerId, savedVol);
+                setPeerVolumes((prev) => ({ ...prev, [msg.peer.peerId]: savedVol }));
+                getOrCreatePeerConnection(msg.peer.peerId);
+                updatePeersState();
+              }
+
+              // WebRTC signaling message
+              else if (type === 'signal') {
+                handleSignal(msg.from, msg.data);
+              }
+
+              // Peer updated nickname
+              else if (type === 'user-updated') {
+                const info = peersInfoRef.current.get(msg.peerId);
+                if (info) {
+                  info.nickname = msg.nickname;
+                  peersInfoRef.current.set(msg.peerId, info);
+                  const savedVol = getSavedVolume(msg.nickname);
+                  peerVolumesRef.current.set(msg.peerId, savedVol);
+                  setPeerVolumes((prev) => ({ ...prev, [msg.peerId]: savedVol }));
+                  const audio = audioElementsRef.current.get(msg.peerId);
+                  if (audio) {
+                    audio.volume = savedVol / 100;
+                  }
+                  updatePeersState();
+                }
+              }
+
+              // Peer updated mute status
+              else if (type === 'user-muted') {
+                const info = peersInfoRef.current.get(msg.peerId);
+                if (info) {
+                  info.isMuted = msg.isMuted;
+                  peersInfoRef.current.set(msg.peerId, info);
+                  updatePeersState();
+                }
+              }
+
+              // Peer speaking status
+              else if (type === 'user-speaking') {
+                const info = peersInfoRef.current.get(msg.peerId);
+                if (info) {
+                  if (msg.isSpeaking) {
+                    info.isSpeaking = true;
+                    remoteHangoverRef.current.set(msg.peerId, Date.now() + 500);
+                  } else {
+                    info.isSpeaking = false;
+                    remoteHangoverRef.current.delete(msg.peerId);
+                  }
+                  peersInfoRef.current.set(msg.peerId, info);
+                  updatePeersState();
+                }
+              }
+
+              // Peer left the room
+              else if (type === 'user-left') {
+                console.log(`[WS] Peer left: ${msg.peerId}`);
+                playLeaveSound();
+                cleanupPeer(msg.peerId);
+              }
+            };
+
+            ws.onclose = () => {
+              console.warn('[WS] WebSocket disconnected');
+              setIsConnected(false);
+              if (wasConnectedRef.current) {
+                wasConnectedRef.current = false;
+                playLeaveSound();
+              }
+              if (!isIntentionalDisconnectRef.current) {
+                setConnectionStatus('Переподключение...');
+                if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+                reconnectTimerRef.current = setTimeout(() => {
+                  if (!isIntentionalDisconnectRef.current) {
+                    console.log('[WS] Reconnecting WebSocket...');
+                    connectWs();
+                  }
+                }, 2000);
+              }
+            };
+
+            ws.onerror = (err) => {
+              console.error('[WS] WebSocket error:', err);
+              setError('Ошибка подключения к серверу сигнализации.');
+            };
+          } catch (wsErr) {
+            console.warn('[WS] Failed to connect:', wsErr);
+            if (!isIntentionalDisconnectRef.current) {
+              setConnectionStatus('Переподключение...');
+              if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+              reconnectTimerRef.current = setTimeout(connectWs, 2500);
             }
           }
-
-          // Peer left the room
-          else if (type === 'user-left') {
-            console.log(`[WS] Peer left: ${msg.peerId}`);
-            cleanupPeer(msg.peerId);
-          }
         };
 
-        ws.onclose = () => {
-          console.warn('[WS] WebSocket disconnected');
-          setIsConnected(false);
-          setConnectionStatus('Переподключение...');
-        };
-
-        ws.onerror = (err) => {
-          console.error('[WS] WebSocket error:', err);
-          setError('Ошибка подключения к серверу сигнализации.');
-        };
+        connectWs();
 
       } catch (err: any) {
         console.error('Init error:', err);
@@ -955,6 +998,12 @@ export function useVoiceChat({
     window.addEventListener('keydown', unlockAudio);
 
     return () => {
+      isIntentionalDisconnectRef.current = true;
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
       window.removeEventListener('keydown', unlockAudio);

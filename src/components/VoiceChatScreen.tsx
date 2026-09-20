@@ -5,6 +5,7 @@ import { useHotkey, isHotkeyMatch } from '../hooks/useHotkey';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { AudioDeviceSettings } from './AudioDeviceSettings';
 import { getShareUrl, isTauri } from '../config';
+import { playLeaveSound } from '../utils/soundEffects';
 
 interface VoiceChatScreenProps {
   nickname: string;
@@ -522,12 +523,15 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
             <button
               onClick={() => {
                 if (confirm('Выйти из голосового чата?')) {
-                  if (isTauri()) {
-                    window.history.replaceState({}, '', window.location.pathname);
-                    window.location.reload();
-                  } else {
-                    window.location.href = window.location.origin;
-                  }
+                  playLeaveSound();
+                  setTimeout(() => {
+                    if (isTauri()) {
+                      window.history.replaceState({}, '', window.location.pathname);
+                      window.location.reload();
+                    } else {
+                      window.location.href = window.location.origin;
+                    }
+                  }, 200);
                 }
               }}
               className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-red-500/10 hover:bg-red-700 border-2 border-red-500/30 hover:border-red-700 flex items-center justify-center transition-all active:scale-90"

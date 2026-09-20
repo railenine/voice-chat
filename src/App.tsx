@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { generateNickname, generateRoomId } from './utils/nicknames';
+import { generateNickname, generateRoomId, extractRoomId } from './utils/nicknames';
 import { LobbyScreen } from './components/LobbyScreen';
 import { VoiceChatScreen } from './components/VoiceChatScreen';
 import { useAudioDevices } from './hooks/useAudioDevices';
@@ -38,9 +38,10 @@ function App() {
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
       if (urlRoom) {
-        setRoomId(urlRoom);
+        const clean = extractRoomId(urlRoom);
+        setRoomId(clean);
         setMode('join');
-        setJoinRoomId(urlRoom);
+        setJoinRoomId(clean);
       }
     } catch {}
   }, []);
@@ -53,10 +54,11 @@ function App() {
   }, []);
 
   const handleJoinRoom = useCallback(() => {
-    if (joinRoomId.trim().length > 0) {
-      setRoomId(joinRoomId.trim().toUpperCase());
+    const cleanId = extractRoomId(joinRoomId);
+    if (cleanId.length >= 3) {
+      setRoomId(cleanId);
       setJoined(true);
-      window.history.replaceState({}, '', `?room=${joinRoomId.trim().toUpperCase()}`);
+      window.history.replaceState({}, '', `?room=${cleanId}`);
     }
   }, [joinRoomId]);
 
