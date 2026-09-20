@@ -374,19 +374,23 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
             {/* Noise Suppression (RNNoise) Toggle */}
             <button
               onClick={toggleNoiseSuppression}
-              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex flex-col items-center justify-center transition-all active:scale-90 ${
+              className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all active:scale-90 ${
                 isNoiseSuppression
-                  ? 'bg-gradient-to-br from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 text-white shadow-lg shadow-indigo-900/50 border-2 border-indigo-400/50'
-                  : 'bg-white/5 hover:bg-white/10 text-gray-400 border-2 border-white/10 hover:border-white/20'
+                  ? 'bg-white/5 hover:bg-white/10 border-2 border-white/20 hover:border-white/40 text-white'
+                  : 'bg-white/5 hover:bg-white/10 border-2 border-white/10 hover:border-white/20 text-gray-500'
               }`}
               title={isNoiseSuppression ? 'Шумоподавление (RNNoise): ВКЛ' : 'Шумоподавление (RNNoise): ВЫКЛ'}
             >
-              <span className="text-lg sm:text-xl">
-                {isNoiseSuppression ? '✨' : '🛡️'}
-              </span>
-              <span className="text-[9px] sm:text-[10px] font-semibold mt-0.5 tracking-tight uppercase">
-                {isNoiseSuppression ? 'Шум: Вкл' : 'Шум: Выкл'}
-              </span>
+              {isNoiseSuppression ? (
+                <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.286L13 21l-2.286-6.857L5 12l5.714-2.286L13 3z" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6 sm:w-7 sm:h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.286L13 21l-2.286-6.857L5 12l5.714-2.286L13 3z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
+                </svg>
+              )}
             </button>
 
             <button
