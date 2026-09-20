@@ -4,13 +4,31 @@ export interface HotkeyConfig {
   code: string;
   key: string;
   label: string;
+  type?: 'keyboard' | 'mouse';
+  button?: number;
 }
 
 export const DEFAULT_HOTKEY: HotkeyConfig = {
   code: 'Backquote',
   key: 'ё',
   label: 'Ё / `',
+  type: 'keyboard',
 };
+
+export const MOUSE_HOTKEY_OPTIONS: HotkeyConfig[] = [
+  { code: 'Mouse3', key: 'Mouse3', label: 'Колёсико (Mouse 3)', type: 'mouse', button: 1 },
+  { code: 'Mouse4', key: 'Mouse4', label: 'Мышь 4 (Боковая 1)', type: 'mouse', button: 3 },
+  { code: 'Mouse5', key: 'Mouse5', label: 'Мышь 5 (Боковая 2)', type: 'mouse', button: 4 },
+  { code: 'Mouse2', key: 'Mouse2', label: 'ПКМ (Mouse 2)', type: 'mouse', button: 2 },
+];
+
+export function mouseButtonToConfig(button: number): HotkeyConfig | null {
+  return MOUSE_HOTKEY_OPTIONS.find((opt) => opt.button === button) || null;
+}
+
+export function mouseCodeToConfig(code: string): HotkeyConfig | null {
+  return MOUSE_HOTKEY_OPTIONS.find((opt) => opt.code === code) || null;
+}
 
 const STORAGE_KEY = 'voice_chat_mute_hotkey';
 
@@ -33,6 +51,8 @@ export function formatKeyLabel(code: string, key: string): string {
 }
 
 export function isHotkeyMatch(e: KeyboardEvent, hotkey: HotkeyConfig): boolean {
+  if (hotkey.type === 'mouse') return false;
+
   // Backquote / 'ё' / '`' match
   if (
     (hotkey.code === 'Backquote' || hotkey.key.toLowerCase() === 'ё') &&
@@ -98,12 +118,11 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
     updateHotkey(DEFAULT_HOTKEY);
   }, [updateHotkey]);
 
-  // Listener for capturing new hotkey
+  // Listener for capturing new hotkey (Keyboard + Mouse)
   useEffect(() => {
     if (!isRecording) return;
 
     const handleRecordKeyDown = (e: KeyboardEvent) => {
-      // Prevent browser default actions (like Esc closing modal or Space scrolling)
       e.preventDefault();
       e.stopPropagation();
 
@@ -117,13 +136,40 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
         code: e.code,
         key: e.key,
         label,
+        type: 'keyboard',
       });
       setIsRecording(false);
     };
 
+    const handleRecordMouseDown = (e: MouseEvent) => {
+      // Ignore left click (button 0) so user can still click cancel / UI
+      if (e.button === 0) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const config = mouseButtonToConfig(e.button);
+      if (config) {
+        updateHotkey(config);
+        setIsRecording(false);
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+
     window.addEventListener('keydown', handleRecordKeyDown, { capture: true });
+    window.addEventListener('mousedown', handleRecordMouseDown, { capture: true });
+    window.addEventListener('auxclick', handleRecordMouseDown, { capture: true });
+    window.addEventListener('contextmenu', handleContextMenu, { capture: true });
+
     return () => {
       window.removeEventListener('keydown', handleRecordKeyDown, { capture: true });
+      window.removeEventListener('mousedown', handleRecordMouseDown, { capture: true });
+      window.removeEventListener('auxclick', handleRecordMouseDown, { capture: true });
+      window.removeEventListener('contextmenu', handleContextMenu, { capture: true });
     };
   }, [isRecording, updateHotkey]);
 
@@ -132,7 +178,6 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
     if (!enabled || isRecording) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore key events from inputs, textareas or contentEditable elements
       const target = e.target as HTMLElement | null;
       if (
         target &&
@@ -143,21 +188,69 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
         return;
       }
 
-      if (isHotkeyMatch(e, hotkey)) {
+      if (hotkey.type !== 'mouse' && isHotkeyMatch(e, hotkey)) {
         e.preventDefault();
         onTrigger();
       }
     };
 
+    const handleMouseDown = (e: MouseEvent) => {
+      if (hotkey.type === 'mouse' && hotkey.button === e.button) {
+        e.preventDefault();
+        e.stopPropagation();
+        onTrigger();
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('auxclick', handleMouseDown);
+
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('auxclick', handleMouseDown);
     };
   }, [enabled, isRecording, hotkey, onTrigger]);
 
-  // Tauri OS-wide Global Shortcut registration (works in any full-screen game or background window)
+  // Tauri OS-wide Global Mouse Event listener (works in background / full-screen games)
   useEffect(() => {
-    if (!enabled || !isTauri()) return;
+    if (!isTauri()) return;
+
+    let unlisten: (() => void) | null = null;
+    let isCancelled = false;
+
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      if (isCancelled) return;
+      listen<string>('global-mouse-click', (event) => {
+        const btnCode = event.payload;
+        if (isRecording) {
+          const cfg = mouseCodeToConfig(btnCode);
+          if (cfg) {
+            updateHotkey(cfg);
+            setIsRecording(false);
+          }
+        } else if (enabled && hotkey.type === 'mouse' && hotkey.code === btnCode) {
+          onTrigger();
+        }
+      }).then((u) => {
+        if (isCancelled) {
+          u();
+        } else {
+          unlisten = u;
+        }
+      });
+    });
+
+    return () => {
+      isCancelled = true;
+      if (unlisten) unlisten();
+    };
+  }, [isRecording, enabled, hotkey, onTrigger, updateHotkey]);
+
+  // Tauri OS-wide Global Keyboard Shortcut registration
+  useEffect(() => {
+    if (!enabled || !isTauri() || hotkey.type === 'mouse') return;
 
     let activeShortcut: string | null = null;
     let isCancelled = false;
@@ -181,9 +274,9 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
         });
 
         activeShortcut = shortcut;
-        console.log(`[Tauri] Global shortcut registered in Windows OS: ${shortcut}`);
+        console.log(`[Tauri] Global keyboard shortcut registered: ${shortcut}`);
       } catch (err) {
-        console.warn('[Tauri] Failed to register global shortcut:', err);
+        console.warn('[Tauri] Failed to register global keyboard shortcut:', err);
       }
     };
 

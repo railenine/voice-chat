@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useVoiceChat } from '../hooks/useVoiceChat';
-import { useHotkey, isHotkeyMatch } from '../hooks/useHotkey';
+import { useHotkey, isHotkeyMatch, MOUSE_HOTKEY_OPTIONS } from '../hooks/useHotkey';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { AudioDeviceSettings } from './AudioDeviceSettings';
 import { getShareUrl, isTauri } from '../config';
@@ -47,6 +47,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
     startRecording,
     cancelRecording,
     resetHotkey,
+    updateHotkey,
   } = useHotkey({
     onTrigger: toggleMute,
     enabled: true,
@@ -634,10 +635,11 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-3.5 bg-white/5 border border-white/10 rounded-xl">
                 <div>
                   <div className="text-[11px] text-gray-400 uppercase tracking-wider font-semibold">
-                    Текущая клавиша:
+                    Текущая клавиша / кнопка:
                   </div>
-                  <div className="text-lg font-mono font-bold text-blue-400 mt-0.5">
-                    {isRecording ? 'Ожидание клавиши...' : hotkey.label}
+                  <div className="text-lg font-mono font-bold text-blue-400 mt-0.5 flex items-center gap-1.5">
+                    <span>{hotkey.type === 'mouse' ? '🖱️' : '⌨️'}</span>
+                    <span>{isRecording ? 'Ожидание нажатия...' : hotkey.label}</span>
                   </div>
                 </div>
 
@@ -650,7 +652,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                         : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
                     }`}
                   >
-                    {isRecording ? 'Отмена' : 'Изменить клавишу'}
+                    {isRecording ? 'Отмена' : 'Назначить'}
                   </button>
                   <button
                     onClick={resetHotkey}
@@ -662,9 +664,36 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                 </div>
               </div>
 
+              {/* Quick Mouse Button Selection */}
+              <div className="space-y-1.5 pt-1">
+                <div className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider">
+                  Быстрый выбор кнопки мыши:
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                  {MOUSE_HOTKEY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.code}
+                      type="button"
+                      onClick={() => {
+                        updateHotkey(opt);
+                        cancelRecording();
+                      }}
+                      className={`px-2.5 py-2 rounded-lg text-xs font-medium border transition-all truncate text-center ${
+                        hotkey.type === 'mouse' && hotkey.code === opt.code
+                          ? 'bg-blue-600/30 border-blue-500 text-blue-300 font-semibold shadow-sm'
+                          : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
+                      }`}
+                      title={opt.label}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {isRecording && (
-                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs animate-pulse text-center">
-                  Нажмите любую клавишу на клавиатуре (например: <strong>Ё</strong>, <strong>Пробел</strong>, <strong>M</strong>, <strong>F4</strong>)...
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs animate-pulse text-center leading-relaxed">
+                  Нажмите <strong>любую клавишу</strong> на клавиатуре (<strong>Ё</strong>, <strong>Пробел</strong>, <strong>F4</strong>) или <strong>кнопку мыши</strong> (<strong>Колёсико</strong>, <strong>Боковая 1 / 2</strong>, <strong>ПКМ</strong>)...
                 </div>
               )}
             </div>
@@ -720,7 +749,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                   <span>Десктоп-режим активен (Tauri)</span>
                 </div>
                 <p className="text-gray-300 leading-relaxed">
-                  Горячая клавиша <strong>[{hotkey.label}]</strong> перехватывается на уровне операционной системы Windows. Она работает <strong>в любых полноэкранных играх и свернутом приложении</strong>!
+                  Горячая клавиша или кнопка мыши <strong>[{hotkey.label}]</strong> перехватывается на уровне операционной системы Windows. Она работает <strong>в любых полноэкранных играх и свёрнутом приложении</strong>!
                 </p>
                 <p className="text-gray-400 text-[11px] leading-relaxed">
                   Приложение также доступно в системном трее Windows возле часов.
