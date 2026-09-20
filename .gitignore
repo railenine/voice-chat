@@ -40,3 +40,8 @@ coverage/
 *.tmp
 .cache/
 .next/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+
