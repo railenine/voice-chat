@@ -1,4 +1,6 @@
 import React from 'react';
+import { useAudioDevices } from '../hooks/useAudioDevices';
+import { AudioDeviceSettings } from './AudioDeviceSettings';
 
 interface LobbyScreenProps {
   nickname: string;
@@ -9,6 +11,7 @@ interface LobbyScreenProps {
   setJoinRoomId: (id: string) => void;
   onCreateRoom: () => void;
   onJoinRoom: () => void;
+  deviceState: ReturnType<typeof useAudioDevices>;
 }
 
 export const LobbyScreen: React.FC<LobbyScreenProps> = ({
@@ -20,6 +23,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
   setJoinRoomId,
   onCreateRoom,
   onJoinRoom,
+  deviceState,
 }) => {
   return (
     <>
@@ -82,6 +86,15 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Audio Devices Card */}
+          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-5 sm:p-6 mb-5 sm:mb-6 border border-white/10 animate-bounce-in">
+            <h2 className="text-white font-semibold text-sm sm:text-base mb-3 flex items-center gap-2">
+              <span>⚙️</span>
+              <span>Настройка звуковых устройств</span>
+            </h2>
+            <AudioDeviceSettings deviceState={deviceState} />
           </div>
 
           {/* Mode Selection */}

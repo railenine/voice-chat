@@ -1,9 +1,10 @@
 /**
- * Sound effects utility for UI audio cues (mute, unmute, etc.)
+ * Sound effects utility for UI audio cues (mute, unmute, test sound)
  * Uses Web Audio API oscillator synthesis - zero external audio files required, zero latency.
  */
 
 let fallbackAudioCtx: AudioContext | null = null;
+let currentOutputSinkId: string = '';
 
 function getFallbackAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -14,34 +15,49 @@ function getFallbackAudioContext(): AudioContext | null {
     if (!fallbackAudioCtx || fallbackAudioCtx.state === 'closed') {
       fallbackAudioCtx = new AudioContextClass();
     }
-    if (fallbackAudioCtx.state === 'suspended') {
-      fallbackAudioCtx.resume().catch(() => {});
-    }
     return fallbackAudioCtx;
-  } catch {
+  } catch (e) {
+    console.warn('[SoundEffects] Failed to create AudioContext:', e);
     return null;
   }
 }
 
-function resolveAudioContext(customCtx?: AudioContext | null): AudioContext | null {
-  if (customCtx && customCtx.state !== 'closed') {
-    if (customCtx.state === 'suspended') {
-      customCtx.resume().catch(() => {});
-    }
-    return customCtx;
+// User-gesture unlocker
+if (typeof window !== 'undefined') {
+  const unlockAudio = () => {
+    try {
+      const ctx = getFallbackAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+    } catch {}
+  };
+  window.addEventListener('click', unlockAudio, { once: true, passive: true });
+  window.addEventListener('keydown', unlockAudio, { once: true, passive: true });
+  window.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
+}
+
+export function setSoundOutputDevice(sinkId: string) {
+  currentOutputSinkId = sinkId;
+  const ctx = getFallbackAudioContext();
+  if (ctx && typeof (ctx as any).setSinkId === 'function') {
+    try {
+      (ctx as any).setSinkId(sinkId).catch((err: any) => {
+        console.warn('[SoundEffects] Failed to set sinkId on AudioContext:', err);
+      });
+    } catch {}
   }
-  return getFallbackAudioContext();
 }
 
 /**
- * Play a smooth tone with gain envelope to prevent clicking/popping
+ * Play a smooth synthesized tone with gain envelope
  */
 function playTone(
   ctx: AudioContext,
   frequency: number,
   startTime: number,
   duration: number,
-  volume = 0.12,
+  volume = 0.22,
   type: OscillatorType = 'sine'
 ) {
   try {
@@ -51,7 +67,7 @@ function playTone(
     osc.type = type;
     osc.frequency.setValueAtTime(frequency, startTime);
 
-    // Smooth envelope: 15ms linear attack, smooth exponential decay
+    // Smooth envelope: 15ms linear attack, smooth exponential decay to avoid clicks
     gain.gain.setValueAtTime(0.0001, startTime);
     gain.gain.linearRampToValueAtTime(volume, startTime + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
@@ -60,7 +76,7 @@ function playTone(
     gain.connect(ctx.destination);
 
     osc.start(startTime);
-    osc.stop(startTime + duration);
+    osc.stop(startTime + duration + 0.02);
   } catch (e) {
     console.warn('[SoundEffects] Failed to play tone:', e);
   }
@@ -68,26 +84,61 @@ function playTone(
 
 /**
  * Sound when muting (turning mic off):
- * Two descending soft tones (520 Hz -> 380 Hz)
+ * Two descending soft tones (540 Hz -> 380 Hz)
  */
-export function playMuteSound(customCtx?: AudioContext | null) {
-  const ctx = resolveAudioContext(customCtx);
+export async function playMuteSound() {
+  const ctx = getFallbackAudioContext();
   if (!ctx) return;
 
-  const now = ctx.currentTime;
-  playTone(ctx, 520, now, 0.08, 0.12, 'sine');
-  playTone(ctx, 380, now + 0.07, 0.11, 0.12, 'sine');
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playTone(ctx, 540, now, 0.09, 0.25, 'sine');
+    playTone(ctx, 380, now + 0.08, 0.12, 0.25, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playMuteSound error:', e);
+  }
 }
 
 /**
  * Sound when unmuting (turning mic on):
- * Two ascending soft tones (380 Hz -> 520 Hz)
+ * Two ascending soft tones (380 Hz -> 540 Hz)
  */
-export function playUnmuteSound(customCtx?: AudioContext | null) {
-  const ctx = resolveAudioContext(customCtx);
+export async function playUnmuteSound() {
+  const ctx = getFallbackAudioContext();
   if (!ctx) return;
 
-  const now = ctx.currentTime;
-  playTone(ctx, 380, now, 0.08, 0.12, 'sine');
-  playTone(ctx, 520, now + 0.07, 0.11, 0.12, 'sine');
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playTone(ctx, 380, now, 0.09, 0.25, 'sine');
+    playTone(ctx, 540, now + 0.08, 0.12, 0.25, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playUnmuteSound error:', e);
+  }
+}
+
+/**
+ * Test sound for checking output device / speakers
+ * Three ascending notes (A major arpeggio: 440Hz -> 554Hz -> 659Hz)
+ */
+export async function playTestSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playTone(ctx, 440, now, 0.12, 0.22, 'sine');
+    playTone(ctx, 554, now + 0.10, 0.12, 0.22, 'sine');
+    playTone(ctx, 659, now + 0.20, 0.18, 0.25, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playTestSound error:', e);
+  }
 }

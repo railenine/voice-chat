@@ -2,14 +2,21 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import { useHotkey, isHotkeyMatch } from '../hooks/useHotkey';
+import { useAudioDevices } from '../hooks/useAudioDevices';
+import { AudioDeviceSettings } from './AudioDeviceSettings';
 import { getShareUrl, isTauri } from '../config';
 
 interface VoiceChatScreenProps {
   nickname: string;
   roomId: string;
+  deviceState?: ReturnType<typeof useAudioDevices>;
 }
 
-export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, roomId }) => {
+export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
+  nickname,
+  roomId,
+  deviceState,
+}) => {
   const {
     isConnected,
     isMuted,
@@ -28,6 +35,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
   } = useVoiceChat({
     roomId,
     nickname,
+    audioInputDeviceId: deviceState?.selectedInput,
+    audioOutputDeviceId: deviceState?.selectedOutput,
   });
 
   const {
@@ -43,6 +52,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
   });
 
   const [showHotkeyModal, setShowHotkeyModal] = useState(false);
+  const [showAudioModal, setShowAudioModal] = useState(false);
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
   const isPipSupported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
@@ -190,6 +200,16 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {deviceState && (
+                <button
+                  onClick={() => setShowAudioModal(true)}
+                  className="px-2.5 sm:px-3 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all text-xs sm:text-sm border border-white/10 flex items-center gap-1.5 flex-shrink-0"
+                  title="Настройка звуковых устройств (микрофон и динамики)"
+                >
+                  <span>🎧</span>
+                  <span className="hidden md:inline">Устройства</span>
+                </button>
+              )}
               <button
                 onClick={() => setShowHotkeyModal(true)}
                 className="px-2.5 sm:px-3 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg transition-all text-xs sm:text-sm border border-white/10 flex items-center gap-1.5 flex-shrink-0"
@@ -542,6 +562,43 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({ nickname, room
           </div>
         </footer>
       </div>
+
+      {/* Audio Devices Modal */}
+      {showAudioModal && deviceState && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowAudioModal(false)}
+        >
+          <div
+            className="bg-slate-900/95 border border-white/20 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎧</span>
+                <h3 className="font-bold text-base sm:text-lg">Настройка звуковых устройств</h3>
+              </div>
+              <button
+                onClick={() => setShowAudioModal(false)}
+                className="text-gray-400 hover:text-white text-2xl leading-none p-1"
+              >
+                &times;
+              </button>
+            </div>
+
+            <AudioDeviceSettings deviceState={deviceState} />
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setShowAudioModal(false)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30"
+              >
+                Готово
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hotkey & Background Controls Modal */}
       {showHotkeyModal && (

@@ -16,9 +16,16 @@ export interface PeerInfo {
 interface UseVoiceChatOptions {
   roomId: string;
   nickname: string;
+  audioInputDeviceId?: string;
+  audioOutputDeviceId?: string;
 }
 
-export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
+export function useVoiceChat({
+  roomId,
+  nickname,
+  audioInputDeviceId,
+  audioOutputDeviceId,
+}: UseVoiceChatOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -228,9 +235,21 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
       audio.style.opacity = '0.01';
       document.body.appendChild(audio);
       audioElementsRef.current.set(peerId, audio);
+
+      if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
+        (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
+          console.warn(`[Audio] Failed to set sinkId on peer ${peerId}:`, err);
+        });
+      }
     } else {
       audio.muted = gainNode ? true : isMuted;
       audio.volume = gainNode ? 1.0 : currentVol / 100;
+
+      if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
+        (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
+          console.warn(`[Audio] Failed to update sinkId on peer ${peerId}:`, err);
+        });
+      }
     }
 
     if (audio.srcObject !== stream) {
@@ -470,9 +489,9 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     setIsMuted(newMuted);
 
     if (newMuted) {
-      playMuteSound(audioCtxRef.current);
+      playMuteSound();
     } else {
-      playUnmuteSound(audioCtxRef.current);
+      playUnmuteSound();
     }
 
     if (streamRef.current) {
@@ -527,6 +546,71 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
     };
   }, [roomId, nickname, isMuted, toggleMute]);
 
+  // Update output sink for all peer audio elements when audioOutputDeviceId changes
+  useEffect(() => {
+    if (!audioOutputDeviceId) return;
+    audioElementsRef.current.forEach((audio, peerId) => {
+      if (typeof (audio as any).setSinkId === 'function') {
+        (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
+          console.warn(`[Audio] Failed to set sinkId on peer ${peerId}:`, err);
+        });
+      }
+    });
+  }, [audioOutputDeviceId]);
+
+  // Switch microphone input device dynamically if user changes it during call
+  const prevInputDeviceRef = useRef<string | undefined>(audioInputDeviceId);
+  useEffect(() => {
+    if (!initDoneRef.current || !rawMicStreamRef.current) return;
+    if (prevInputDeviceRef.current === audioInputDeviceId) return;
+    prevInputDeviceRef.current = audioInputDeviceId;
+
+    const switchMic = async () => {
+      try {
+        console.log(`[Audio] Switching input device to: ${audioInputDeviceId || 'default'}`);
+        const constraints: MediaStreamConstraints = {
+          audio: audioInputDeviceId
+            ? {
+                deviceId: { exact: audioInputDeviceId },
+                echoCancellation: true,
+                noiseSuppression: false,
+                autoGainControl: true,
+              }
+            : {
+                echoCancellation: true,
+                noiseSuppression: false,
+                autoGainControl: true,
+              },
+        };
+        const newRawStream = await navigator.mediaDevices.getUserMedia(constraints);
+        const newRawTrack = newRawStream.getAudioTracks()[0];
+        if (!newRawTrack) return;
+
+        if (rawMicStreamRef.current) {
+          rawMicStreamRef.current.getAudioTracks().forEach((t) => t.stop());
+        }
+        rawMicStreamRef.current = newRawStream;
+        newRawTrack.enabled = !isMuted;
+
+        connectMicGraph();
+
+        const activeTrack = streamRef.current?.getAudioTracks()[0] || newRawTrack;
+        peerConnectionsRef.current.forEach((pc) => {
+          const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'audio');
+          if (sender && activeTrack) {
+            sender.replaceTrack(activeTrack).catch((err) => {
+              console.warn('[WebRTC] Error replacing track on device change:', err);
+            });
+          }
+        });
+      } catch (err) {
+        console.warn('[Audio] Failed to switch microphone device:', err);
+      }
+    };
+
+    switchMic();
+  }, [audioInputDeviceId, isMuted, connectMicGraph]);
+
   // Main initialization effect
   useEffect(() => {
     if (initDoneRef.current) return;
@@ -557,16 +641,20 @@ export function useVoiceChat({ roomId, nickname }: UseVoiceChatOptions) {
 
         setConnectionStatus('Запрос доступа к микрофону...');
         let rawStream: MediaStream;
+        const micConstraints: MediaTrackConstraints = {
+          echoCancellation: true,
+          noiseSuppression: false, // Using RNNoise for neural noise suppression
+          autoGainControl: true,
+        };
+        if (audioInputDeviceId) {
+          micConstraints.deviceId = { exact: audioInputDeviceId };
+        }
         try {
           rawStream = await navigator.mediaDevices.getUserMedia({
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: false, // Using RNNoise for neural noise suppression
-              autoGainControl: true,
-            },
+            audio: micConstraints,
           });
         } catch (firstErr) {
-          console.warn('Advanced audio constraints failed, falling back to basic audio: true', firstErr);
+          console.warn('Advanced/device audio constraints failed, falling back to basic audio: true', firstErr);
           rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
 

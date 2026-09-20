@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { generateNickname, generateRoomId } from './utils/nicknames';
 import { LobbyScreen } from './components/LobbyScreen';
 import { VoiceChatScreen } from './components/VoiceChatScreen';
+import { useAudioDevices } from './hooks/useAudioDevices';
 
 const safeStorage = {
   getItem: (key: string): string | null => {
@@ -59,6 +60,8 @@ function App() {
     }
   }, [joinRoomId]);
 
+  const audioDevices = useAudioDevices();
+
   if (!joined) {
     return (
       <LobbyScreen
@@ -70,6 +73,7 @@ function App() {
         setJoinRoomId={setJoinRoomId}
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
+        deviceState={audioDevices}
       />
     );
   }
@@ -78,6 +82,7 @@ function App() {
     <VoiceChatScreen
       nickname={nickname}
       roomId={roomId}
+      deviceState={audioDevices}
     />
   );
 }
