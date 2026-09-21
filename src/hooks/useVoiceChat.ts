@@ -20,6 +20,11 @@ interface UseVoiceChatOptions {
   audioOutputDeviceId?: string;
 }
 
+const isIOS = typeof navigator !== 'undefined' && (
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1)
+);
+
 export function useVoiceChat({
   roomId,
   nickname,
@@ -53,6 +58,7 @@ export function useVoiceChat({
   const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const rnnoiseNodeRef = useRef<RnnoiseWorkletNode | null>(null);
   const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const micMergerNodeRef = useRef<ChannelMergerNode | null>(null);
   const isNoiseSuppressionRef = useRef(isNoiseSuppression);
   const peersInfoRef = useRef<Map<string, PeerInfo>>(new Map());
   const peerVolumesRef = useRef<Map<string, number>>(new Map());
@@ -61,6 +67,8 @@ export function useVoiceChat({
   const ignoreOfferRef = useRef<Map<string, boolean>>(new Map());
   const audioElementsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const gainNodesRef = useRef<Map<string, GainNode>>(new Map());
+  const peerMergerNodesRef = useRef<Map<string, ChannelMergerNode>>(new Map());
+  const peerSourceNodesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const initDoneRef = useRef(false);
   const wasConnectedRef = useRef(false);
@@ -152,7 +160,7 @@ export function useVoiceChat({
 
     const isMuted = clamped === 0;
 
-    // 1. Web Audio GainNode (controls volume on iOS Safari & desktop)
+    // 1. Web Audio GainNode (only used on iOS Safari where audio.volume is locked)
     const gainNode = gainNodesRef.current.get(peerId);
     if (gainNode) {
       gainNode.gain.value = clamped / 100;
@@ -166,11 +174,10 @@ export function useVoiceChat({
       });
     }
 
-    // 3. Audio element
+    // 3. Audio element (handles volume & stereo playback on Firefox, Chrome, Edge, Safari macOS, desktop app)
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
-      if (gainNode) {
-        // GainNode routes to speakers, keep audio element muted to avoid double audio/echo
+      if (isIOS && gainNode) {
         audio.muted = true;
       } else {
         audio.muted = isMuted;
@@ -199,23 +206,33 @@ export function useVoiceChat({
       track.enabled = !isMuted;
     });
 
-    // Setup Web Audio GainNode for volume control (essential for iOS Safari)
-    const ctx = getAudioContext();
-    let gainNode = gainNodesRef.current.get(peerId);
-    if (ctx && !gainNode) {
-      try {
-        const source = ctx.createMediaStreamSource(stream);
-        gainNode = ctx.createGain();
+    // Setup Web Audio GainNode for volume control ONLY on iOS Safari (where HTMLAudioElement.volume is read-only)
+    if (isIOS) {
+      const ctx = getAudioContext();
+      let gainNode = gainNodesRef.current.get(peerId);
+      if (ctx && !gainNode) {
+        try {
+          const source = ctx.createMediaStreamSource(stream);
+          peerSourceNodesRef.current.set(peerId, source);
+
+          // Explicitly upmix to stereo (both Left and Right channels) to prevent single-ear playback
+          const merger = ctx.createChannelMerger(2);
+          source.connect(merger, 0, 0); // Left ear
+          source.connect(merger, 0, 1); // Right ear
+          peerMergerNodesRef.current.set(peerId, merger);
+
+          gainNode = ctx.createGain();
+          gainNode.gain.value = currentVol / 100;
+          merger.connect(gainNode);
+          gainNode.connect(ctx.destination);
+          gainNodesRef.current.set(peerId, gainNode);
+          console.log(`[Audio] Web Audio GainNode connected (iOS stereo) for peer ${peerId}`);
+        } catch (err) {
+          console.warn(`[Audio] Could not create GainNode for ${peerId}:`, err);
+        }
+      } else if (gainNode) {
         gainNode.gain.value = currentVol / 100;
-        source.connect(gainNode);
-        gainNode.connect(ctx.destination);
-        gainNodesRef.current.set(peerId, gainNode);
-        console.log(`[Audio] Web Audio GainNode connected for peer ${peerId}`);
-      } catch (err) {
-        console.warn(`[Audio] Could not create GainNode for ${peerId}:`, err);
       }
-    } else if (gainNode) {
-      gainNode.gain.value = currentVol / 100;
     }
 
     let audio = audioElementsRef.current.get(peerId);
@@ -226,9 +243,9 @@ export function useVoiceChat({
       (audio as any).webkitPlaysInline = true;
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
-      // If GainNode is routing to speakers, keep audio element muted to prevent echo
-      audio.muted = gainNode ? true : isMuted;
-      audio.volume = gainNode ? 1.0 : currentVol / 100;
+      // On iOS, keep audio element muted since GainNode routes to speakers; on desktop/Firefox, audio element is unmuted and handles stereo + volume natively
+      audio.muted = isIOS ? true : isMuted;
+      audio.volume = isIOS ? 1.0 : currentVol / 100;
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
       audio.style.top = '-9999px';
@@ -245,8 +262,8 @@ export function useVoiceChat({
         });
       }
     } else {
-      audio.muted = gainNode ? true : isMuted;
-      audio.volume = gainNode ? 1.0 : currentVol / 100;
+      audio.muted = isIOS ? true : isMuted;
+      audio.volume = isIOS ? 1.0 : currentVol / 100;
 
       if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
         (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
@@ -278,7 +295,7 @@ export function useVoiceChat({
         playAudio();
       };
     });
-  }, [getAudioContext]);
+  }, [getAudioContext, audioOutputDeviceId]);
 
   // Cleanup a peer connection and audio
   const cleanupPeer = useCallback((peerId: string) => {
@@ -299,6 +316,16 @@ export function useVoiceChat({
     if (gainNode) {
       try { gainNode.disconnect(); } catch (e) {}
       gainNodesRef.current.delete(peerId);
+    }
+    const merger = peerMergerNodesRef.current.get(peerId);
+    if (merger) {
+      try { merger.disconnect(); } catch (e) {}
+      peerMergerNodesRef.current.delete(peerId);
+    }
+    const source = peerSourceNodesRef.current.get(peerId);
+    if (source) {
+      try { source.disconnect(); } catch (e) {}
+      peerSourceNodesRef.current.delete(peerId);
     }
     remoteStreamsRef.current.delete(peerId);
 
@@ -456,23 +483,39 @@ export function useVoiceChat({
     if (rnnoiseNode) {
       try { rnnoiseNode.disconnect(); } catch (e) {}
     }
+    if (micMergerNodeRef.current) {
+      try { micMergerNodeRef.current.disconnect(); } catch (e) {}
+    }
+
+    const audioCtx = audioContextRef.current;
+    if (audioCtx && !micMergerNodeRef.current) {
+      micMergerNodeRef.current = audioCtx.createChannelMerger(2);
+    }
+    const micMerger = micMergerNodeRef.current;
+
+    const activeNode = (isNoiseSuppressionRef.current && rnnoiseNode) ? rnnoiseNode : micSource;
 
     if (isNoiseSuppressionRef.current && rnnoiseNode) {
-      // RNNoise active: micSource -> rnnoiseNode -> mediaStreamDest
       micSource.connect(rnnoiseNode);
-      rnnoiseNode.connect(mediaStreamDest);
       if (analyser) {
         // VAD listens to filtered audio (no false positives from keyboard clicks or fans)
         rnnoiseNode.connect(analyser);
       }
       console.log('[RNNoise] Filter active');
     } else {
-      // RNNoise bypassed: direct pass-through
-      micSource.connect(mediaStreamDest);
       if (analyser) {
         micSource.connect(analyser);
       }
       console.log('[RNNoise] Filter bypassed');
+    }
+
+    if (micMerger) {
+      // Connect mono mic to BOTH Left (0) and Right (1) of micMerger so the outbound WebRTC track is balanced stereo in all browsers (including Firefox)
+      activeNode.connect(micMerger, 0, 0);
+      activeNode.connect(micMerger, 0, 1);
+      micMerger.connect(mediaStreamDest);
+    } else {
+      activeNode.connect(mediaStreamDest);
     }
   }, []);
 
@@ -1048,6 +1091,18 @@ export function useVoiceChat({
         try { gn.disconnect(); } catch (e) {}
       });
       gainNodesRef.current.clear();
+      peerMergerNodesRef.current.forEach((m) => {
+        try { m.disconnect(); } catch (e) {}
+      });
+      peerMergerNodesRef.current.clear();
+      peerSourceNodesRef.current.forEach((s) => {
+        try { s.disconnect(); } catch (e) {}
+      });
+      peerSourceNodesRef.current.clear();
+      if (micMergerNodeRef.current) {
+        try { micMergerNodeRef.current.disconnect(); } catch (e) {}
+        micMergerNodeRef.current = null;
+      }
       remoteStreamsRef.current.clear();
 
       // Stop local microphone stream
