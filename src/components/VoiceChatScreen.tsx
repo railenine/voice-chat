@@ -297,6 +297,20 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                     ? 'border-green-400/60 shadow-lg shadow-green-500/20 ring-2 ring-green-400/50'
                     : 'border-white/10'
                 }`}>
+                  {/* Card Top Status Bar */}
+                  <div className="flex items-center justify-end h-5 mb-1.5">
+                    {isMuted ? (
+                      <span className="text-[10px] sm:text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30 font-medium">
+                        Muted
+                      </span>
+                    ) : isSpeaking ? (
+                      <span className="text-[10px] sm:text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full border border-green-500/40 flex items-center gap-1 font-medium animate-pulse">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+                        Говорит
+                      </span>
+                    ) : null}
+                  </div>
+
                   <div className={`w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full flex items-center justify-center text-xl sm:text-2xl mb-2 sm:mb-3 transition-all ${
                     isMuted 
                       ? 'bg-red-500/20 border-2 border-red-500/50' 
@@ -344,24 +358,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                     </div>
                   )}
                   <p className="text-blue-400 text-xs mt-0.5">Вы</p>
-                  {isMuted && (
-                    <div className="absolute top-2 right-2">
-                      <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30">Muted</span>
-                    </div>
-                  )}
-                  {!isMuted && isSpeaking && (
-                    <div className="absolute top-2 right-2">
-                      <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full border border-green-500/40 flex items-center gap-1 font-medium animate-pulse">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-                        Говорит
-                      </span>
-                    </div>
-                  )}
-                  {!isMuted && !isSpeaking && isConnected && (
-                    <div className="absolute top-2 right-2">
-                      <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full border border-green-500/30">Live</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Other Peers */}
@@ -371,6 +367,20 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                       ? 'border-green-400/60 shadow-lg shadow-green-500/20 ring-2 ring-green-400/50'
                       : 'border-white/10'
                   }`}>
+                    {/* Card Top Status Bar */}
+                    <div className="flex items-center justify-end h-5 mb-1.5">
+                      {peer.isMuted ? (
+                        <span className="text-[10px] sm:text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30 font-medium">
+                          Muted
+                        </span>
+                      ) : peer.isSpeaking ? (
+                        <span className="text-[10px] sm:text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full border border-green-500/40 flex items-center gap-1 font-medium animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
+                          Говорит
+                        </span>
+                      ) : null}
+                    </div>
+
                     <div className={`w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-full flex items-center justify-center text-xl sm:text-2xl mb-2 sm:mb-3 transition-all ${
                       peer.isMuted 
                         ? 'bg-red-500/20 border-2 border-red-500/50' 
@@ -382,19 +392,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                     </div>
                     <p className="text-white font-semibold text-xs sm:text-sm truncate">{peer.nickname}</p>
                     <p className="text-gray-500 text-xs mt-1">Участник</p>
-                    {peer.isMuted && (
-                      <div className="absolute top-2 right-2">
-                        <span className="text-xs bg-red-500/20 text-red-400 px-2 py-0.5 rounded-full border border-red-500/30">Muted</span>
-                      </div>
-                    )}
-                    {!peer.isMuted && peer.isSpeaking && (
-                      <div className="absolute top-2 right-2">
-                        <span className="text-xs bg-green-500/20 text-green-300 px-2 py-0.5 rounded-full border border-green-500/40 flex items-center gap-1 font-medium animate-pulse">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-                          Говорит
-                        </span>
-                      </div>
-                    )}
 
                     {/* Individual Volume Control */}
                     <div
