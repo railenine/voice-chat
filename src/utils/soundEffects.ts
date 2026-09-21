@@ -119,9 +119,27 @@ function playTactileSweep(
 }
 
 /**
+ * Play a clear two-stage melodic cue for gaming hotkey feedback
+ */
+function playTwoToneCue(
+  ctx: AudioContext,
+  tone1Freqs: number[],
+  tone2Freqs: number[],
+  tone1Duration = 0.065,
+  tone2Duration = 0.12,
+  volume = 0.40
+) {
+  const now = ctx.currentTime;
+  // Tone 1: snappy attack, crisp presence
+  playHarmonicChime(ctx, tone1Freqs, now, tone1Duration, volume * 0.9, 'sine');
+  // Tone 2: solid resolution chime
+  playHarmonicChime(ctx, tone2Freqs, now + tone1Duration, tone2Duration, volume, 'sine');
+}
+
+/**
  * Mute sound (Microphone OFF):
- * Short, subtle tactile click down (360 Hz -> 180 Hz, 55ms)
- * Sounds like a physical switch clicking off.
+ * Clear descending two-tone cue: G5 (784 Hz) -> C5 (523 Hz)
+ * Distinct, louder, and cuts through in-game audio without being harsh.
  */
 export async function playMuteSound() {
   const ctx = getFallbackAudioContext();
@@ -131,8 +149,8 @@ export async function playMuteSound() {
     if (ctx.state === 'suspended') {
       await ctx.resume();
     }
-    const now = ctx.currentTime;
-    playTactileSweep(ctx, 360, 180, now, 0.055, 0.22);
+    // Descending G5 -> C5 with harmonic sparkle
+    playTwoToneCue(ctx, [784.0, 1568.0], [523.25, 1046.5], 0.065, 0.11, 0.40);
   } catch (e) {
     console.warn('[SoundEffects] playMuteSound error:', e);
   }
@@ -140,8 +158,8 @@ export async function playMuteSound() {
 
 /**
  * Unmute sound (Microphone ON):
- * Short, crisp tactile click up (220 Hz -> 480 Hz, 55ms)
- * Sounds like a physical switch clicking on.
+ * Clear ascending two-tone cue: C5 (523 Hz) -> G5 (784 Hz)
+ * Instantly recognizable "mic activated" chime audible over games.
  */
 export async function playUnmuteSound() {
   const ctx = getFallbackAudioContext();
@@ -151,8 +169,8 @@ export async function playUnmuteSound() {
     if (ctx.state === 'suspended') {
       await ctx.resume();
     }
-    const now = ctx.currentTime;
-    playTactileSweep(ctx, 220, 480, now, 0.055, 0.22);
+    // Ascending C5 -> G5 with harmonic sparkle
+    playTwoToneCue(ctx, [523.25, 1046.5], [784.0, 1568.0], 0.065, 0.13, 0.42);
   } catch (e) {
     console.warn('[SoundEffects] playUnmuteSound error:', e);
   }
