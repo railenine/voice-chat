@@ -13,6 +13,14 @@ export interface PeerInfo {
   isSpeaking: boolean;
 }
 
+export interface ChatMessage {
+  id: string;
+  peerId: string;
+  nickname: string;
+  text: string;
+  timestamp: number;
+}
+
 interface UseVoiceChatOptions {
   roomId: string;
   nickname: string;
@@ -36,6 +44,8 @@ export function useVoiceChat({
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [peerVolumes, setPeerVolumes] = useState<Record<string, number>>({});
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [myPeerId, setMyPeerId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('Подключение...');
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
@@ -56,7 +66,10 @@ export function useVoiceChat({
   const rawMicStreamRef = useRef<MediaStream | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const micPreFilterNodeRef = useRef<BiquadFilterNode | null>(null);
   const rnnoiseNodeRef = useRef<RnnoiseWorkletNode | null>(null);
+  const micPostFilterNodeRef = useRef<BiquadFilterNode | null>(null);
+  const micGateGainNodeRef = useRef<GainNode | null>(null);
   const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const micMergerNodeRef = useRef<ChannelMergerNode | null>(null);
   const isNoiseSuppressionRef = useRef(isNoiseSuppression);
@@ -69,6 +82,8 @@ export function useVoiceChat({
   const gainNodesRef = useRef<Map<string, GainNode>>(new Map());
   const peerMergerNodesRef = useRef<Map<string, ChannelMergerNode>>(new Map());
   const peerSourceNodesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
+  const peerDestNodesRef = useRef<Map<string, MediaStreamAudioDestinationNode>>(new Map());
+  const peerCompressorNodesRef = useRef<Map<string, DynamicsCompressorNode>>(new Map());
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const isSettingRemoteAnswerPendingRef = useRef<Map<string, boolean>>(new Map());
@@ -104,6 +119,15 @@ export function useVoiceChat({
       wsRef.current.send(JSON.stringify(msg));
     }
   }, []);
+
+  const sendChatMessage = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    sendWsMessage({
+      type: 'chat-message',
+      text: trimmed,
+    });
+  }, [sendWsMessage]);
 
   // Unlock audio playback (AudioContext & <audio> elements)
   const unlockAudio = useCallback(() => {
@@ -148,7 +172,7 @@ export function useVoiceChat({
       const saved = localStorage.getItem(`peer_volume_${nick}`);
       if (saved !== null) {
         const val = Number(saved);
-        if (!isNaN(val) && val >= 0 && val <= 100) {
+        if (!isNaN(val) && val >= 0 && val <= 200) {
           return val;
         }
       }
@@ -156,21 +180,21 @@ export function useVoiceChat({
     return 100;
   }, []);
 
-  // Set volume for a remote peer (0 to 100) - supports iOS Safari, Chrome, Edge, Firefox
+  // Set volume for a remote peer (0 to 200%) - supports volume boost across all platforms
   const setPeerVolume = useCallback((peerId: string, volume: number) => {
-    const clamped = Math.max(0, Math.min(100, Math.round(volume)));
+    const clamped = Math.max(0, Math.min(200, Math.round(volume)));
     peerVolumesRef.current.set(peerId, clamped);
     setPeerVolumes((prev) => ({ ...prev, [peerId]: clamped }));
 
     const isMuted = clamped === 0;
 
-    // 1. Web Audio GainNode (only used on iOS Safari where audio.volume is locked)
+    // 1. Web Audio GainNode (controls volume & boost up to 200%)
     const gainNode = gainNodesRef.current.get(peerId);
     if (gainNode) {
       gainNode.gain.value = clamped / 100;
     }
 
-    // 2. Hardware/track level mute (works 100% on iOS Safari)
+    // 2. Hardware/track level mute (works 100% on iOS Safari & instant silencing)
     const stream = remoteStreamsRef.current.get(peerId);
     if (stream) {
       stream.getAudioTracks().forEach((track) => {
@@ -185,7 +209,7 @@ export function useVoiceChat({
         audio.muted = true;
       } else {
         audio.muted = isMuted;
-        audio.volume = clamped / 100;
+        audio.volume = gainNode ? 1.0 : Math.min(1.0, clamped / 100);
       }
     }
 
@@ -210,32 +234,56 @@ export function useVoiceChat({
       track.enabled = !isMuted;
     });
 
-    // Setup Web Audio GainNode for volume control ONLY on iOS Safari (where HTMLAudioElement.volume is read-only)
-    if (isIOS) {
-      const ctx = getAudioContext();
-      let gainNode = gainNodesRef.current.get(peerId);
-      if (ctx && !gainNode) {
-        try {
-          const source = ctx.createMediaStreamSource(stream);
-          peerSourceNodesRef.current.set(peerId, source);
+    // Setup Web Audio GainNode for volume control and boost (0% to 200%)
+    const ctx = getAudioContext();
+    let gainNode = gainNodesRef.current.get(peerId);
+    let audioStream: MediaStream = stream;
 
-          // Explicitly upmix to stereo (both Left and Right channels) to prevent single-ear playback
-          const merger = ctx.createChannelMerger(2);
-          source.connect(merger, 0, 0); // Left ear
-          source.connect(merger, 0, 1); // Right ear
-          peerMergerNodesRef.current.set(peerId, merger);
+    if (ctx && !gainNode) {
+      try {
+        const source = ctx.createMediaStreamSource(stream);
+        peerSourceNodesRef.current.set(peerId, source);
 
-          gainNode = ctx.createGain();
-          gainNode.gain.value = currentVol / 100;
-          merger.connect(gainNode);
-          gainNode.connect(ctx.destination);
-          gainNodesRef.current.set(peerId, gainNode);
-          console.log(`[Audio] Web Audio GainNode connected (iOS stereo) for peer ${peerId}`);
-        } catch (err) {
-          console.warn(`[Audio] Could not create GainNode for ${peerId}:`, err);
-        }
-      } else if (gainNode) {
+        // Explicitly upmix to stereo (both Left and Right channels) to prevent single-ear playback in Firefox
+        const merger = ctx.createChannelMerger(2);
+        source.connect(merger, 0, 0); // Left ear
+        source.connect(merger, 0, 1); // Right ear
+        peerMergerNodesRef.current.set(peerId, merger);
+
+        gainNode = ctx.createGain();
         gainNode.gain.value = currentVol / 100;
+        merger.connect(gainNode);
+
+        if (isIOS) {
+          // iOS Safari: GainNode connects directly to destination, audio element is kept muted
+          gainNode.connect(ctx.destination);
+        } else {
+          // Desktop & Android: add limiter to prevent clipping when boosted above 100%
+          const compressor = ctx.createDynamicsCompressor();
+          compressor.threshold.value = -6;
+          compressor.knee.value = 10;
+          compressor.ratio.value = 12;
+          compressor.attack.value = 0.003;
+          compressor.release.value = 0.15;
+          gainNode.connect(compressor);
+          peerCompressorNodesRef.current.set(peerId, compressor);
+
+          const dest = ctx.createMediaStreamDestination();
+          compressor.connect(dest);
+          peerDestNodesRef.current.set(peerId, dest);
+          audioStream = dest.stream;
+        }
+        gainNodesRef.current.set(peerId, gainNode);
+        console.log(`[Audio] Web Audio GainNode & Limiter connected for peer ${peerId} (up to 200% boost)`);
+      } catch (err) {
+        console.warn(`[Audio] Could not create GainNode for ${peerId}:`, err);
+        audioStream = stream;
+      }
+    } else if (gainNode) {
+      gainNode.gain.value = currentVol / 100;
+      const dest = peerDestNodesRef.current.get(peerId);
+      if (dest) {
+        audioStream = dest.stream;
       }
     }
 
@@ -247,9 +295,8 @@ export function useVoiceChat({
       (audio as any).webkitPlaysInline = true;
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
-      // On iOS, keep audio element muted since GainNode routes to speakers; on desktop/Firefox, audio element is unmuted and handles stereo + volume natively
       audio.muted = isIOS ? true : isMuted;
-      audio.volume = isIOS ? 1.0 : currentVol / 100;
+      audio.volume = gainNode ? 1.0 : Math.min(1.0, currentVol / 100);
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
       audio.style.top = '-9999px';
@@ -267,7 +314,7 @@ export function useVoiceChat({
       }
     } else {
       audio.muted = isIOS ? true : isMuted;
-      audio.volume = isIOS ? 1.0 : currentVol / 100;
+      audio.volume = gainNode ? 1.0 : Math.min(1.0, currentVol / 100);
 
       if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
         (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
@@ -276,8 +323,8 @@ export function useVoiceChat({
       }
     }
 
-    if (audio.srcObject !== stream) {
-      audio.srcObject = stream;
+    if (audio.srcObject !== audioStream) {
+      audio.srcObject = audioStream;
     }
 
     const playAudio = () => {
@@ -320,6 +367,16 @@ export function useVoiceChat({
     if (gainNode) {
       try { gainNode.disconnect(); } catch (e) {}
       gainNodesRef.current.delete(peerId);
+    }
+    const compressor = peerCompressorNodesRef.current.get(peerId);
+    if (compressor) {
+      try { compressor.disconnect(); } catch (e) {}
+      peerCompressorNodesRef.current.delete(peerId);
+    }
+    const dest = peerDestNodesRef.current.get(peerId);
+    if (dest) {
+      try { dest.disconnect(); } catch (e) {}
+      peerDestNodesRef.current.delete(peerId);
     }
     const merger = peerMergerNodesRef.current.get(peerId);
     if (merger) {
@@ -580,42 +637,83 @@ export function useVoiceChat({
     if (!micSource || !mediaStreamDest) return;
 
     try { micSource.disconnect(); } catch (e) {}
+    if (micPreFilterNodeRef.current) {
+      try { micPreFilterNodeRef.current.disconnect(); } catch (e) {}
+    }
     if (rnnoiseNode) {
       try { rnnoiseNode.disconnect(); } catch (e) {}
+    }
+    if (micPostFilterNodeRef.current) {
+      try { micPostFilterNodeRef.current.disconnect(); } catch (e) {}
+    }
+    if (micGateGainNodeRef.current) {
+      try { micGateGainNodeRef.current.disconnect(); } catch (e) {}
     }
     if (micMergerNodeRef.current) {
       try { micMergerNodeRef.current.disconnect(); } catch (e) {}
     }
 
     const audioCtx = audioContextRef.current;
-    if (audioCtx && !micMergerNodeRef.current) {
+    if (!audioCtx) return;
+
+    if (!micMergerNodeRef.current) {
       micMergerNodeRef.current = audioCtx.createChannelMerger(2);
     }
     const micMerger = micMergerNodeRef.current;
 
-    const activeNode = (isNoiseSuppressionRef.current && rnnoiseNode) ? rnnoiseNode : micSource;
-
     if (isNoiseSuppressionRef.current && rnnoiseNode) {
-      micSource.connect(rnnoiseNode);
-      if (analyser) {
-        // VAD listens to filtered audio (no false positives from keyboard clicks or fans)
-        rnnoiseNode.connect(analyser);
+      // 1. Pre-filter: High-Pass at 80Hz (Q: 0.7) to eliminate desk rumble, wind/breath, and 50/60Hz mains hum
+      if (!micPreFilterNodeRef.current) {
+        const preFilter = audioCtx.createBiquadFilter();
+        preFilter.type = 'highpass';
+        preFilter.frequency.value = 80;
+        preFilter.Q.value = 0.7;
+        micPreFilterNodeRef.current = preFilter;
       }
-      console.log('[RNNoise] Filter active');
+      const preFilter = micPreFilterNodeRef.current;
+
+      // 2. Post-filter: High-Shelf at 5500Hz (+2.0dB) to restore presence and vocal brilliance after RNNoise Bark-scale filtering
+      if (!micPostFilterNodeRef.current) {
+        const postFilter = audioCtx.createBiquadFilter();
+        postFilter.type = 'highshelf';
+        postFilter.frequency.value = 5500;
+        postFilter.gain.value = 2.0;
+        micPostFilterNodeRef.current = postFilter;
+      }
+      const postFilter = micPostFilterNodeRef.current;
+
+      // 3. Intelligent Noise Gate: Smoothly attenuates signal to 0 when silent to kill keyboard clicks & heavy breathing
+      if (!micGateGainNodeRef.current) {
+        const gateGain = audioCtx.createGain();
+        gateGain.gain.value = 1.0;
+        micGateGainNodeRef.current = gateGain;
+      }
+      const gateGain = micGateGainNodeRef.current;
+
+      // Chain: micSource -> preFilter -> rnnoiseNode -> postFilter -> gateGain -> micMerger -> mediaStreamDest
+      micSource.connect(preFilter);
+      preFilter.connect(rnnoiseNode);
+      rnnoiseNode.connect(postFilter);
+      postFilter.connect(gateGain);
+      gateGain.connect(micMerger, 0, 0);
+      gateGain.connect(micMerger, 0, 1);
+      micMerger.connect(mediaStreamDest);
+
+      if (analyser) {
+        // VAD listens to post-filtered audio before gate so it detects speech accurately
+        postFilter.connect(analyser);
+      }
+      console.log('[RNNoise] Enhanced filter chain active (High-Pass 80Hz + RNNoise + Post-EQ + Noise Gate)');
     } else {
+      // Noise suppression bypassed: direct pass-through
+      micSource.connect(micMerger, 0, 0);
+      micSource.connect(micMerger, 0, 1);
+      micMerger.connect(mediaStreamDest);
+
       if (analyser) {
         micSource.connect(analyser);
       }
-      console.log('[RNNoise] Filter bypassed');
-    }
-
-    if (micMerger) {
-      // Connect mono mic to BOTH Left (0) and Right (1) of micMerger so the outbound WebRTC track is balanced stereo in all browsers (including Firefox)
-      activeNode.connect(micMerger, 0, 0);
-      activeNode.connect(micMerger, 0, 1);
-      micMerger.connect(mediaStreamDest);
-    } else {
-      activeNode.connect(mediaStreamDest);
+      console.log('[RNNoise] Filter bypassed (direct pass-through)');
     }
   }, []);
 
@@ -764,6 +862,7 @@ export function useVoiceChat({
 
     const myPeerId = `vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     myPeerIdRef.current = myPeerId;
+    setMyPeerId(myPeerId);
 
     const init = async () => {
       try {
@@ -866,6 +965,11 @@ export function useVoiceChat({
               if (analyserRef.current && streamRef.current) {
                 const track = streamRef.current.getAudioTracks()[0];
                 if (!track || !track.enabled) {
+                  const gateGain = micGateGainNodeRef.current;
+                  const audioCtx = audioContextRef.current;
+                  if (gateGain && audioCtx) {
+                    gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.01);
+                  }
                   if (isSpeakingRef.current) {
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
@@ -879,9 +983,16 @@ export function useVoiceChat({
                   }
                   const average = sum / dataArray.length;
 
+                  const gateGain = micGateGainNodeRef.current;
+                  const audioCtx = audioContextRef.current;
+
                   // Sensitivity threshold: 6 out of 255
                   if (average > 6) {
                     speechHangoverRef.current = now + 400;
+                    // Open noise gate with fast attack (10ms)
+                    if (gateGain && audioCtx && isNoiseSuppressionRef.current) {
+                      gateGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.01);
+                    }
                     if (!isSpeakingRef.current) {
                       isSpeakingRef.current = true;
                       setIsSpeaking(true);
@@ -893,9 +1004,16 @@ export function useVoiceChat({
                       lastBroadcastSpeakingRef.current = now;
                     }
                   } else if (isSpeakingRef.current && now > speechHangoverRef.current) {
+                    // Close noise gate with smooth release (40ms, no clicks or pops)
+                    if (gateGain && audioCtx && isNoiseSuppressionRef.current) {
+                      gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.04);
+                    }
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
                     sendWsMessage({ type: 'speaking', isSpeaking: false });
+                  } else if (!isSpeakingRef.current && now > speechHangoverRef.current && gateGain && audioCtx && isNoiseSuppressionRef.current) {
+                    // Ensure noise gate stays closed during extended silence
+                    gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.04);
                   }
                 }
               }
@@ -1001,6 +1119,9 @@ export function useVoiceChat({
                   iceServersRef.current = msg.iceServers;
                   console.log(`[ICE] Updated ICE servers from room-state: ${msg.iceServers.length} servers`);
                 }
+                if (Array.isArray(msg.messages)) {
+                  setMessages(msg.messages);
+                }
                 if (Array.isArray(msg.peers)) {
                   const newVols: Record<string, number> = {};
                   msg.peers.forEach((p: PeerInfo) => {
@@ -1043,12 +1164,7 @@ export function useVoiceChat({
                   info.nickname = msg.nickname;
                   peersInfoRef.current.set(msg.peerId, info);
                   const savedVol = getSavedVolume(msg.nickname);
-                  peerVolumesRef.current.set(msg.peerId, savedVol);
-                  setPeerVolumes((prev) => ({ ...prev, [msg.peerId]: savedVol }));
-                  const audio = audioElementsRef.current.get(msg.peerId);
-                  if (audio) {
-                    audio.volume = savedVol / 100;
-                  }
+                  setPeerVolume(msg.peerId, savedVol);
                   updatePeersState();
                 }
               }
@@ -1084,6 +1200,11 @@ export function useVoiceChat({
                 console.log(`[WS] Peer left: ${msg.peerId}`);
                 playLeaveSound();
                 cleanupPeer(msg.peerId);
+              }
+
+              // In-room chat message
+              else if (type === 'chat-message' && msg.message) {
+                setMessages((prev) => [...prev, msg.message]);
               }
             };
 
@@ -1198,6 +1319,14 @@ export function useVoiceChat({
         try { gn.disconnect(); } catch (e) {}
       });
       gainNodesRef.current.clear();
+      peerCompressorNodesRef.current.forEach((c) => {
+        try { c.disconnect(); } catch (e) {}
+      });
+      peerCompressorNodesRef.current.clear();
+      peerDestNodesRef.current.forEach((d) => {
+        try { d.disconnect(); } catch (e) {}
+      });
+      peerDestNodesRef.current.clear();
       peerMergerNodesRef.current.forEach((m) => {
         try { m.disconnect(); } catch (e) {}
       });
@@ -1209,6 +1338,18 @@ export function useVoiceChat({
       if (micMergerNodeRef.current) {
         try { micMergerNodeRef.current.disconnect(); } catch (e) {}
         micMergerNodeRef.current = null;
+      }
+      if (micPreFilterNodeRef.current) {
+        try { micPreFilterNodeRef.current.disconnect(); } catch (e) {}
+        micPreFilterNodeRef.current = null;
+      }
+      if (micPostFilterNodeRef.current) {
+        try { micPostFilterNodeRef.current.disconnect(); } catch (e) {}
+        micPostFilterNodeRef.current = null;
+      }
+      if (micGateGainNodeRef.current) {
+        try { micGateGainNodeRef.current.disconnect(); } catch (e) {}
+        micGateGainNodeRef.current = null;
       }
       remoteStreamsRef.current.clear();
 
@@ -1247,5 +1388,8 @@ export function useVoiceChat({
     isNoiseSuppression,
     isNoiseSuppressionReady,
     toggleNoiseSuppression,
+    messages,
+    sendChatMessage,
+    myPeerId,
   };
 }

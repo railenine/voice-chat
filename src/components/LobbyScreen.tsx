@@ -37,7 +37,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
       </div>
 
       {/* Content */}
-      <div className="content-wrapper min-h-screen flex items-center justify-center p-4 sm:p-6">
+      <div className="content-wrapper h-full w-full flex-1 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
         <div className="max-w-md w-full">
           {/* Logo / Title */}
           <div className="text-center mb-6 sm:mb-8">
@@ -150,7 +150,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     setJoinRoomId(extractRoomId(text));
                   }}
                   placeholder="ID КОМНАТЫ ИЛИ ССЫЛКА"
-                  className="w-full py-3 px-4 bg-white/5 border border-white/10 rounded-xl text-white text-center text-base sm:text-lg font-mono tracking-widest placeholder:text-gray-600 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 mb-4"
+                  className="w-full py-3 px-3 sm:px-4 bg-white/5 border border-white/10 rounded-xl text-white text-center text-sm sm:text-lg font-mono tracking-wider sm:tracking-widest placeholder:text-gray-600 focus:outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20 mb-4"
                   maxLength={128}
                 />
                 <button

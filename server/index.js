@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import cors from 'cors';
 import fs from 'fs';
+import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -80,7 +81,9 @@ const clientMeta = new Map();
 
 function getRoom(roomId) {
   if (!rooms.has(roomId)) {
-    rooms.set(roomId, new Map());
+    const room = new Map();
+    room.messages = [];
+    rooms.set(roomId, room);
   }
   return rooms.get(roomId);
 }
@@ -120,7 +123,7 @@ function removeClientFromRoom(ws) {
 
     if (room.size === 0) {
       rooms.delete(roomId);
-      console.log(`[Room ${roomId}] Room closed (empty)`);
+      console.log(`[Room ${roomId}] Room closed (empty, all in-memory messages cleared)`);
     }
   }
 }
@@ -200,10 +203,11 @@ wss.on('connection', (ws) => {
       // Fetch cached/live ICE servers including Metered TURN
       const iceServers = await getIceServers();
 
-      // Send existing peers and iceServers to joining client
+      // Send existing peers, in-memory messages, and iceServers to joining client
       ws.send(JSON.stringify({
         type: 'room-state',
         peers: existingPeers,
+        messages: room.messages || [],
         iceServers,
       }));
 
@@ -303,6 +307,44 @@ wss.on('connection', (ws) => {
           isSpeaking: client.isSpeaking,
         }, meta.peerId);
       }
+      return;
+    }
+
+    // In-room Chat message (zero persistence, in-memory only)
+    if (type === 'chat-message') {
+      const meta = clientMeta.get(ws);
+      if (!meta) return;
+
+      const { text } = msg;
+      if (!text || typeof text !== 'string') return;
+      const trimmedText = text.trim();
+      if (!trimmedText || trimmedText.length > 1000) return;
+
+      const room = rooms.get(meta.roomId);
+      if (!room || !room.has(meta.peerId)) return;
+
+      const client = room.get(meta.peerId);
+      const chatMessage = {
+        id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        peerId: meta.peerId,
+        nickname: client.nickname || 'Аноним',
+        text: trimmedText,
+        timestamp: Date.now(),
+      };
+
+      if (!room.messages) {
+        room.messages = [];
+      }
+      room.messages.push(chatMessage);
+      // Keep only last 100 messages in memory per room
+      if (room.messages.length > 100) {
+        room.messages.shift();
+      }
+
+      broadcastToRoom(meta.roomId, {
+        type: 'chat-message',
+        message: chatMessage,
+      });
       return;
     }
 
