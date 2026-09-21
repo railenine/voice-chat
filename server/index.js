@@ -175,8 +175,35 @@ wss.on('connection', (ws) => {
       // Cleanup any previous room for this socket
       removeClientFromRoom(ws);
 
-      clientMeta.set(ws, { roomId, peerId });
       const room = getRoom(roomId);
+
+      // Check if room already has stale clients with the same peerId OR the same non-default nickname
+      const cleanNick = (nickname || '').trim();
+      const isNonDefaultNick = cleanNick && cleanNick !== 'Аноним';
+      const stalePeers = [];
+
+      for (const [existingId, client] of room.entries()) {
+        const isSamePeer = existingId === peerId;
+        const isSameNick = isNonDefaultNick && client.nickname === cleanNick;
+        if (isSamePeer || isSameNick) {
+          stalePeers.push({ peerId: existingId, client });
+        }
+      }
+
+      for (const { peerId: staleId, client: staleClient } of stalePeers) {
+        console.log(`[Room ${roomId}] Evicting stale duplicate peer ${staleId} (${staleClient.nickname})`);
+        try {
+          staleClient.ws.close();
+        } catch (e) {}
+        clientMeta.delete(staleClient.ws);
+        room.delete(staleId);
+        broadcastToRoom(roomId, {
+          type: 'user-left',
+          peerId: staleId,
+        });
+      }
+
+      clientMeta.set(ws, { roomId, peerId });
 
       // Existing peers list (excluding self)
       const existingPeers = [];
