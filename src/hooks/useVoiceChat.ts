@@ -69,7 +69,6 @@ export function useVoiceChat({
   const micPreFilterNodeRef = useRef<BiquadFilterNode | null>(null);
   const rnnoiseNodeRef = useRef<RnnoiseWorkletNode | null>(null);
   const micPostFilterNodeRef = useRef<BiquadFilterNode | null>(null);
-  const micGateGainNodeRef = useRef<GainNode | null>(null);
   const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const micMergerNodeRef = useRef<ChannelMergerNode | null>(null);
   const isNoiseSuppressionRef = useRef(isNoiseSuppression);
@@ -82,7 +81,6 @@ export function useVoiceChat({
   const gainNodesRef = useRef<Map<string, GainNode>>(new Map());
   const peerMergerNodesRef = useRef<Map<string, ChannelMergerNode>>(new Map());
   const peerSourceNodesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
-  const peerDestNodesRef = useRef<Map<string, MediaStreamAudioDestinationNode>>(new Map());
   const peerCompressorNodesRef = useRef<Map<string, DynamicsCompressorNode>>(new Map());
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
@@ -202,14 +200,14 @@ export function useVoiceChat({
       });
     }
 
-    // 3. Audio element (handles volume & stereo playback on Firefox, Chrome, Edge, Safari macOS, desktop app)
+    // 3. Audio element (kept muted when Web Audio ctx.destination is active, or direct fallback)
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
-      if (isIOS && gainNode) {
+      if (gainNode) {
         audio.muted = true;
       } else {
         audio.muted = isMuted;
-        audio.volume = gainNode ? 1.0 : Math.min(1.0, clamped / 100);
+        audio.volume = Math.min(1.0, clamped / 100);
       }
     }
 
@@ -229,7 +227,7 @@ export function useVoiceChat({
     const currentVol = peerVolumesRef.current.get(peerId) ?? 100;
     const isMuted = currentVol === 0;
 
-    // Track-level mute (essential for iOS Safari)
+    // Track-level mute (essential for instant silencing & iOS Safari)
     stream.getAudioTracks().forEach((track) => {
       track.enabled = !isMuted;
     });
@@ -237,7 +235,6 @@ export function useVoiceChat({
     // Setup Web Audio GainNode for volume control and boost (0% to 200%)
     const ctx = getAudioContext();
     let gainNode = gainNodesRef.current.get(peerId);
-    let audioStream: MediaStream = stream;
 
     if (ctx && !gainNode) {
       try {
@@ -254,37 +251,25 @@ export function useVoiceChat({
         gainNode.gain.value = currentVol / 100;
         merger.connect(gainNode);
 
-        if (isIOS) {
-          // iOS Safari: GainNode connects directly to destination, audio element is kept muted
-          gainNode.connect(ctx.destination);
-        } else {
-          // Desktop & Android: add limiter to prevent clipping when boosted above 100%
-          const compressor = ctx.createDynamicsCompressor();
-          compressor.threshold.value = -6;
-          compressor.knee.value = 10;
-          compressor.ratio.value = 12;
-          compressor.attack.value = 0.003;
-          compressor.release.value = 0.15;
-          gainNode.connect(compressor);
-          peerCompressorNodesRef.current.set(peerId, compressor);
+        // Dynamics compressor limiter to prevent clipping when boosted above 100%
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.value = -6;
+        compressor.knee.value = 10;
+        compressor.ratio.value = 12;
+        compressor.attack.value = 0.003;
+        compressor.release.value = 0.15;
+        gainNode.connect(compressor);
+        peerCompressorNodesRef.current.set(peerId, compressor);
 
-          const dest = ctx.createMediaStreamDestination();
-          compressor.connect(dest);
-          peerDestNodesRef.current.set(peerId, dest);
-          audioStream = dest.stream;
-        }
+        // Connect directly to system audio output (works on iOS, Desktop, Android, WebView2)
+        compressor.connect(ctx.destination);
         gainNodesRef.current.set(peerId, gainNode);
-        console.log(`[Audio] Web Audio GainNode & Limiter connected for peer ${peerId} (up to 200% boost)`);
+        console.log(`[Audio] Web Audio GainNode & Limiter connected directly to output for peer ${peerId} (up to 200% boost)`);
       } catch (err) {
-        console.warn(`[Audio] Could not create GainNode for ${peerId}:`, err);
-        audioStream = stream;
+        console.warn(`[Audio] Could not create Web Audio graph for ${peerId}, falling back to direct <audio>:`, err);
       }
     } else if (gainNode) {
       gainNode.gain.value = currentVol / 100;
-      const dest = peerDestNodesRef.current.get(peerId);
-      if (dest) {
-        audioStream = dest.stream;
-      }
     }
 
     let audio = audioElementsRef.current.get(peerId);
@@ -295,7 +280,8 @@ export function useVoiceChat({
       (audio as any).webkitPlaysInline = true;
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
-      audio.muted = isIOS ? true : isMuted;
+      // If Web Audio is active, mute <audio> to prevent double playback / echo
+      audio.muted = gainNode ? true : isMuted;
       audio.volume = gainNode ? 1.0 : Math.min(1.0, currentVol / 100);
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
@@ -323,8 +309,8 @@ export function useVoiceChat({
       }
     }
 
-    if (audio.srcObject !== audioStream) {
-      audio.srcObject = audioStream;
+    if (audio.srcObject !== stream) {
+      audio.srcObject = stream;
     }
 
     const playAudio = () => {
@@ -372,11 +358,6 @@ export function useVoiceChat({
     if (compressor) {
       try { compressor.disconnect(); } catch (e) {}
       peerCompressorNodesRef.current.delete(peerId);
-    }
-    const dest = peerDestNodesRef.current.get(peerId);
-    if (dest) {
-      try { dest.disconnect(); } catch (e) {}
-      peerDestNodesRef.current.delete(peerId);
     }
     const merger = peerMergerNodesRef.current.get(peerId);
     if (merger) {
@@ -646,9 +627,6 @@ export function useVoiceChat({
     if (micPostFilterNodeRef.current) {
       try { micPostFilterNodeRef.current.disconnect(); } catch (e) {}
     }
-    if (micGateGainNodeRef.current) {
-      try { micGateGainNodeRef.current.disconnect(); } catch (e) {}
-    }
     if (micMergerNodeRef.current) {
       try { micMergerNodeRef.current.disconnect(); } catch (e) {}
     }
@@ -682,28 +660,18 @@ export function useVoiceChat({
       }
       const postFilter = micPostFilterNodeRef.current;
 
-      // 3. Intelligent Noise Gate: Smoothly attenuates signal to 0 when silent to kill keyboard clicks & heavy breathing
-      if (!micGateGainNodeRef.current) {
-        const gateGain = audioCtx.createGain();
-        gateGain.gain.value = 1.0;
-        micGateGainNodeRef.current = gateGain;
-      }
-      const gateGain = micGateGainNodeRef.current;
-
-      // Chain: micSource -> preFilter -> rnnoiseNode -> postFilter -> gateGain -> micMerger -> mediaStreamDest
+      // Chain: micSource -> preFilter -> rnnoiseNode -> postFilter -> micMerger -> mediaStreamDest
       micSource.connect(preFilter);
       preFilter.connect(rnnoiseNode);
       rnnoiseNode.connect(postFilter);
-      postFilter.connect(gateGain);
-      gateGain.connect(micMerger, 0, 0);
-      gateGain.connect(micMerger, 0, 1);
+      postFilter.connect(micMerger, 0, 0);
+      postFilter.connect(micMerger, 0, 1);
       micMerger.connect(mediaStreamDest);
 
       if (analyser) {
-        // VAD listens to post-filtered audio before gate so it detects speech accurately
         postFilter.connect(analyser);
       }
-      console.log('[RNNoise] Enhanced filter chain active (High-Pass 80Hz + RNNoise + Post-EQ + Noise Gate)');
+      console.log('[RNNoise] Enhanced filter chain active (High-Pass 80Hz + RNNoise + Post-EQ)');
     } else {
       // Noise suppression bypassed: direct pass-through
       micSource.connect(micMerger, 0, 0);
@@ -860,7 +828,17 @@ export function useVoiceChat({
     if (initDoneRef.current) return;
     initDoneRef.current = true;
 
-    const myPeerId = `vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    let myPeerId = '';
+    try {
+      myPeerId = sessionStorage.getItem(`vc_peer_${roomId}`) || '';
+    } catch (e) {}
+
+    if (!myPeerId) {
+      myPeerId = `vc-${roomId}-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      try {
+        sessionStorage.setItem(`vc_peer_${roomId}`, myPeerId);
+      } catch (e) {}
+    }
     myPeerIdRef.current = myPeerId;
     setMyPeerId(myPeerId);
 
@@ -961,15 +939,10 @@ export function useVoiceChat({
                 audioContextRef.current.resume().catch(() => {});
               }
 
-              // 1. Local mic VAD
+              // 1. Local mic VAD (visual indicator only, never mutes audio stream)
               if (analyserRef.current && streamRef.current) {
                 const track = streamRef.current.getAudioTracks()[0];
                 if (!track || !track.enabled) {
-                  const gateGain = micGateGainNodeRef.current;
-                  const audioCtx = audioContextRef.current;
-                  if (gateGain && audioCtx) {
-                    gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.01);
-                  }
                   if (isSpeakingRef.current) {
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
@@ -977,22 +950,17 @@ export function useVoiceChat({
                   }
                 } else {
                   analyserRef.current.getByteFrequencyData(dataArray);
+                  // Analyze vocal frequency bins 1 to 32 (~150Hz to ~6000Hz)
                   let sum = 0;
-                  for (let i = 0; i < dataArray.length; i++) {
+                  const vocalBins = Math.min(32, dataArray.length);
+                  for (let i = 1; i < vocalBins; i++) {
                     sum += dataArray[i];
                   }
-                  const average = sum / dataArray.length;
+                  const vocalAverage = sum / (vocalBins - 1);
 
-                  const gateGain = micGateGainNodeRef.current;
-                  const audioCtx = audioContextRef.current;
-
-                  // Sensitivity threshold: 6 out of 255
-                  if (average > 6) {
+                  // Sensitivity threshold: 6 out of 255 in speech range
+                  if (vocalAverage > 6) {
                     speechHangoverRef.current = now + 400;
-                    // Open noise gate with fast attack (10ms)
-                    if (gateGain && audioCtx && isNoiseSuppressionRef.current) {
-                      gateGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.01);
-                    }
                     if (!isSpeakingRef.current) {
                       isSpeakingRef.current = true;
                       setIsSpeaking(true);
@@ -1004,16 +972,9 @@ export function useVoiceChat({
                       lastBroadcastSpeakingRef.current = now;
                     }
                   } else if (isSpeakingRef.current && now > speechHangoverRef.current) {
-                    // Close noise gate with smooth release (40ms, no clicks or pops)
-                    if (gateGain && audioCtx && isNoiseSuppressionRef.current) {
-                      gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.04);
-                    }
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
                     sendWsMessage({ type: 'speaking', isSpeaking: false });
-                  } else if (!isSpeakingRef.current && now > speechHangoverRef.current && gateGain && audioCtx && isNoiseSuppressionRef.current) {
-                    // Ensure noise gate stays closed during extended silence
-                    gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.04);
                   }
                 }
               }
@@ -1144,6 +1105,17 @@ export function useVoiceChat({
                 if (Array.isArray(msg.iceServers) && msg.iceServers.length > 0) {
                   iceServersRef.current = msg.iceServers;
                 }
+
+                // If a peer with this nickname already exists under an old peerId, clean it up immediately
+                if (msg.peer.nickname && msg.peer.nickname !== 'Аноним') {
+                  for (const [oldId, oldInfo] of peersInfoRef.current.entries()) {
+                    if (oldId !== msg.peer.peerId && oldInfo.nickname === msg.peer.nickname) {
+                      console.log(`[WebRTC] Removing duplicate old peer ${oldId} for ${msg.peer.nickname}`);
+                      cleanupPeer(oldId);
+                    }
+                  }
+                }
+
                 peersInfoRef.current.set(msg.peer.peerId, msg.peer);
                 const savedVol = getSavedVolume(msg.peer.nickname);
                 peerVolumesRef.current.set(msg.peer.peerId, savedVol);
