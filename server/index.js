@@ -24,14 +24,14 @@ app.get('/health', (req, res) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
     service: 'voicechat-server',
-    version: '0.0.2'
+    version: '0.0.3'
   });
 });
 
 app.get('/peerjs/info', (req, res) => {
   res.json({
     name: 'VoiceChat Server',
-    version: '0.0.2',
+    version: '0.0.3',
     signaling: 'websocket',
     path: '/peerjs/ws',
     status: 'running'
