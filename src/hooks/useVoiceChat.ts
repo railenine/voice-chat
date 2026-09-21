@@ -41,6 +41,10 @@ export function useVoiceChat({
 }: UseVoiceChatOptions) {
   const [isConnected, setIsConnected] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const isMutedRef = useRef(isMuted);
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [peerVolumes, setPeerVolumes] = useState<Record<string, number>>({});
@@ -150,6 +154,32 @@ export function useVoiceChat({
     }
   }, []);
 
+  // Auto-unlock AudioContext and resume audio on any user interaction in the window
+  useEffect(() => {
+    const handleInteraction = () => {
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().then(() => {
+          console.log('[Audio] AudioContext resumed via user interaction');
+        }).catch(() => {});
+      }
+      audioElementsRef.current.forEach((audio) => {
+        if (audio.paused) {
+          audio.play().catch(() => {});
+        }
+      });
+    };
+
+    window.addEventListener('click', handleInteraction);
+    window.addEventListener('keydown', handleInteraction);
+    window.addEventListener('touchstart', handleInteraction);
+
+    return () => {
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+    };
+  }, []);
+
   // Helper to ensure AudioContext is initialized and active
   const getAudioContext = useCallback(() => {
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
@@ -200,10 +230,11 @@ export function useVoiceChat({
       });
     }
 
-    // 3. Audio element (kept muted when Web Audio ctx.destination is active, or direct fallback)
+    // 3. Audio element (kept muted ONLY when Web Audio ctx.destination is active and running)
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
-      if (gainNode) {
+      const isWebAudioRunning = Boolean(gainNode && audioContextRef.current && audioContextRef.current.state === 'running');
+      if (isWebAudioRunning) {
         audio.muted = true;
       } else {
         audio.muted = isMuted;
@@ -265,12 +296,28 @@ export function useVoiceChat({
         compressor.connect(ctx.destination);
         gainNodesRef.current.set(peerId, gainNode);
         console.log(`[Audio] Web Audio GainNode & Limiter connected directly to output for peer ${peerId} (up to 200% boost)`);
+
+        // Dynamically sync all peer audio elements whenever AudioContext state transitions (suspended <-> running)
+        if (!ctx.onstatechange) {
+          ctx.onstatechange = () => {
+            const isRunning = ctx.state === 'running';
+            console.log(`[Audio] AudioContext state changed: ${ctx.state}`);
+            audioElementsRef.current.forEach((audioEl, pId) => {
+              const pVol = peerVolumesRef.current.get(pId) ?? 100;
+              const pMuted = pVol === 0;
+              audioEl.muted = isRunning ? true : pMuted;
+              audioEl.volume = isRunning ? 1.0 : Math.min(1.0, pVol / 100);
+            });
+          };
+        }
       } catch (err) {
         console.warn(`[Audio] Could not create Web Audio graph for ${peerId}, falling back to direct <audio>:`, err);
       }
     } else if (gainNode) {
       gainNode.gain.value = currentVol / 100;
     }
+
+    const isWebAudioRunning = Boolean(gainNode && ctx && ctx.state === 'running');
 
     let audio = audioElementsRef.current.get(peerId);
     if (!audio) {
@@ -280,9 +327,10 @@ export function useVoiceChat({
       (audio as any).webkitPlaysInline = true;
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
-      // If Web Audio is active, mute <audio> to prevent double playback / echo
-      audio.muted = gainNode ? true : isMuted;
-      audio.volume = gainNode ? 1.0 : Math.min(1.0, currentVol / 100);
+      // If Web Audio is active AND running, mute <audio> to prevent double playback / echo.
+      // If Web Audio is suspended (no user interaction yet), keep <audio> UNMUTED so newcomer is heard immediately!
+      audio.muted = isWebAudioRunning ? true : isMuted;
+      audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, currentVol / 100);
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
       audio.style.top = '-9999px';
@@ -299,8 +347,8 @@ export function useVoiceChat({
         });
       }
     } else {
-      audio.muted = isIOS ? true : isMuted;
-      audio.volume = gainNode ? 1.0 : Math.min(1.0, currentVol / 100);
+      audio.muted = isWebAudioRunning ? true : isMuted;
+      audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, currentVol / 100);
 
       if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
         (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
@@ -539,6 +587,15 @@ export function useVoiceChat({
           return;
         }
 
+        if (offerCollision && polite) {
+          console.log(`[WebRTC] Collision detected with ${from} (polite peer rolls back local offer)`);
+          try {
+            await pc.setLocalDescription({ type: 'rollback' });
+          } catch (e) {
+            console.warn('[WebRTC] Rollback error:', e);
+          }
+        }
+
         if (description.type === 'answer') {
           isSettingRemoteAnswerPendingRef.current.set(from, true);
         }
@@ -553,6 +610,7 @@ export function useVoiceChat({
         const queue = pendingCandidatesRef.current.get(from);
         if (queue && queue.length > 0) {
           console.log(`[WebRTC] Flushing ${queue.length} queued ICE candidates for ${from}`);
+          pendingCandidatesRef.current.delete(from);
           for (const cand of queue) {
             try {
               await pc.addIceCandidate(cand);
@@ -560,7 +618,6 @@ export function useVoiceChat({
               console.warn(`[WebRTC] Error adding queued ICE candidate for ${from}:`, err);
             }
           }
-          pendingCandidatesRef.current.delete(from);
         }
 
         if (description.type === 'offer') {
@@ -697,7 +754,8 @@ export function useVoiceChat({
 
   // Toggle microphone mute
   const toggleMute = useCallback(() => {
-    const newMuted = !isMuted;
+    const newMuted = !isMutedRef.current;
+    isMutedRef.current = newMuted;
     setIsMuted(newMuted);
 
     if (newMuted) {
@@ -727,7 +785,7 @@ export function useVoiceChat({
       type: 'update-mute',
       isMuted: newMuted,
     });
-  }, [isMuted, sendWsMessage]);
+  }, [sendWsMessage]);
 
   // MediaSession API integration (background hardware / OS mute toggle)
   useEffect(() => {

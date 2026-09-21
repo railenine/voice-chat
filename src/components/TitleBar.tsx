@@ -97,7 +97,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ roomId }) => {
             #{roomId}
           </span>
         ) : (
-          <span className="text-[10px] text-gray-500 font-mono">v0.0.3</span>
+          <span className="text-[10px] text-gray-500 font-mono">v0.0.31</span>
         )}
       </div>
 

@@ -120,9 +120,19 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
       }
     };
 
+    const handlePipMouseDown = (e: MouseEvent) => {
+      if (hotkey.type === 'mouse' && hotkey.button === e.button) {
+        e.preventDefault();
+        e.stopPropagation();
+        toggleMute();
+      }
+    };
+
     pipWindow.addEventListener('keydown', handlePipKeyDown);
+    pipWindow.addEventListener('mousedown', handlePipMouseDown);
     return () => {
       pipWindow.removeEventListener('keydown', handlePipKeyDown);
+      pipWindow.removeEventListener('mousedown', handlePipMouseDown);
     };
   }, [pipWindow, hotkey, toggleMute]);
 

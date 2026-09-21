@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface HotkeyConfig {
   code: string;
@@ -105,6 +105,23 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
 
   const [isRecording, setIsRecording] = useState(false);
 
+  // Keep latest onTrigger in ref to avoid stale closures and unnecessary re-subscriptions
+  const onTriggerRef = useRef(onTrigger);
+  useEffect(() => {
+    onTriggerRef.current = onTrigger;
+  }, [onTrigger]);
+
+  // Debounce/cooldown to prevent rapid double triggers (e.g. mousedown + auxclick, or OS hook + webview)
+  const lastTriggerTimeRef = useRef(0);
+  const triggerSafely = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTriggerTimeRef.current < 250) {
+      return;
+    }
+    lastTriggerTimeRef.current = now;
+    onTriggerRef.current();
+  }, []);
+
   // Save hotkey to state and localStorage
   const updateHotkey = useCallback((newConfig: HotkeyConfig) => {
     setHotkeyState(newConfig);
@@ -162,13 +179,11 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
 
     window.addEventListener('keydown', handleRecordKeyDown, { capture: true });
     window.addEventListener('mousedown', handleRecordMouseDown, { capture: true });
-    window.addEventListener('auxclick', handleRecordMouseDown, { capture: true });
     window.addEventListener('contextmenu', handleContextMenu, { capture: true });
 
     return () => {
       window.removeEventListener('keydown', handleRecordKeyDown, { capture: true });
       window.removeEventListener('mousedown', handleRecordMouseDown, { capture: true });
-      window.removeEventListener('auxclick', handleRecordMouseDown, { capture: true });
       window.removeEventListener('contextmenu', handleContextMenu, { capture: true });
     };
   }, [isRecording, updateHotkey]);
@@ -190,7 +205,7 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
 
       if (hotkey.type !== 'mouse' && isHotkeyMatch(e, hotkey)) {
         e.preventDefault();
-        onTrigger();
+        triggerSafely();
       }
     };
 
@@ -198,20 +213,18 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
       if (hotkey.type === 'mouse' && hotkey.button === e.button) {
         e.preventDefault();
         e.stopPropagation();
-        onTrigger();
+        triggerSafely();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('mousedown', handleMouseDown);
-    window.addEventListener('auxclick', handleMouseDown);
 
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('mousedown', handleMouseDown);
-      window.removeEventListener('auxclick', handleMouseDown);
     };
-  }, [enabled, isRecording, hotkey, onTrigger]);
+  }, [enabled, isRecording, hotkey, triggerSafely]);
 
   // Tauri OS-wide Global Mouse Event listener (works in background / full-screen games)
   useEffect(() => {
@@ -231,7 +244,7 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
             setIsRecording(false);
           }
         } else if (enabled && hotkey.type === 'mouse' && hotkey.code === btnCode) {
-          onTrigger();
+          triggerSafely();
         }
       }).then((u) => {
         if (isCancelled) {
@@ -246,7 +259,7 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
       isCancelled = true;
       if (unlisten) unlisten();
     };
-  }, [isRecording, enabled, hotkey, onTrigger, updateHotkey]);
+  }, [isRecording, enabled, hotkey, triggerSafely, updateHotkey]);
 
   // Tauri OS-wide Global Keyboard Shortcut registration
   useEffect(() => {
@@ -269,7 +282,7 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
 
         await register(shortcut, (event) => {
           if (event.state === 'Pressed') {
-            onTrigger();
+            triggerSafely();
           }
         });
 
@@ -290,7 +303,7 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
         });
       }
     };
-  }, [enabled, hotkey, onTrigger]);
+  }, [enabled, hotkey, triggerSafely]);
 
   return {
     hotkey,
