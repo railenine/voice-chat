@@ -70,6 +70,10 @@ export function useVoiceChat({
   const peerMergerNodesRef = useRef<Map<string, ChannelMergerNode>>(new Map());
   const peerSourceNodesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
+  const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+  const isSettingRemoteAnswerPendingRef = useRef<Map<string, boolean>>(new Map());
+  const failedRecoveryTimersRef = useRef<Map<string, any>>(new Map());
+  const rebuildPeerRef = useRef<(peerId: string) => void>(() => {});
   const initDoneRef = useRef(false);
   const wasConnectedRef = useRef(false);
   const isIntentionalDisconnectRef = useRef(false);
@@ -329,6 +333,14 @@ export function useVoiceChat({
     }
     remoteStreamsRef.current.delete(peerId);
 
+    const timer = failedRecoveryTimersRef.current.get(peerId);
+    if (timer) {
+      clearTimeout(timer);
+      failedRecoveryTimersRef.current.delete(peerId);
+    }
+    pendingCandidatesRef.current.delete(peerId);
+    isSettingRemoteAnswerPendingRef.current.delete(peerId);
+
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
       try {
@@ -403,16 +415,68 @@ export function useVoiceChat({
       handleRemoteStream(remotePeerId, remoteStream);
     };
 
-    // Connection state logging
-    pc.onconnectionstatechange = () => {
-      console.log(`[WebRTC] Connection with ${remotePeerId} is: ${pc!.connectionState}`);
-      if (pc!.connectionState === 'failed') {
-        pc!.restartIce();
+    // Connection & ICE state monitoring with automatic recovery for long sessions
+    const checkStateAndRecover = () => {
+      const connState = pc!.connectionState;
+      const iceState = pc!.iceConnectionState;
+      console.log(`[WebRTC] Peer ${remotePeerId} state: conn=${connState}, ice=${iceState}`);
+
+      if (connState === 'failed' || iceState === 'failed') {
+        try {
+          pc!.restartIce();
+        } catch (e) {}
+
+        if (!failedRecoveryTimersRef.current.has(remotePeerId)) {
+          const timer = setTimeout(() => {
+            failedRecoveryTimersRef.current.delete(remotePeerId);
+            const currentPc = peerConnectionsRef.current.get(remotePeerId);
+            if (
+              currentPc &&
+              (currentPc.connectionState === 'failed' ||
+                currentPc.iceConnectionState === 'failed' ||
+                currentPc.connectionState === 'disconnected')
+            ) {
+              console.log(`[WebRTC] Auto-rebuilding failed connection for ${remotePeerId}...`);
+              rebuildPeerRef.current(remotePeerId);
+            }
+          }, 3500);
+          failedRecoveryTimersRef.current.set(remotePeerId, timer);
+        }
+      } else if (connState === 'connected' || iceState === 'connected') {
+        const timer = failedRecoveryTimersRef.current.get(remotePeerId);
+        if (timer) {
+          clearTimeout(timer);
+          failedRecoveryTimersRef.current.delete(remotePeerId);
+        }
       }
     };
 
+    pc.onconnectionstatechange = checkStateAndRecover;
+    pc.oniceconnectionstatechange = checkStateAndRecover;
+
     return pc;
   }, [sendWsMessage, handleRemoteStream]);
+
+  // Rebuild an unrecoverable peer connection
+  const rebuildPeer = useCallback((remotePeerId: string) => {
+    console.log(`[WebRTC] Rebuilding peer connection for ${remotePeerId}`);
+    const oldPc = peerConnectionsRef.current.get(remotePeerId);
+    if (oldPc) {
+      try { oldPc.close(); } catch (e) {}
+      peerConnectionsRef.current.delete(remotePeerId);
+    }
+    makingOfferRef.current.delete(remotePeerId);
+    ignoreOfferRef.current.delete(remotePeerId);
+    isSettingRemoteAnswerPendingRef.current.delete(remotePeerId);
+    pendingCandidatesRef.current.delete(remotePeerId);
+
+    const newPc = getOrCreatePeerConnection(remotePeerId);
+    if (newPc && newPc.onnegotiationneeded) {
+      newPc.onnegotiationneeded(new Event('negotiationneeded'));
+    }
+  }, [getOrCreatePeerConnection]);
+
+  rebuildPeerRef.current = rebuildPeer;
 
   // Handle incoming signaling message (W3C Perfect Negotiation)
   const handleSignal = useCallback(async (from: string, data: any) => {
@@ -423,8 +487,11 @@ export function useVoiceChat({
       if (data.description) {
         const description = data.description;
         const isMakingOffer = makingOfferRef.current.get(from) || false;
-        const offerCollision = (description.type === 'offer') &&
-          (isMakingOffer || pc.signalingState !== 'stable');
+        const isSettingRemoteAnswerPending = isSettingRemoteAnswerPendingRef.current.get(from) || false;
+
+        const readyForOffer = !isMakingOffer &&
+          (pc.signalingState === 'stable' || isSettingRemoteAnswerPending);
+        const offerCollision = (description.type === 'offer') && !readyForOffer;
 
         const ignoreOffer = !polite && offerCollision;
         ignoreOfferRef.current.set(from, ignoreOffer);
@@ -434,7 +501,29 @@ export function useVoiceChat({
           return;
         }
 
-        await pc.setRemoteDescription(description);
+        if (description.type === 'answer') {
+          isSettingRemoteAnswerPendingRef.current.set(from, true);
+        }
+
+        try {
+          await pc.setRemoteDescription(description);
+        } finally {
+          isSettingRemoteAnswerPendingRef.current.set(from, false);
+        }
+
+        // Process any queued ICE candidates that arrived before setRemoteDescription
+        const queue = pendingCandidatesRef.current.get(from);
+        if (queue && queue.length > 0) {
+          console.log(`[WebRTC] Flushing ${queue.length} queued ICE candidates for ${from}`);
+          for (const cand of queue) {
+            try {
+              await pc.addIceCandidate(cand);
+            } catch (err) {
+              console.warn(`[WebRTC] Error adding queued ICE candidate for ${from}:`, err);
+            }
+          }
+          pendingCandidatesRef.current.delete(from);
+        }
 
         if (description.type === 'offer') {
           await pc.setLocalDescription();
@@ -445,11 +534,22 @@ export function useVoiceChat({
           });
         }
       } else if (data.candidate) {
-        try {
-          await pc.addIceCandidate(data.candidate);
-        } catch (err) {
-          if (!ignoreOfferRef.current.get(from)) {
-            console.warn(`[WebRTC] Error adding ICE candidate from ${from}:`, err);
+        // Queue candidate if remote description is not set yet
+        if (!pc.remoteDescription || !pc.remoteDescription.type) {
+          let queue = pendingCandidatesRef.current.get(from);
+          if (!queue) {
+            queue = [];
+            pendingCandidatesRef.current.set(from, queue);
+          }
+          queue.push(data.candidate);
+          console.log(`[WebRTC] Queued early ICE candidate for ${from} (total: ${queue.length})`);
+        } else {
+          try {
+            await pc.addIceCandidate(data.candidate);
+          } catch (err) {
+            if (!ignoreOfferRef.current.get(from)) {
+              console.warn(`[WebRTC] Error adding ICE candidate from ${from}:`, err);
+            }
           }
         }
       }
@@ -920,6 +1020,9 @@ export function useVoiceChat({
               else if (type === 'user-joined') {
                 console.log(`[WS] Peer joined: ${msg.peer.peerId} (${msg.peer.nickname})`);
                 playJoinSound();
+                if (Array.isArray(msg.iceServers) && msg.iceServers.length > 0) {
+                  iceServersRef.current = msg.iceServers;
+                }
                 peersInfoRef.current.set(msg.peer.peerId, msg.peer);
                 const savedVol = getSavedVolume(msg.peer.nickname);
                 peerVolumesRef.current.set(msg.peer.peerId, savedVol);
@@ -1077,6 +1180,10 @@ export function useVoiceChat({
       peerConnectionsRef.current.clear();
       makingOfferRef.current.clear();
       ignoreOfferRef.current.clear();
+      failedRecoveryTimersRef.current.forEach((t) => clearTimeout(t));
+      failedRecoveryTimersRef.current.clear();
+      pendingCandidatesRef.current.clear();
+      isSettingRemoteAnswerPendingRef.current.clear();
 
       // Remove all audio elements and gain nodes
       audioElementsRef.current.forEach((audio) => {

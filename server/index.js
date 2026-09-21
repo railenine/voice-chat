@@ -216,6 +216,7 @@ wss.on('connection', (ws) => {
           isMuted: false,
           isSpeaking: false,
         },
+        iceServers,
       }, peerId);
 
       return;
