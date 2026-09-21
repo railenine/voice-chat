@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { generateNickname, generateRoomId, extractRoomId } from './utils/nicknames';
 import { LobbyScreen } from './components/LobbyScreen';
 import { VoiceChatScreen } from './components/VoiceChatScreen';
+import { TitleBar } from './components/TitleBar';
 import { useAudioDevices } from './hooks/useAudioDevices';
+import { isTauri } from './config';
 
 const safeStorage = {
   getItem: (key: string): string | null => {
@@ -64,28 +66,31 @@ function App() {
 
   const audioDevices = useAudioDevices();
 
-  if (!joined) {
-    return (
-      <LobbyScreen
-        nickname={nickname}
-        setNickname={setNickname}
-        mode={mode}
-        setMode={setMode}
-        joinRoomId={joinRoomId}
-        setJoinRoomId={setJoinRoomId}
-        onCreateRoom={handleCreateRoom}
-        onJoinRoom={handleJoinRoom}
-        deviceState={audioDevices}
-      />
-    );
-  }
-
   return (
-    <VoiceChatScreen
-      nickname={nickname}
-      roomId={roomId}
-      deviceState={audioDevices}
-    />
+    <div className="h-screen h-[100dvh] w-full flex flex-col overflow-hidden bg-slate-950 select-none">
+      {isTauri() && <TitleBar roomId={joined ? roomId : undefined} />}
+      <div className="flex-1 min-h-0 w-full relative flex flex-col overflow-hidden">
+        {!joined ? (
+          <LobbyScreen
+            nickname={nickname}
+            setNickname={setNickname}
+            mode={mode}
+            setMode={setMode}
+            joinRoomId={joinRoomId}
+            setJoinRoomId={setJoinRoomId}
+            onCreateRoom={handleCreateRoom}
+            onJoinRoom={handleJoinRoom}
+            deviceState={audioDevices}
+          />
+        ) : (
+          <VoiceChatScreen
+            nickname={nickname}
+            roomId={roomId}
+            deviceState={audioDevices}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 

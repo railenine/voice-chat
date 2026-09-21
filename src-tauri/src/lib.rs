@@ -104,6 +104,41 @@ fn is_desktop() -> bool {
     true
 }
 
+#[tauri::command]
+fn minimize_window(window: tauri::Window) {
+    let _ = window.minimize();
+}
+
+#[tauri::command]
+fn toggle_maximize_window(window: tauri::Window) -> bool {
+    if let Ok(is_max) = window.is_maximized() {
+        if is_max {
+            let _ = window.unmaximize();
+            false
+        } else {
+            let _ = window.maximize();
+            true
+        }
+    } else {
+        false
+    }
+}
+
+#[tauri::command]
+fn is_window_maximized(window: tauri::Window) -> bool {
+    window.is_maximized().unwrap_or(false)
+}
+
+#[tauri::command]
+fn close_window(window: tauri::Window) {
+    let _ = window.close();
+}
+
+#[tauri::command]
+fn start_drag(window: tauri::Window) {
+    let _ = window.start_dragging();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -169,7 +204,14 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![is_desktop])
+        .invoke_handler(tauri::generate_handler![
+            is_desktop,
+            minimize_window,
+            toggle_maximize_window,
+            is_window_maximized,
+            close_window,
+            start_drag
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
