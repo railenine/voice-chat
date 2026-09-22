@@ -18,7 +18,7 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-const APP_VERSION = '0.0.4';
+const APP_VERSION = '0.0.41';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints

@@ -219,21 +219,20 @@ export function useVoiceChat({
       audioContextRef.current.resume().catch((err) => console.warn('[Audio] Resume failed:', err));
     }
 
-    let allPlaying = true;
-    audioElementsRef.current.forEach((audio, peerId) => {
-      if (audio.paused) {
-        audio.play().then(() => {
-          console.log(`[Audio] Unlocked playback for ${peerId}`);
-        }).catch((err) => {
-          console.warn(`[Audio] Play failed for ${peerId}:`, err);
-          allPlaying = false;
-        });
-      }
-    });
+    const isWebAudioRunning = Boolean(!isIOS && audioContextRef.current && audioContextRef.current.state === 'running');
 
-    if (allPlaying) {
-      setNeedsAudioUnlock(false);
-    }
+    audioElementsRef.current.forEach((audio, peerId) => {
+      const pVol = peerVolumesRef.current.get(peerId) ?? 100;
+      const pMuted = pVol === 0;
+      audio.muted = isDeafenedRef.current ? true : (isWebAudioRunning ? true : pMuted);
+      audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, pVol / 100);
+      audio.play().then(() => {
+        console.log(`[Audio] Unlocked playback for ${peerId}`);
+        setNeedsAudioUnlock(false);
+      }).catch((err) => {
+        console.warn(`[Audio] Play failed for ${peerId}:`, err);
+      });
+    });
   }, [startSilentLoop]);
 
   // Auto-unlock AudioContext, Screen WakeLock, and mobile background audio retention (iOS & Android)
@@ -259,9 +258,16 @@ export function useVoiceChat({
           console.log('[Audio] AudioContext resumed via user interaction');
         }).catch(() => {});
       }
-      audioElementsRef.current.forEach((audio) => {
+      const isWebAudioRunning = Boolean(!isIOS && audioContextRef.current && audioContextRef.current.state === 'running');
+      audioElementsRef.current.forEach((audio, peerId) => {
+        const pVol = peerVolumesRef.current.get(peerId) ?? 100;
+        const pMuted = pVol === 0;
+        audio.muted = isDeafenedRef.current ? true : (isWebAudioRunning ? true : pMuted);
+        audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, pVol / 100);
         if (audio.paused) {
-          audio.play().catch(() => {});
+          audio.play().then(() => {
+            setNeedsAudioUnlock(false);
+          }).catch(() => {});
         }
       });
       requestWakeLock();
@@ -361,14 +367,14 @@ export function useVoiceChat({
       });
     }
 
-    // 3. Audio element (kept muted ONLY when Web Audio ctx.destination is active and running)
+    // 3. Audio element (kept muted ONLY when Web Audio ctx.destination is active and running on non-iOS)
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
-      const isWebAudioRunning = Boolean(gainNode && audioContextRef.current && audioContextRef.current.state === 'running');
+      const isWebAudioRunning = Boolean(!isIOS && gainNode && audioContextRef.current && audioContextRef.current.state === 'running');
       if (isWebAudioRunning) {
-        audio.muted = true;
+        audio.muted = isDeafenedRef.current ? true : false;
       } else {
-        audio.muted = isMuted;
+        audio.muted = isDeafenedRef.current ? true : isMuted;
         audio.volume = Math.min(1.0, clamped / 100);
       }
     }
@@ -430,10 +436,17 @@ export function useVoiceChat({
         merger.connect(remoteAnalyser);
         remoteAnalysersRef.current.set(peerId, remoteAnalyser);
 
-        // Connect directly to system audio output (works on iOS, Desktop, Android, WebView2)
-        compressor.connect(ctx.destination);
-        gainNodesRef.current.set(peerId, gainNode);
-        console.log(`[Audio] Web Audio GainNode & Limiter connected directly to output for peer ${peerId} (up to 200% boost)`);
+        // On non-iOS (Desktop, Android, etc.): connect directly to system audio output for up to 200% boost.
+        // On iOS Safari: WebKit cannot output remote WebRTC streams via ctx.destination.
+        // Remote audio MUST play exclusively through HTML <audio> element.
+        if (!isIOS) {
+          compressor.connect(ctx.destination);
+          gainNodesRef.current.set(peerId, gainNode);
+          console.log(`[Audio] Web Audio GainNode & Limiter connected directly to output for peer ${peerId} (up to 200% boost)`);
+        } else {
+          gainNodesRef.current.set(peerId, gainNode);
+          console.log(`[Audio] iOS detected: remote audio for ${peerId} will play exclusively via <audio> element`);
+        }
 
         // Dynamically sync all peer audio elements whenever AudioContext state transitions (suspended <-> running)
         if (!ctx.onstatechange) {
@@ -443,8 +456,9 @@ export function useVoiceChat({
             audioElementsRef.current.forEach((audioEl, pId) => {
               const pVol = peerVolumesRef.current.get(pId) ?? 100;
               const pMuted = pVol === 0;
-              audioEl.muted = isRunning ? true : pMuted;
-              audioEl.volume = isRunning ? 1.0 : Math.min(1.0, pVol / 100);
+              // On iOS, never mute <audio> just because Web Audio is running!
+              audioEl.muted = isDeafenedRef.current ? true : (!isIOS && isRunning ? true : pMuted);
+              audioEl.volume = !isIOS && isRunning ? 1.0 : Math.min(1.0, pVol / 100);
             });
           };
         }
@@ -455,7 +469,7 @@ export function useVoiceChat({
       gainNode.gain.value = isDeafenedRef.current ? 0 : currentVol / 100;
     }
 
-    const isWebAudioRunning = Boolean(gainNode && ctx && ctx.state === 'running');
+    const isWebAudioRunning = Boolean(!isIOS && gainNode && ctx && ctx.state === 'running');
 
     let audio = audioElementsRef.current.get(peerId);
     if (!audio) {
@@ -464,9 +478,10 @@ export function useVoiceChat({
       (audio as any).playsInline = true;
       (audio as any).webkitPlaysInline = true;
       audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
-      // If Web Audio is active AND running, mute <audio> to prevent double playback / echo.
-      // If Web Audio is suspended (no user interaction yet), keep <audio> UNMUTED so newcomer is heard immediately!
+      // If Web Audio is active AND running (non-iOS only), mute <audio> to prevent double playback / echo.
+      // On iOS, keep <audio> UNMUTED always!
       audio.muted = isDeafenedRef.current ? true : (isWebAudioRunning ? true : isMuted);
       audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, currentVol / 100);
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
@@ -485,7 +500,7 @@ export function useVoiceChat({
         });
       }
     } else {
-      audio.muted = isWebAudioRunning ? true : isMuted;
+      audio.muted = isDeafenedRef.current ? true : (isWebAudioRunning ? true : isMuted);
       audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, currentVol / 100);
 
       if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
@@ -942,7 +957,7 @@ export function useVoiceChat({
       sendWsMessage({ type: 'update-deafen', isDeafened: false });
 
       const ctx = audioContextRef.current;
-      const isWebAudioRunning = Boolean(ctx && ctx.state === 'running');
+      const isWebAudioRunning = Boolean(!isIOS && ctx && ctx.state === 'running');
       audioElementsRef.current.forEach((audio, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
         audio.muted = isWebAudioRunning ? true : pVol === 0;
@@ -1017,7 +1032,7 @@ export function useVoiceChat({
 
       // Restore incoming audio
       const ctx = audioContextRef.current;
-      const isWebAudioRunning = Boolean(ctx && ctx.state === 'running');
+      const isWebAudioRunning = Boolean(!isIOS && ctx && ctx.state === 'running');
       audioElementsRef.current.forEach((audio, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
         audio.muted = isWebAudioRunning ? true : pVol === 0;

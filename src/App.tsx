@@ -63,21 +63,47 @@ function App() {
     } catch {}
   }, []);
 
+  const primeAudioForIOS = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        ctx.resume().catch(() => {});
+      }
+      const audio = document.createElement('audio');
+      audio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
+      (audio as any).playsInline = true;
+      (audio as any).webkitPlaysInline = true;
+      audio.volume = 0.01;
+      const p = audio.play();
+      if (p) {
+        p.then(() => {
+          audio.pause();
+          audio.remove();
+        }).catch(() => {});
+      }
+    } catch {}
+  }, []);
+
   const handleCreateRoom = useCallback(() => {
+    primeAudioForIOS();
     const newRoomId = generateRoomId();
     setRoomId(newRoomId);
     setJoined(true);
     window.history.replaceState({}, '', `?room=${newRoomId}`);
-  }, []);
+  }, [primeAudioForIOS]);
 
   const handleJoinRoom = useCallback(() => {
+    primeAudioForIOS();
     const cleanId = extractRoomId(joinRoomId);
     if (cleanId.length >= 3) {
       setRoomId(cleanId);
       setJoined(true);
       window.history.replaceState({}, '', `?room=${cleanId}`);
     }
-  }, [joinRoomId]);
+  }, [joinRoomId, primeAudioForIOS]);
 
   const handleLeaveRoom = useCallback(() => {
     setJoined(false);
