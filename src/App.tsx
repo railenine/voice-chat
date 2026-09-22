@@ -63,7 +63,9 @@ function App() {
     } catch {}
   }, []);
 
-  const primeAudioForIOS = useCallback(() => {
+  // Prime audio playback across all platforms (PC Web, Desktop Tauri, Android, iOS Safari)
+  // Ensures audio permissions are captured synchronously within the user click gesture before getUserMedia prompt
+  const primeAudioEngine = useCallback(() => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioCtx) {
@@ -88,22 +90,22 @@ function App() {
   }, []);
 
   const handleCreateRoom = useCallback(() => {
-    primeAudioForIOS();
+    primeAudioEngine();
     const newRoomId = generateRoomId();
     setRoomId(newRoomId);
     setJoined(true);
     window.history.replaceState({}, '', `?room=${newRoomId}`);
-  }, [primeAudioForIOS]);
+  }, [primeAudioEngine]);
 
   const handleJoinRoom = useCallback(() => {
-    primeAudioForIOS();
+    primeAudioEngine();
     const cleanId = extractRoomId(joinRoomId);
     if (cleanId.length >= 3) {
       setRoomId(cleanId);
       setJoined(true);
       window.history.replaceState({}, '', `?room=${cleanId}`);
     }
-  }, [joinRoomId, primeAudioForIOS]);
+  }, [joinRoomId, primeAudioEngine]);
 
   const handleLeaveRoom = useCallback(() => {
     setJoined(false);
