@@ -167,9 +167,8 @@ export function useAppUpdater() {
           }
         });
       } catch (err: any) {
-        console.error('[Updater] Install error:', err);
-        setStatus('error');
-        setError(err.message || 'Ошибка установки обновления');
+        const msg = typeof err === 'string' ? err : err?.message || (err ? String(err) : 'Ошибка установки обновления');
+        setError(msg);
       }
     } else if (isTauri()) {
       // Desktop fallback when latest.json manifest is not directly installable: open GitHub Releases
