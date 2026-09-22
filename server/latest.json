@@ -1,0 +1,10 @@
+{
+  "version": "0.0.42",
+  "notes": "VoiceChat v0.0.42 - Универсальное исправление слышимости звука (PC Web, Desktop, Android, iOS)",
+  "pub_date": "2026-09-22T19:00:00Z",
+  "platforms": {
+    "windows-x86_64": {
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.0.42/VoiceChat_0.0.42_x64-setup.nsis.zip"
+    }
+  }
+}

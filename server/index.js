@@ -22,7 +22,7 @@ const APP_VERSION = '0.0.42';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
-app.get('/health', (req, res) => {
+app.get(['/health', '/peerjs/health'], (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -43,7 +43,7 @@ app.get('/peerjs/info', (req, res) => {
 });
 
 // Tauri updater endpoint: serves latest.json manifest for desktop clients
-app.get(['/api/updater/latest.json', '/downloads/latest.json'], (req, res) => {
+app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/latest.json'], (req, res) => {
   const latestJsonPath = path.join(__dirname, 'latest.json');
   if (fs.existsSync(latestJsonPath)) {
     return res.sendFile(latestJsonPath);

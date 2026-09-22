@@ -50,7 +50,8 @@ export function useAppUpdater() {
 
     try {
       if (isTauri()) {
-        // Desktop updater via Tauri v2 plugin
+        // 1. Try Desktop updater via Tauri v2 plugin
+        let tauriFound = false;
         try {
           const { check } = await import('@tauri-apps/plugin-updater');
           const update = await check();
@@ -59,39 +60,69 @@ export function useAppUpdater() {
             setUpdateInfo({
               version: update.version,
               currentVersion: update.currentVersion || APP_VERSION,
-              notes: update.body || 'Новое обновление с улучшениями производительности и стабильности.',
+              notes: update.body || 'Новое обновление с улучшениями звука, производительности и стабильности.',
               date: update.date,
             });
             setStatus('available');
             setIsModalOpen(true);
+            tauriFound = true;
             return;
           }
         } catch (tauriErr: any) {
-          console.warn('[Updater] Tauri update check error:', tauriErr);
-          if (manual) {
-            setError(tauriErr.message || 'Ошибка проверки обновления');
-            setStatus('error');
-            setIsModalOpen(true);
-            return;
+          console.warn('[Updater] Tauri native update check error:', tauriErr);
+        }
+
+        // 2. Desktop Fallback: check server version via /peerjs/info (which is always reachable through Nginx)
+        if (!tauriFound) {
+          try {
+            const res = await fetch(`${getBackendBaseUrl()}/peerjs/info`, { cache: 'no-cache' });
+            if (res.ok) {
+              const data = await res.json();
+              const serverVersion = data.version;
+              if (serverVersion && isNewerVersion(serverVersion, APP_VERSION)) {
+                setUpdateInfo({
+                  version: serverVersion,
+                  currentVersion: APP_VERSION,
+                  notes: `Доступна новая версия VoiceChat v${serverVersion} с исправлениями звука и стабильности. Нажмите «Обновить», чтобы перейти к загрузке.`,
+                });
+                setStatus('available');
+                setIsModalOpen(true);
+                return;
+              }
+            }
+          } catch (fbErr) {
+            console.warn('[Updater] Desktop version check fallback failed:', fbErr);
           }
         }
       } else {
-        // Web / Browser version check via backend health endpoint
+        // Web / Browser version check via backend /peerjs/info endpoint (works reliably across all Nginx proxies)
         try {
-          const res = await fetch(`${getBackendBaseUrl()}/health`, { cache: 'no-cache' });
-          if (res.ok) {
-            const data = await res.json();
-            const serverVersion = data.version;
-            if (serverVersion && isNewerVersion(serverVersion, APP_VERSION)) {
-              setUpdateInfo({
-                version: serverVersion,
-                currentVersion: APP_VERSION,
-                notes: 'Доступна новая версия VoiceChat с улучшениями звука, производительности и интерфейса.',
-              });
-              setStatus('available');
-              setIsModalOpen(true);
-              return;
+          let serverVersion = '';
+          try {
+            const res = await fetch(`${getBackendBaseUrl()}/peerjs/info`, { cache: 'no-cache' });
+            if (res.ok) {
+              const data = await res.json();
+              serverVersion = data.version;
             }
+          } catch {}
+
+          if (!serverVersion) {
+            const res = await fetch(`${getBackendBaseUrl()}/health`, { cache: 'no-cache' });
+            if (res.ok) {
+              const data = await res.json();
+              serverVersion = data.version;
+            }
+          }
+
+          if (serverVersion && isNewerVersion(serverVersion, APP_VERSION)) {
+            setUpdateInfo({
+              version: serverVersion,
+              currentVersion: APP_VERSION,
+              notes: 'Доступна новая версия VoiceChat с улучшениями звука, производительности и интерфейса.',
+            });
+            setStatus('available');
+            setIsModalOpen(true);
+            return;
           }
         } catch (webErr: any) {
           console.warn('[Updater] Web check failed:', webErr);
@@ -139,6 +170,13 @@ export function useAppUpdater() {
         console.error('[Updater] Install error:', err);
         setStatus('error');
         setError(err.message || 'Ошибка установки обновления');
+      }
+    } else if (isTauri()) {
+      // Desktop fallback when latest.json manifest is not directly installable: open GitHub Releases
+      try {
+        window.open('https://github.com/railenine/voice-chat/releases/latest', '_blank');
+      } catch {
+        window.location.href = 'https://github.com/railenine/voice-chat/releases/latest';
       }
     } else {
       // Browser: hard reload to fetch fresh assets from server
