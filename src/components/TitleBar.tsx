@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { isTauri } from '../config';
+import { Mic } from 'lucide-react';
+import { isTauri, APP_VERSION } from '../config';
 
 interface TitleBarProps {
   roomId?: string;
+  onCheckUpdates?: () => void;
 }
 
-export const TitleBar: React.FC<TitleBarProps> = ({ roomId }) => {
+export const TitleBar: React.FC<TitleBarProps> = ({ roomId, onCheckUpdates }) => {
   const [isMaximized, setIsMaximized] = useState(false);
 
   // Invoke helper with graceful fallback
@@ -88,8 +90,8 @@ export const TitleBar: React.FC<TitleBarProps> = ({ roomId }) => {
         data-tauri-drag-region
         className="flex items-center gap-2 px-3 h-full cursor-default"
       >
-        <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-blue-700 via-blue-500 to-sky-400 flex items-center justify-center text-[9px] shadow-sm shadow-blue-500/40 flex-shrink-0">
-          🎤
+        <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-blue-700 via-blue-500 to-sky-400 flex items-center justify-center shadow-sm shadow-blue-500/40 flex-shrink-0">
+          <Mic className="w-2.5 h-2.5 text-white" />
         </div>
         <span className="font-semibold text-white/90 text-xs tracking-tight">VoiceChat</span>
         {roomId ? (
@@ -97,7 +99,14 @@ export const TitleBar: React.FC<TitleBarProps> = ({ roomId }) => {
             #{roomId}
           </span>
         ) : (
-          <span className="text-[10px] text-gray-500 font-mono">v0.0.31</span>
+          <button
+            type="button"
+            onClick={onCheckUpdates}
+            className="text-[10px] text-gray-500 hover:text-blue-400 font-mono transition-colors"
+            title="Нажмите, чтобы проверить наличие обновлений"
+          >
+            v{APP_VERSION}
+          </button>
         )}
       </div>
 

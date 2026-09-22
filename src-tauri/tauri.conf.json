@@ -1,13 +1,22 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "VoiceChat",
-  "version": "0.0.31",
+  "version": "0.0.4",
   "identifier": "com.railenine.voicechat",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:3000",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDFFM0IwQ0IzOEUwMEE1RDAKUldUUXBRQ09zd3c3SHJvc3NwemdBdUZndlFpZ3lBbWdpWDhQdHJJZW0yU1FvUkhibFpIRUNhaXQK",
+      "endpoints": [
+        "https://rvxis.site/api/updater/latest.json",
+        "https://github.com/railenine/voice-chat/releases/latest/download/latest.json"
+      ]
+    }
   },
   "app": {
     "windows": [
@@ -22,7 +31,8 @@
         "fullscreen": false,
         "visible": true,
         "decorations": false,
-        "shadow": true
+        "shadow": true,
+        "backgroundColor": "#020617"
       }
     ],
     "security": {

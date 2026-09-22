@@ -1,3 +1,4 @@
+export const APP_VERSION = '0.0.4';
 export const PRODUCTION_SERVER = 'https://rvxis.site';
 export const PRODUCTION_WS = 'wss://rvxis.site/peerjs/ws';
 
@@ -9,7 +10,14 @@ export function getBackendBaseUrl(): string {
   if (isTauri()) {
     return PRODUCTION_SERVER;
   }
-  return window.location.origin;
+  const isDev =
+    typeof window !== 'undefined' &&
+    (window.location.port === '5173' || window.location.port === '5174');
+
+  if (isDev) {
+    return `http://${window.location.hostname}:3000`;
+  }
+  return typeof window !== 'undefined' ? window.location.origin : PRODUCTION_SERVER;
 }
 
 export function getWebSocketUrl(): string {

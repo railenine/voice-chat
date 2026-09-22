@@ -3,7 +3,9 @@ import { generateNickname, generateRoomId, extractRoomId } from './utils/nicknam
 import { LobbyScreen } from './components/LobbyScreen';
 import { VoiceChatScreen } from './components/VoiceChatScreen';
 import { TitleBar } from './components/TitleBar';
+import { UpdateModal } from './components/UpdateModal';
 import { useAudioDevices } from './hooks/useAudioDevices';
+import { useAppUpdater } from './hooks/useAppUpdater';
 import { isTauri } from './config';
 
 const safeStorage = {
@@ -33,6 +35,19 @@ function App() {
   const [joined, setJoined] = useState(false);
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [joinRoomId, setJoinRoomId] = useState('');
+
+  const {
+    status: updateStatus,
+    updateInfo,
+    downloadProgress,
+    downloadedBytes,
+    totalBytes,
+    error: updateError,
+    isModalOpen: isUpdateModalOpen,
+    setIsModalOpen: setIsUpdateModalOpen,
+    checkForUpdates,
+    installUpdate,
+  } = useAppUpdater();
 
   useEffect(() => {
     // Check URL for room ID
@@ -64,11 +79,23 @@ function App() {
     }
   }, [joinRoomId]);
 
+  const handleLeaveRoom = useCallback(() => {
+    setJoined(false);
+    setMode('join');
+    setJoinRoomId(roomId);
+    window.history.replaceState({}, '', window.location.pathname);
+  }, [roomId]);
+
   const audioDevices = useAudioDevices();
 
   return (
     <div className="h-screen h-[100dvh] w-full flex flex-col overflow-hidden bg-slate-950 select-none">
-      {isTauri() && <TitleBar roomId={joined ? roomId : undefined} />}
+      {isTauri() && (
+        <TitleBar
+          roomId={joined ? roomId : undefined}
+          onCheckUpdates={() => checkForUpdates(true)}
+        />
+      )}
       <div className="flex-1 min-h-0 w-full relative flex flex-col overflow-hidden">
         {!joined ? (
           <LobbyScreen
@@ -81,15 +108,31 @@ function App() {
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
             deviceState={audioDevices}
+            onCheckUpdates={() => checkForUpdates(true)}
           />
         ) : (
           <VoiceChatScreen
             nickname={nickname}
             roomId={roomId}
             deviceState={audioDevices}
+            onLeave={handleLeaveRoom}
           />
         )}
       </div>
+
+      {/* Global Update Modal (Web & Tauri Desktop) */}
+      <UpdateModal
+        isOpen={isUpdateModalOpen}
+        onClose={() => setIsUpdateModalOpen(false)}
+        status={updateStatus}
+        updateInfo={updateInfo}
+        downloadProgress={downloadProgress}
+        downloadedBytes={downloadedBytes}
+        totalBytes={totalBytes}
+        error={updateError}
+        onInstall={installUpdate}
+        onCheckAgain={() => checkForUpdates(true)}
+      />
     </div>
   );
 }
