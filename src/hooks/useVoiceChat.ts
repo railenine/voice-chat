@@ -4,12 +4,20 @@ import rnnoiseWorkletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.j
 import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 import { getBackendBaseUrl, getWebSocketUrl } from '../config';
-import { playMuteSound, playUnmuteSound, playJoinSound, playLeaveSound } from '../utils/soundEffects';
+import {
+  playMuteSound,
+  playUnmuteSound,
+  playJoinSound,
+  playLeaveSound,
+  playDeafenSound,
+  playUndeafenSound,
+} from '../utils/soundEffects';
 
 export interface PeerInfo {
   peerId: string;
   nickname: string;
   isMuted: boolean;
+  isDeafened?: boolean;
   isSpeaking: boolean;
 }
 
@@ -33,6 +41,38 @@ const isIOS = typeof navigator !== 'undefined' && (
   (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1)
 );
 
+const SILENT_AUDIO_URI = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+
+// Optimize WebRTC Opus SDP: 32kbps mono with in-band FEC to halve bandwidth consumption while preserving speech clarity
+function optimizeAudioSdp(sdp: string): string {
+  const match = sdp.match(/a=rtpmap:(\d+)\s+opus\/48000/i);
+  if (!match) return sdp;
+  const pt = match[1];
+
+  const fmtpRegex = new RegExp(`(a=fmtp:${pt}\\s+)([^\\r\\n]+)`, 'i');
+  const customParams = 'maxaveragebitrate=32000;stereo=0;sprop-stereo=0;useinbandfec=1;cbr=0';
+
+  if (fmtpRegex.test(sdp)) {
+    return sdp.replace(fmtpRegex, (_m, prefix, params) => {
+      const clean = params
+        .replace(/maxaveragebitrate=\d+;?/gi, '')
+        .replace(/stereo=[01];?/gi, '')
+        .replace(/sprop-stereo=[01];?/gi, '')
+        .replace(/useinbandfec=[01];?/gi, '')
+        .replace(/cbr=[01];?/gi, '')
+        .replace(/;\s*$/, '')
+        .trim();
+      const sep = clean.length > 0 && !clean.endsWith(';') ? ';' : '';
+      return `${prefix}${clean}${sep}${customParams}`;
+    });
+  } else {
+    return sdp.replace(
+      new RegExp(`(a=rtpmap:${pt}\\s+opus\\/48000[^\\r\\n]*)`, 'i'),
+      `$1\r\na=fmtp:${pt} ${customParams}`
+    );
+  }
+}
+
 export function useVoiceChat({
   roomId,
   nickname,
@@ -45,6 +85,11 @@ export function useVoiceChat({
   useEffect(() => {
     isMutedRef.current = isMuted;
   }, [isMuted]);
+  const [isDeafened, setIsDeafened] = useState(false);
+  const isDeafenedRef = useRef(false);
+  useEffect(() => {
+    isDeafenedRef.current = isDeafened;
+  }, [isDeafened]);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [peers, setPeers] = useState<PeerInfo[]>([]);
   const [peerVolumes, setPeerVolumes] = useState<Record<string, number>>({});
@@ -111,6 +156,8 @@ export function useVoiceChat({
   const speechHangoverRef = useRef<number>(0);
   const lastBroadcastSpeakingRef = useRef<number>(0);
   const remoteHangoverRef = useRef<Map<string, number>>(new Map());
+  const remoteAnalysersRef = useRef<Map<string, AnalyserNode>>(new Map());
+  const wakeLockRef = useRef<any>(null);
 
   const updatePeersState = useCallback(() => {
     setPeers(Array.from(peersInfoRef.current.values()));
@@ -131,8 +178,43 @@ export function useVoiceChat({
     });
   }, [sendWsMessage]);
 
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Start silent loop to keep audio pipeline active in background on mobile (iOS Safari & Android Chrome)
+  const startSilentLoop = useCallback(() => {
+    if (typeof document === 'undefined') return;
+
+    if (!silentAudioRef.current) {
+      const audio = document.createElement('audio');
+      audio.src = SILENT_AUDIO_URI;
+      audio.loop = true;
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
+      (audio as any).playsInline = true;
+      (audio as any).webkitPlaysInline = true;
+      audio.style.position = 'fixed';
+      audio.style.top = '-9999px';
+      audio.style.left = '-9999px';
+      audio.style.width = '1px';
+      audio.style.height = '1px';
+      audio.style.opacity = '0.01';
+      document.body.appendChild(audio);
+      silentAudioRef.current = audio;
+    }
+
+    if (silentAudioRef.current && silentAudioRef.current.paused) {
+      silentAudioRef.current.play().then(() => {
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'playing';
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
   // Unlock audio playback (AudioContext & <audio> elements)
   const unlockAudio = useCallback(() => {
+    startSilentLoop();
+
     if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume().catch((err) => console.warn('[Audio] Resume failed:', err));
     }
@@ -152,11 +234,26 @@ export function useVoiceChat({
     if (allPlaying) {
       setNeedsAudioUnlock(false);
     }
-  }, []);
+  }, [startSilentLoop]);
 
-  // Auto-unlock AudioContext and resume audio on any user interaction in the window
+  // Auto-unlock AudioContext, Screen WakeLock, and mobile background audio retention (iOS & Android)
   useEffect(() => {
+    const requestWakeLock = async () => {
+      if (typeof navigator !== 'undefined' && 'wakeLock' in navigator) {
+        try {
+          if (!wakeLockRef.current) {
+            wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+            console.log('[WakeLock] Screen wake lock acquired');
+          }
+        } catch (e) {
+          console.warn('[WakeLock] Wake lock request failed:', e);
+        }
+      }
+    };
+
     const handleInteraction = () => {
+      startSilentLoop();
+
       if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
         audioContextRef.current.resume().then(() => {
           console.log('[Audio] AudioContext resumed via user interaction');
@@ -167,18 +264,49 @@ export function useVoiceChat({
           audio.play().catch(() => {});
         }
       });
+      requestWakeLock();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // App sent to background or screen locked: ensure silent audio loop keeps audio session alive
+        if (silentAudioRef.current && silentAudioRef.current.paused) {
+          silentAudioRef.current.play().catch(() => {});
+        }
+      } else {
+        // App returned to foreground: resume AudioContext and reacquire wake lock
+        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume().catch(() => {});
+        }
+        audioElementsRef.current.forEach((audio) => {
+          if (audio.paused) {
+            audio.play().catch(() => {});
+          }
+        });
+        requestWakeLock();
+      }
     };
 
     window.addEventListener('click', handleInteraction);
     window.addEventListener('keydown', handleInteraction);
     window.addEventListener('touchstart', handleInteraction);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    requestWakeLock();
 
     return () => {
       window.removeEventListener('click', handleInteraction);
       window.removeEventListener('keydown', handleInteraction);
       window.removeEventListener('touchstart', handleInteraction);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockRef.current) {
+        try {
+          wakeLockRef.current.release();
+        } catch (e) {}
+        wakeLockRef.current = null;
+      }
     };
-  }, []);
+  }, [startSilentLoop]);
 
   // Helper to ensure AudioContext is initialized and active
   const getAudioContext = useCallback(() => {
@@ -186,13 +314,16 @@ export function useVoiceChat({
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass) {
         audioContextRef.current = new AudioContextClass();
+        if (audioOutputDeviceId && typeof (audioContextRef.current as any).setSinkId === 'function') {
+          (audioContextRef.current as any).setSinkId(audioOutputDeviceId).catch(() => {});
+        }
       }
     }
     if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
       audioContextRef.current.resume().catch(() => {});
     }
     return audioContextRef.current;
-  }, []);
+  }, [audioOutputDeviceId]);
 
   // Helper to read saved volume by nickname from localStorage
   const getSavedVolume = useCallback((nick: string): number => {
@@ -292,6 +423,13 @@ export function useVoiceChat({
         gainNode.connect(compressor);
         peerCompressorNodesRef.current.set(peerId, compressor);
 
+        // Remote AnalyserNode for autonomous, browser-agnostic local VAD (Firefox, Safari, Chrome, iOS, Android)
+        const remoteAnalyser = ctx.createAnalyser();
+        remoteAnalyser.fftSize = 256;
+        remoteAnalyser.smoothingTimeConstant = 0.3;
+        merger.connect(remoteAnalyser);
+        remoteAnalysersRef.current.set(peerId, remoteAnalyser);
+
         // Connect directly to system audio output (works on iOS, Desktop, Android, WebView2)
         compressor.connect(ctx.destination);
         gainNodesRef.current.set(peerId, gainNode);
@@ -314,7 +452,7 @@ export function useVoiceChat({
         console.warn(`[Audio] Could not create Web Audio graph for ${peerId}, falling back to direct <audio>:`, err);
       }
     } else if (gainNode) {
-      gainNode.gain.value = currentVol / 100;
+      gainNode.gain.value = isDeafenedRef.current ? 0 : currentVol / 100;
     }
 
     const isWebAudioRunning = Boolean(gainNode && ctx && ctx.state === 'running');
@@ -329,7 +467,7 @@ export function useVoiceChat({
       audio.setAttribute('autoplay', 'true');
       // If Web Audio is active AND running, mute <audio> to prevent double playback / echo.
       // If Web Audio is suspended (no user interaction yet), keep <audio> UNMUTED so newcomer is heard immediately!
-      audio.muted = isWebAudioRunning ? true : isMuted;
+      audio.muted = isDeafenedRef.current ? true : (isWebAudioRunning ? true : isMuted);
       audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, currentVol / 100);
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
@@ -396,6 +534,12 @@ export function useVoiceChat({
     makingOfferRef.current.delete(peerId);
     ignoreOfferRef.current.delete(peerId);
     remoteHangoverRef.current.delete(peerId);
+
+    const remoteAnalyser = remoteAnalysersRef.current.get(peerId);
+    if (remoteAnalyser) {
+      try { remoteAnalyser.disconnect(); } catch (e) {}
+      remoteAnalysersRef.current.delete(peerId);
+    }
 
     const gainNode = gainNodesRef.current.get(peerId);
     if (gainNode) {
@@ -471,10 +615,15 @@ export function useVoiceChat({
       try {
         makingOfferRef.current.set(remotePeerId, true);
         await pc!.setLocalDescription();
+        const sdp = pc!.localDescription?.sdp ? optimizeAudioSdp(pc!.localDescription.sdp) : undefined;
         sendWsMessage({
           type: 'signal',
           to: remotePeerId,
-          data: { description: pc!.localDescription },
+          data: {
+            description: pc!.localDescription
+              ? { type: pc!.localDescription.type, sdp }
+              : undefined,
+          },
         });
       } catch (err) {
         console.error(`[WebRTC] Negotiation error with ${remotePeerId}:`, err);
@@ -622,10 +771,15 @@ export function useVoiceChat({
 
         if (description.type === 'offer') {
           await pc.setLocalDescription();
+          const sdp = pc.localDescription?.sdp ? optimizeAudioSdp(pc.localDescription.sdp) : undefined;
           sendWsMessage({
             type: 'signal',
             to: from,
-            data: { description: pc.localDescription },
+            data: {
+              description: pc.localDescription
+                ? { type: pc.localDescription.type, sdp }
+                : undefined,
+            },
           });
         }
       } else if (data.candidate) {
@@ -781,13 +935,106 @@ export function useVoiceChat({
       sendWsMessage({ type: 'speaking', isSpeaking: false });
     }
 
+    // If user was deafened and un-mutes mic, undeafen as well
+    if (isDeafenedRef.current && !newMuted) {
+      isDeafenedRef.current = false;
+      setIsDeafened(false);
+      sendWsMessage({ type: 'update-deafen', isDeafened: false });
+
+      const ctx = audioContextRef.current;
+      const isWebAudioRunning = Boolean(ctx && ctx.state === 'running');
+      audioElementsRef.current.forEach((audio, peerId) => {
+        const pVol = peerVolumesRef.current.get(peerId) ?? 100;
+        audio.muted = isWebAudioRunning ? true : pVol === 0;
+        audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, pVol / 100);
+      });
+      gainNodesRef.current.forEach((gn, peerId) => {
+        const pVol = peerVolumesRef.current.get(peerId) ?? 100;
+        gn.gain.value = pVol / 100;
+      });
+    }
+
     sendWsMessage({
       type: 'update-mute',
       isMuted: newMuted,
     });
   }, [sendWsMessage]);
 
-  // MediaSession API integration (background hardware / OS mute toggle)
+  // Toggle full deafen (mute mic + mute all incoming sound)
+  const toggleDeafen = useCallback(() => {
+    const nextDeafened = !isDeafenedRef.current;
+    isDeafenedRef.current = nextDeafened;
+    setIsDeafened(nextDeafened);
+
+    if (nextDeafened) {
+      // Deafen ON: Mute local microphone
+      isMutedRef.current = true;
+      setIsMuted(true);
+
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = false;
+        });
+      }
+      if (rawMicStreamRef.current) {
+        rawMicStreamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = false;
+        });
+      }
+
+      if (isSpeakingRef.current) {
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        sendWsMessage({ type: 'speaking', isSpeaking: false });
+      }
+
+      // Mute all incoming audio
+      audioElementsRef.current.forEach((audio) => {
+        audio.muted = true;
+      });
+      gainNodesRef.current.forEach((gn) => {
+        gn.gain.value = 0;
+      });
+
+      sendWsMessage({ type: 'update-deafen', isDeafened: true });
+      sendWsMessage({ type: 'update-mute', isMuted: true });
+      playDeafenSound();
+    } else {
+      // Deafen OFF: Unmute local microphone
+      isMutedRef.current = false;
+      setIsMuted(false);
+
+      if (streamRef.current) {
+        streamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = true;
+        });
+      }
+      if (rawMicStreamRef.current) {
+        rawMicStreamRef.current.getAudioTracks().forEach((track) => {
+          track.enabled = true;
+        });
+      }
+
+      // Restore incoming audio
+      const ctx = audioContextRef.current;
+      const isWebAudioRunning = Boolean(ctx && ctx.state === 'running');
+      audioElementsRef.current.forEach((audio, peerId) => {
+        const pVol = peerVolumesRef.current.get(peerId) ?? 100;
+        audio.muted = isWebAudioRunning ? true : pVol === 0;
+        audio.volume = isWebAudioRunning ? 1.0 : Math.min(1.0, pVol / 100);
+      });
+      gainNodesRef.current.forEach((gn, peerId) => {
+        const pVol = peerVolumesRef.current.get(peerId) ?? 100;
+        gn.gain.value = pVol / 100;
+      });
+
+      sendWsMessage({ type: 'update-deafen', isDeafened: false });
+      sendWsMessage({ type: 'update-mute', isMuted: false });
+      playUndeafenSound();
+    }
+  }, [sendWsMessage]);
+
+  // MediaSession API integration (background hardware / OS mute toggle & playback control)
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 
@@ -800,23 +1047,52 @@ export function useVoiceChat({
         });
       }
 
+      navigator.mediaSession.playbackState = 'playing';
+
       navigator.mediaSession.setActionHandler('togglemicrophone' as any, () => {
         toggleMute();
       });
+
+      navigator.mediaSession.setActionHandler('play', () => {
+        if (silentAudioRef.current && silentAudioRef.current.paused) {
+          silentAudioRef.current.play().catch(() => {});
+        }
+        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume().catch(() => {});
+        }
+        if (isMutedRef.current) {
+          toggleMute();
+        }
+      });
+
+      navigator.mediaSession.setActionHandler('pause', () => {
+        if (!isMutedRef.current) {
+          toggleMute();
+        }
+      });
+
+      navigator.mediaSession.setActionHandler('stop', () => {
+        if (!isMutedRef.current) {
+          toggleMute();
+        }
+      });
     } catch (e) {
-      console.warn('[MediaSession] togglemicrophone not supported:', e);
+      console.warn('[MediaSession] Action handlers not supported:', e);
     }
 
     return () => {
       if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
         try {
           navigator.mediaSession.setActionHandler('togglemicrophone' as any, null);
+          navigator.mediaSession.setActionHandler('play', null);
+          navigator.mediaSession.setActionHandler('pause', null);
+          navigator.mediaSession.setActionHandler('stop', null);
         } catch (e) {}
       }
     };
   }, [roomId, nickname, isMuted, toggleMute]);
 
-  // Update output sink for all peer audio elements when audioOutputDeviceId changes
+  // Update output sink for all peer audio elements and AudioContext when audioOutputDeviceId changes
   useEffect(() => {
     if (!audioOutputDeviceId) return;
     audioElementsRef.current.forEach((audio, peerId) => {
@@ -826,6 +1102,11 @@ export function useVoiceChat({
         });
       }
     });
+    if (audioContextRef.current && typeof (audioContextRef.current as any).setSinkId === 'function') {
+      (audioContextRef.current as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
+        console.warn('[Audio] Failed to set sinkId on AudioContext:', err);
+      });
+    }
   }, [audioOutputDeviceId]);
 
   // Switch microphone input device dynamically if user changes it during call
@@ -1037,27 +1318,47 @@ export function useVoiceChat({
                 }
               }
 
-              // 2. Remote peers VAD: verify via native getSynchronizationSources
+              // 2. Remote peers VAD: autonomous local AnalyserNode + fallback to getSynchronizationSources
+              const remoteDataArray = new Uint8Array(128);
               peerConnectionsRef.current.forEach((pc, remotePeerId) => {
                 const peerInfo = peersInfoRef.current.get(remotePeerId);
                 if (!peerInfo) return;
 
                 let audioDetected = false;
-                try {
-                  if (pc && typeof pc.getReceivers === 'function') {
-                    for (const receiver of pc.getReceivers()) {
-                      if (receiver.track && receiver.track.kind === 'audio' && typeof receiver.getSynchronizationSources === 'function') {
-                        for (const src of receiver.getSynchronizationSources()) {
-                          if ((typeof src.audioLevel === 'number' && src.audioLevel > 0.01) || (src as any).voiceActivityFlag === true) {
-                            audioDetected = true;
-                            break;
+
+                // Primary: Local Web Audio AnalyserNode (works 100% on Firefox, Safari, Chrome, iOS, Android)
+                const remoteAnalyser = remoteAnalysersRef.current.get(remotePeerId);
+                if (remoteAnalyser) {
+                  remoteAnalyser.getByteFrequencyData(remoteDataArray);
+                  let sum = 0;
+                  const vocalBins = Math.min(32, remoteAnalyser.frequencyBinCount);
+                  for (let i = 1; i < vocalBins; i++) {
+                    sum += remoteDataArray[i];
+                  }
+                  const vocalAverage = sum / (vocalBins - 1);
+                  if (vocalAverage > 6) {
+                    audioDetected = true;
+                  }
+                }
+
+                // Secondary Fallback: native WebRTC getSynchronizationSources
+                if (!audioDetected) {
+                  try {
+                    if (pc && typeof pc.getReceivers === 'function') {
+                      for (const receiver of pc.getReceivers()) {
+                        if (receiver.track && receiver.track.kind === 'audio' && typeof receiver.getSynchronizationSources === 'function') {
+                          for (const src of receiver.getSynchronizationSources()) {
+                            if ((typeof src.audioLevel === 'number' && src.audioLevel > 0.01) || (src as any).voiceActivityFlag === true) {
+                              audioDetected = true;
+                              break;
+                            }
                           }
                         }
+                        if (audioDetected) break;
                       }
-                      if (audioDetected) break;
                     }
-                  }
-                } catch (e) {}
+                  } catch (e) {}
+                }
 
                 if (audioDetected) {
                   remoteHangoverRef.current.set(remotePeerId, now + 400);
@@ -1209,6 +1510,20 @@ export function useVoiceChat({
                 }
               }
 
+              // Peer updated deafen status
+              else if (type === 'user-deafened') {
+                const info = peersInfoRef.current.get(msg.peerId);
+                if (info) {
+                  info.isDeafened = msg.isDeafened;
+                  if (msg.isDeafened) {
+                    info.isMuted = true;
+                    info.isSpeaking = false;
+                  }
+                  peersInfoRef.current.set(msg.peerId, info);
+                  updatePeersState();
+                }
+              }
+
               // Peer speaking status
               else if (type === 'user-speaking') {
                 const info = peersInfoRef.current.get(msg.peerId);
@@ -1353,10 +1668,6 @@ export function useVoiceChat({
         try { c.disconnect(); } catch (e) {}
       });
       peerCompressorNodesRef.current.clear();
-      peerDestNodesRef.current.forEach((d) => {
-        try { d.disconnect(); } catch (e) {}
-      });
-      peerDestNodesRef.current.clear();
       peerMergerNodesRef.current.forEach((m) => {
         try { m.disconnect(); } catch (e) {}
       });
@@ -1365,6 +1676,11 @@ export function useVoiceChat({
         try { s.disconnect(); } catch (e) {}
       });
       peerSourceNodesRef.current.clear();
+      remoteAnalysersRef.current.forEach((a) => {
+        try { a.disconnect(); } catch (e) {}
+      });
+      remoteAnalysersRef.current.clear();
+      remoteHangoverRef.current.clear();
       if (micMergerNodeRef.current) {
         try { micMergerNodeRef.current.disconnect(); } catch (e) {}
         micMergerNodeRef.current = null;
@@ -1376,10 +1692,6 @@ export function useVoiceChat({
       if (micPostFilterNodeRef.current) {
         try { micPostFilterNodeRef.current.disconnect(); } catch (e) {}
         micPostFilterNodeRef.current = null;
-      }
-      if (micGateGainNodeRef.current) {
-        try { micGateGainNodeRef.current.disconnect(); } catch (e) {}
-        micGateGainNodeRef.current = null;
       }
       remoteStreamsRef.current.clear();
 
@@ -1399,12 +1711,25 @@ export function useVoiceChat({
 
       peersInfoRef.current.clear();
       remoteHangoverRef.current.clear();
+      remoteAnalysersRef.current.forEach((a) => {
+        try { a.disconnect(); } catch (e) {}
+      });
+      remoteAnalysersRef.current.clear();
+      if (silentAudioRef.current) {
+        try {
+          silentAudioRef.current.pause();
+          silentAudioRef.current.src = '';
+          silentAudioRef.current.remove();
+        } catch (e) {}
+        silentAudioRef.current = null;
+      }
     };
   }, [roomId, unlockAudio, getOrCreatePeerConnection, handleSignal, cleanupPeer, updatePeersState, sendWsMessage]);
 
   return {
     isConnected,
     isMuted,
+    isDeafened,
     isSpeaking,
     peers,
     error,
@@ -1412,6 +1737,7 @@ export function useVoiceChat({
     needsAudioUnlock,
     unlockAudio,
     toggleMute,
+    toggleDeafen,
     changeNickname,
     peerVolumes,
     setPeerVolume,

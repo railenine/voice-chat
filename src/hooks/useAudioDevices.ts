@@ -141,10 +141,16 @@ export function useAudioDevices() {
   const startMicTest = useCallback(async () => {
     stopMicTest();
     try {
-      const constraints: MediaStreamConstraints = {
-        audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
-      };
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      let stream: MediaStream;
+      try {
+        const constraints: MediaStreamConstraints = {
+          audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+      } catch (err) {
+        console.warn('[AudioDevices] Failed with selectedInput, falling back to default mic:', err);
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
       testStreamRef.current = stream;
 
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;

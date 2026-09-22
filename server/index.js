@@ -18,23 +18,46 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
+const APP_VERSION = '0.0.4';
+const MIN_CLIENT_VERSION = '0.0.3';
+
 // Health & Info endpoints
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     service: 'voicechat-server',
-    version: '0.0.31'
+    version: APP_VERSION,
+    minClientVersion: MIN_CLIENT_VERSION
   });
 });
 
 app.get('/peerjs/info', (req, res) => {
   res.json({
     name: 'VoiceChat Server',
-    version: '0.0.31',
+    version: APP_VERSION,
     signaling: 'websocket',
     path: '/peerjs/ws',
     status: 'running'
+  });
+});
+
+// Tauri updater endpoint: serves latest.json manifest for desktop clients
+app.get(['/api/updater/latest.json', '/downloads/latest.json'], (req, res) => {
+  const latestJsonPath = path.join(__dirname, 'latest.json');
+  if (fs.existsSync(latestJsonPath)) {
+    return res.sendFile(latestJsonPath);
+  }
+  // Default fallback manifest if custom latest.json not yet present on disk
+  res.json({
+    version: APP_VERSION,
+    notes: `VoiceChat v${APP_VERSION} - P2P WebRTC Voice Chat`,
+    pub_date: new Date().toISOString(),
+    platforms: {
+      'windows-x86_64': {
+        url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/VoiceChat_${APP_VERSION}_x64-setup.nsis.zip`
+      }
+    }
   });
 });
 
@@ -145,8 +168,15 @@ server.on('upgrade', (request, socket, head) => {
   }
 });
 
+// In-memory sliding-window rate limiter per socket (max 25 messages per 1000ms window)
+const RATE_LIMIT_MAX_MSG = 25;
+const RATE_LIMIT_WINDOW_MS = 1000;
+
 wss.on('connection', (ws) => {
   console.log('[WS] Client connected');
+
+  ws.msgCount = 0;
+  ws.lastMsgReset = Date.now();
 
   // Keep-alive ping
   ws.isAlive = true;
@@ -155,6 +185,23 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('message', async (raw) => {
+    const now = Date.now();
+    if (now - ws.lastMsgReset > RATE_LIMIT_WINDOW_MS) {
+      ws.msgCount = 1;
+      ws.lastMsgReset = now;
+    } else {
+      ws.msgCount++;
+      if (ws.msgCount > RATE_LIMIT_MAX_MSG) {
+        if (ws.msgCount === RATE_LIMIT_MAX_MSG + 1) {
+          console.warn(`[WS] Rate limit exceeded for socket (${ws.msgCount} msgs/s). Throttling.`);
+          try {
+            ws.send(JSON.stringify({ type: 'error', message: 'Слишком много запросов. Подождите секунду.' }));
+          } catch (e) {}
+        }
+        return; // Drop packet
+      }
+    }
+
     let msg;
     try {
       msg = JSON.parse(raw.toString());
@@ -212,6 +259,7 @@ wss.on('connection', (ws) => {
           peerId: existingId,
           nickname: client.nickname,
           isMuted: client.isMuted,
+          isDeafened: client.isDeafened || false,
           isSpeaking: client.isSpeaking,
         });
       }
@@ -222,6 +270,7 @@ wss.on('connection', (ws) => {
         peerId,
         nickname: nickname || 'Аноним',
         isMuted: false,
+        isDeafened: false,
         isSpeaking: false,
       });
 
@@ -245,6 +294,7 @@ wss.on('connection', (ws) => {
           peerId,
           nickname: nickname || 'Аноним',
           isMuted: false,
+          isDeafened: false,
           isSpeaking: false,
         },
         iceServers,
@@ -312,6 +362,30 @@ wss.on('connection', (ws) => {
           type: 'user-muted',
           peerId: meta.peerId,
           isMuted: client.isMuted,
+        }, meta.peerId);
+      }
+      return;
+    }
+
+    // Update deafen status (mute both mic and all sound)
+    if (type === 'update-deafen') {
+      const meta = clientMeta.get(ws);
+      if (!meta) return;
+
+      const { isDeafened } = msg;
+      const room = rooms.get(meta.roomId);
+      if (room && room.has(meta.peerId)) {
+        const client = room.get(meta.peerId);
+        client.isDeafened = Boolean(isDeafened);
+        if (client.isDeafened) {
+          client.isMuted = true;
+          client.isSpeaking = false;
+        }
+
+        broadcastToRoom(meta.roomId, {
+          type: 'user-deafened',
+          peerId: meta.peerId,
+          isDeafened: client.isDeafened,
         }, meta.peerId);
       }
       return;
