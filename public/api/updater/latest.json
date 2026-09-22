@@ -1,9 +1,10 @@
 {
   "version": "0.0.43",
-  "notes": "VoiceChat v0.0.43 - Универсальное исправление звука для PC, Desktop, Android и iOS, а также автоматические обновления",
-  "pub_date": "2026-09-22T19:20:00Z",
+  "notes": "VoiceChat v0.0.43 - Универсальное исправление слышимости звука (PC Web, Desktop, Android, iOS)",
+  "pub_date": "2026-09-22T16:24:00Z",
   "platforms": {
     "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUUXBRQ09zd3c3SHBxOTBYMXRmTk02UGU1RUJEVnhSSDI4ZWNSR2w1Mm9ZT0l4Qzd1YlZJbm1Ucjd4clIrSXRnTzEvblNMTXZYSUFRY3lUa0pLYnA2TTlpRTRzVUpxdmdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMDk0NjA0CWZpbGU6Vm9pY2VDaGF0XzAuMC40M194NjQtc2V0dXAubnNpcy56aXAJdmVyc2lvbjowLjAuNDMKOWVHeFdyeHFxbjNueWNqbDhodzBINlJHR2dPQmc2U1N6YzZJcGx5ZmphQlJNcG5WRGR5Zy9BZnlNMGdqakFxblVmUnNpbHVNdnNjZ0JNQ2x4VGtzRHc9PQo=",
       "url": "https://github.com/railenine/voice-chat/releases/download/v0.0.43/VoiceChat_0.0.43_x64-setup.nsis.zip"
     }
   }
