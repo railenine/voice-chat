@@ -244,3 +244,45 @@ export async function playTestSound() {
     console.warn('[SoundEffects] playTestSound error:', e);
   }
 }
+
+/**
+ * Deafen sound (All Audio & Mic Muted):
+ * Heavy descending three-tone cue: A5 (880Hz) -> D5 (587Hz) -> G4 (392Hz)
+ */
+export async function playDeafenSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playHarmonicChime(ctx, [880.0, 1760.0], now, 0.07, 0.38, 'sine');
+    playHarmonicChime(ctx, [587.33, 1174.66], now + 0.065, 0.07, 0.40, 'sine');
+    playHarmonicChime(ctx, [392.0, 784.0], now + 0.13, 0.16, 0.42, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playDeafenSound error:', e);
+  }
+}
+
+/**
+ * Undeafen sound (Audio & Mic Restored):
+ * Bright ascending three-tone cue: G4 (392Hz) -> D5 (587Hz) -> A5 (880Hz)
+ */
+export async function playUndeafenSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playHarmonicChime(ctx, [392.0, 784.0], now, 0.07, 0.38, 'sine');
+    playHarmonicChime(ctx, [587.33, 1174.66], now + 0.065, 0.07, 0.40, 'sine');
+    playHarmonicChime(ctx, [880.0, 1760.0], now + 0.13, 0.18, 0.44, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playUndeafenSound error:', e);
+  }
+}

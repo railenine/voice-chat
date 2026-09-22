@@ -15,6 +15,15 @@ export const DEFAULT_HOTKEY: HotkeyConfig = {
   type: 'keyboard',
 };
 
+export const DEFAULT_MUTE_HOTKEY = DEFAULT_HOTKEY;
+
+export const DEFAULT_DEAFEN_HOTKEY: HotkeyConfig = {
+  code: 'Backslash',
+  key: '\\',
+  label: '\\',
+  type: 'keyboard',
+};
+
 export const MOUSE_HOTKEY_OPTIONS: HotkeyConfig[] = [
   { code: 'Mouse3', key: 'Mouse3', label: 'Колёсико (Mouse 3)', type: 'mouse', button: 1 },
   { code: 'Mouse4', key: 'Mouse4', label: 'Мышь 4 (Боковая 1)', type: 'mouse', button: 3 },
@@ -35,6 +44,9 @@ const STORAGE_KEY = 'voice_chat_mute_hotkey';
 export function formatKeyLabel(code: string, key: string): string {
   if (code === 'Backquote' || key.toLowerCase() === 'ё' || key === '`' || key === '~') {
     return 'Ё / `';
+  }
+  if (code === 'Backslash' || key === '\\') {
+    return '\\';
   }
   if (code === 'Space') return 'Пробел';
   if (code === 'Escape') return 'Esc';
@@ -60,6 +72,13 @@ export function isHotkeyMatch(e: KeyboardEvent, hotkey: HotkeyConfig): boolean {
   ) {
     return true;
   }
+  // Backslash / '\' match
+  if (
+    (hotkey.code === 'Backslash' || hotkey.key === '\\') &&
+    (e.code === 'Backslash' || e.key === '\\')
+  ) {
+    return true;
+  }
   if (hotkey.code && e.code && e.code.toLowerCase() === hotkey.code.toLowerCase()) {
     return true;
   }
@@ -77,6 +96,9 @@ export function toTauriShortcut(config: HotkeyConfig): string {
   if (config.code === 'Backquote' || config.key.toLowerCase() === 'ё' || config.key === '`' || config.key === '~') {
     return 'Backquote';
   }
+  if (config.code === 'Backslash' || config.key === '\\') {
+    return 'Backslash';
+  }
   if (config.code === 'Space') return 'Space';
   if (config.code.startsWith('Key')) return config.code.replace('Key', '').toUpperCase();
   if (config.code.startsWith('Digit')) return config.code.replace('Digit', '');
@@ -84,15 +106,32 @@ export function toTauriShortcut(config: HotkeyConfig): string {
   return config.code || config.key;
 }
 
+export function isSameHotkey(a: HotkeyConfig, b: HotkeyConfig): boolean {
+  if (a.type !== b.type) return false;
+  if (a.type === 'mouse') {
+    return a.button === b.button;
+  }
+  return a.code === b.code;
+}
+
 interface UseHotkeyOptions {
   onTrigger: () => void;
   enabled?: boolean;
+  storageKey?: string;
+  defaultHotkey?: HotkeyConfig;
+  onBeforeUpdate?: (newConfig: HotkeyConfig) => void;
 }
 
-export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
+export function useHotkey({
+  onTrigger,
+  enabled = true,
+  storageKey = STORAGE_KEY,
+  defaultHotkey = DEFAULT_HOTKEY,
+  onBeforeUpdate,
+}: UseHotkeyOptions) {
   const [hotkey, setHotkeyState] = useState<HotkeyConfig>(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.code && parsed.label) {
@@ -100,10 +139,15 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
         }
       }
     } catch (e) {}
-    return DEFAULT_HOTKEY;
+    return defaultHotkey;
   });
 
   const [isRecording, setIsRecording] = useState(false);
+
+  const onBeforeUpdateRef = useRef(onBeforeUpdate);
+  useEffect(() => {
+    onBeforeUpdateRef.current = onBeforeUpdate;
+  }, [onBeforeUpdate]);
 
   // Keep latest onTrigger in ref to avoid stale closures and unnecessary re-subscriptions
   const onTriggerRef = useRef(onTrigger);
@@ -124,16 +168,19 @@ export function useHotkey({ onTrigger, enabled = true }: UseHotkeyOptions) {
 
   // Save hotkey to state and localStorage
   const updateHotkey = useCallback((newConfig: HotkeyConfig) => {
+    if (onBeforeUpdateRef.current) {
+      onBeforeUpdateRef.current(newConfig);
+    }
     setHotkeyState(newConfig);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newConfig));
+      localStorage.setItem(storageKey, JSON.stringify(newConfig));
     } catch (e) {}
-  }, []);
+  }, [storageKey]);
 
   // Reset to default
   const resetHotkey = useCallback(() => {
-    updateHotkey(DEFAULT_HOTKEY);
-  }, [updateHotkey]);
+    updateHotkey(defaultHotkey);
+  }, [updateHotkey, defaultHotkey]);
 
   // Listener for capturing new hotkey (Keyboard + Mouse)
   useEffect(() => {
