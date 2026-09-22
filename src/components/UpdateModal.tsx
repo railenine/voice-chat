@@ -12,7 +12,8 @@ interface UpdateModalProps {
   downloadedBytes: number;
   totalBytes: number;
   error: string | null;
-  onInstall: () => void;
+  isPortable?: boolean;
+  onInstall: (mode?: 'portable' | 'installer') => void;
   onCheckAgain: () => void;
 }
 
@@ -25,6 +26,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
   downloadedBytes,
   totalBytes,
   error,
+  isPortable = false,
   onInstall,
   onCheckAgain,
 }) => {
@@ -83,7 +85,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
                   : status === 'up-to-date'
                   ? 'У вас актуальная версия'
                   : status === 'error'
-                  ? 'Ошибка проверки'
+                  ? 'Ошибка обновления'
                   : status === 'downloading'
                   ? 'Загрузка обновления...'
                   : 'Доступно обновление'}
@@ -97,6 +99,11 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
                   <span className="text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded border border-green-500/30">
                     v{updateInfo.version}
                   </span>
+                  {isDesktop && (
+                    <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-300 border border-blue-500/20 font-sans">
+                      {isPortable ? 'Portable' : 'Установлено'}
+                    </span>
+                  )}
                 </div>
               )}
             </div>
@@ -124,9 +131,11 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
           {status === 'available' && (
             <>
               <p className="leading-relaxed">
-                {isDesktop
-                  ? 'Вышла новая версия приложения. Обновление будет загружено и установлено автоматически в один клик.'
-                  : 'На сервере доступна новая версия VoiceChat. Нажмите кнопку ниже, чтобы перезагрузить страницу и применить обновление.'}
+                {!isDesktop
+                  ? 'На сервере доступна новая версия VoiceChat. Нажмите кнопку ниже, чтобы перезагрузить страницу и применить обновление.'
+                  : isPortable
+                  ? 'Вышла новая версия приложения. Текущий файл будет заменён на актуальный прямо на месте без установки в систему.'
+                  : 'Вышла новая версия приложения. Обновление будет загружено и установлено автоматически в один клик.'}
               </p>
 
               {updateInfo?.notes && (
@@ -199,23 +208,41 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
           )}
 
           {status === 'available' && (
-            <>
+            <div className="flex flex-wrap items-center justify-end gap-2 w-full">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white rounded-xl text-xs font-medium transition-all"
+                className="px-3.5 py-2 bg-white/10 hover:bg-white/15 text-gray-300 hover:text-white rounded-xl text-xs font-medium transition-all"
               >
                 Позже
               </button>
+
+              {isDesktop && isPortable && (
+                <button
+                  type="button"
+                  onClick={() => onInstall('installer')}
+                  title="Скачать и запустить установщик Windows (с ярлыками и записью в список программ)"
+                  className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 border border-white/10 rounded-xl text-xs font-medium transition-all"
+                >
+                  Установить в систему
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={onInstall}
-                className="px-5 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/40 active:scale-95 transition-all flex items-center gap-1.5"
+                onClick={() => onInstall(isPortable ? 'portable' : 'installer')}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-blue-600/40 active:scale-95 transition-all flex items-center gap-1.5"
               >
-                <span>{isDesktop ? 'Обновить сейчас' : 'Обновить страницу'}</span>
+                <span>
+                  {!isDesktop
+                    ? 'Обновить страницу'
+                    : isPortable
+                    ? 'Обновить на месте (Portable)'
+                    : 'Обновить сейчас'}
+                </span>
                 <span>→</span>
               </button>
-            </>
+            </div>
           )}
 
           {status === 'downloading' && (
@@ -224,9 +251,10 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               className="w-full py-2 bg-white/10 text-gray-400 rounded-xl text-xs font-medium cursor-not-allowed flex items-center justify-center gap-2"
             >
               <span className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-              <span>Установка обновления...</span>
+              <span>{isPortable ? 'Загрузка и замена файла...' : 'Установка обновления...'}</span>
             </button>
           )}
+
 
           {status === 'downloaded' && (
             <button

@@ -2,6 +2,7 @@
   "version": "0.0.43",
   "notes": "VoiceChat v0.0.43 - Универсальное исправление слышимости звука (PC Web, Desktop, Android, iOS)",
   "pub_date": "2026-09-22T16:24:00Z",
+  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.0.43/voice-chat.exe",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUUXBRQ09zd3c3SHFXQVc4TXVIejYzR29lVzUzeVBWeWVwdEVYNEUxQjlRU3gzQVY2KyszN29iaVk5NFIwdEpvbE44UHFuOFdidGtwZHFrdjR2aXNNeUlIV1ZadTNoVUFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMDk0NjEzCWZpbGU6Vm9pY2VDaGF0XzAuMC40M194NjQuZXhlCXZlcnNpb246MC4wLjQzCisxNUpUcDAwanpWeS9SVXdHeGVVRk9qNlVRRjhZbkV4anEvR2tOUEFFTjk0U2RIOUZld2dtSDZBSXFVT0l0VTFsbStISlplSzYzSFRmQ1QycDNWc0NRPT0K",

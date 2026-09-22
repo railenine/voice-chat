@@ -45,6 +45,7 @@ function App() {
     error: updateError,
     isModalOpen: isUpdateModalOpen,
     setIsModalOpen: setIsUpdateModalOpen,
+    isPortable,
     checkForUpdates,
     installUpdate,
   } = useAppUpdater();
@@ -158,6 +159,7 @@ function App() {
         downloadedBytes={downloadedBytes}
         totalBytes={totalBytes}
         error={updateError}
+        isPortable={isPortable}
         onInstall={installUpdate}
         onCheckAgain={() => checkForUpdates(true)}
       />
