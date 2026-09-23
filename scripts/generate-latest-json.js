@@ -130,15 +130,18 @@ function main() {
   // 4. Extract Release Notes from CHANGELOG.md if available
   let notes = `VoiceChat v${version}`;
   const changelogPath = path.join(rootDir, 'CHANGELOG.md');
+  const releaseNotesPath = path.join(rootDir, 'RELEASE_NOTES.md');
+  let generatedNotes = false;
+
   if (fs.existsSync(changelogPath)) {
     const changelog = fs.readFileSync(changelogPath, 'utf8');
     const versionHeaderRegex = new RegExp(`##\\s*\\[${version.replace(/\./g, '\\.')}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s*\\[|$)`);
     const match = changelog.match(versionHeaderRegex);
     if (match && match[1]) {
       const fullNotes = match[1].replace(/\n*---\s*$/, '').trim();
-      const releaseNotesPath = path.join(rootDir, 'RELEASE_NOTES.md');
       fs.writeFileSync(releaseNotesPath, fullNotes + '\n', 'utf8');
       console.log(`[Updater] Generated RELEASE_NOTES.md for GitHub Release.`);
+      generatedNotes = true;
 
       // Clean up markdown bullet points for notes
       const lines = match[1]
@@ -150,6 +153,11 @@ function main() {
         notes = `VoiceChat v${version} - ${lines.slice(0, 3).join('; ')}`;
       }
     }
+  }
+
+  if (!generatedNotes) {
+    fs.writeFileSync(releaseNotesPath, `VoiceChat v${version}\n`, 'utf8');
+    console.log(`[Updater] Generated fallback RELEASE_NOTES.md.`);
   }
 
   // 5. Construct latest.json
