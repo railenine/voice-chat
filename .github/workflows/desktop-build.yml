@@ -79,21 +79,3 @@ jobs:
             src-tauri/target/release/*.exe
             latest.json
 
-      - name: Commit and push updated latest.json to main
-        if: startsWith(github.ref, 'refs/tags/')
-        continue-on-error: true
-        shell: bash
-        run: |
-          cp latest.json "$RUNNER_TEMP/latest.json"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git reset --hard
-          git clean -fd
-          git fetch origin main
-          git checkout main
-          git pull origin main --rebase
-          cp "$RUNNER_TEMP/latest.json" latest.json
-          cp "$RUNNER_TEMP/latest.json" server/latest.json
-          cp "$RUNNER_TEMP/latest.json" public/api/updater/latest.json
-          git add latest.json server/latest.json public/api/updater/latest.json
-          git diff --staged --quiet || (git commit -m "chore(updater): auto-update latest.json for ${{ github.ref_name }}" && git push origin main)

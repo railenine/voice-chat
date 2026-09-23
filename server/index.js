@@ -43,19 +43,45 @@ app.get('/peerjs/info', (req, res) => {
 });
 
 // Tauri updater endpoint: serves latest.json manifest for desktop clients
-app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/latest.json'], (req, res) => {
+// Proxies directly to GitHub Releases latest download with 60s cache
+let cachedManifest = null;
+let cachedManifestTime = 0;
+
+app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/latest.json'], async (req, res) => {
+  const now = Date.now();
+  if (cachedManifest && now - cachedManifestTime < 60000) {
+    return res.json(cachedManifest);
+  }
+
+  try {
+    const ghUrl = 'https://github.com/railenine/voice-chat/releases/latest/download/latest.json';
+    const response = await fetch(ghUrl, {
+      headers: { 'User-Agent': 'VoiceChat-Server-Updater' }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      cachedManifest = data;
+      cachedManifestTime = now;
+      return res.json(data);
+    }
+  } catch (err) {
+    console.warn('[Updater] Failed to proxy latest.json from GitHub Releases:', err.message);
+  }
+
   const latestJsonPath = path.join(__dirname, 'latest.json');
   if (fs.existsSync(latestJsonPath)) {
     return res.sendFile(latestJsonPath);
   }
-  // Default fallback manifest if custom latest.json not yet present on disk
+
+  // Default fallback manifest
   res.json({
     version: APP_VERSION,
     notes: `VoiceChat v${APP_VERSION} - P2P WebRTC Voice Chat`,
     pub_date: new Date().toISOString(),
+    portable_url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/voice-chat.exe`,
     platforms: {
       'windows-x86_64': {
-        url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/VoiceChat_${APP_VERSION}_x64-setup.nsis.zip`
+        url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/VoiceChat_${APP_VERSION}_x64-setup.exe`
       }
     }
   });

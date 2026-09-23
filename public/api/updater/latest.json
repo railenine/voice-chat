@@ -1,12 +1,12 @@
 {
-  "version": "0.0.45",
-  "notes": "VoiceChat v0.0.45 - Мобильный Clubhouse-стрип участников, единый стиль чата, настраиваемые тултипы и исправления для ПК",
-  "pub_date": "2026-09-23T15:11:00Z",
-  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.0.45/voice-chat.exe",
+  "version": "0.0.46",
+  "notes": "VoiceChat v0.0.46 - Стилизация подсказки при наведении на версию приложения:; Нативное системное всплывающее окно с пояснением при наведении на номер версии в лобби и в строке заголовка окна (TitleBar) заменено на единый фирменный компонент `<Tooltip>`.; Подсказка оформлена в общем стеклянном стиле приложения: темный фон `bg-slate-900/95`, размытие `backdrop-blur-xl`, аккуратная граница `border-white/20`, заголовок «Проверить обновления» и поясняющий текст.",
+  "pub_date": "2026-09-23T15:39:34.752Z",
+  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.0.46/voice-chat.exe",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUUXBRQ09zd3c3SGlDZEpXMkNIQnJhNHZ1aFFrVGFBSTVKWENEb1E3NXdPMzNyK0dRMnMzN3dhdmUwT0E3bnFRZU1ra0EyUzAwSXRJNVpWZGVGWXJINDZDSjJzQlFPaVFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMTc2Mjk5CWZpbGU6dGVtcF9Wb2ljZUNoYXRfMC4wLjQ1X3g2NC5leGUJdmVyc2lvbjowLjAuNDUKdngzd1dHSGJveUpxeDVVRTZERWx4VGZqTDUzL0MwbnV6SnZ1dnlpU1dNUUNEWGhzbVUveXMyQWI1K1BMZWtBR3YzWDVycmp5U2JjbmxCaEZNaXM2Q1E9PQo=",
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.0.45/VoiceChat_0.0.45_x64.exe"
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.0.46/VoiceChat_0.0.46_x64-setup.exe"
     }
   }
 }
