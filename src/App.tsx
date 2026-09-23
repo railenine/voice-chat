@@ -64,6 +64,42 @@ function App() {
     } catch {}
   }, []);
 
+  // Gracefully disperse jelly blobs, reveal app interface, and fade out splash preloader once React mounts
+  useEffect(() => {
+    const jellyBg = document.getElementById('jelly-bg');
+    const preloader = document.getElementById('app-preloader');
+    const root = document.getElementById('root');
+
+    // Settle frame so React DOM is completely painted before reveal
+    const frameId = requestAnimationFrame(() => {
+      const timer = setTimeout(() => {
+        // 1. Reveal loaded app UI seamlessly
+        if (root) {
+          root.classList.add('app-loaded');
+        }
+
+        // 2. Disperse jelly blobs outward from center to corners
+        if (jellyBg) {
+          jellyBg.classList.remove('jelly-converged');
+          jellyBg.classList.add('jelly-dispersed');
+        }
+
+        // 3. Fade out splash preloader icon and dots simultaneously
+        if (preloader) {
+          preloader.classList.add('fade-out');
+          const removeTimer = setTimeout(() => {
+            preloader.remove();
+          }, 400);
+          return () => clearTimeout(removeTimer);
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    });
+
+    return () => cancelAnimationFrame(frameId);
+  }, []);
+
   // Prime audio playback across all platforms (PC Web, Desktop Tauri, Android, iOS Safari)
   // Ensures audio permissions are captured synchronously within the user click gesture before getUserMedia prompt
   const primeAudioEngine = useCallback(() => {
@@ -135,7 +171,7 @@ function App() {
   }, []);
 
   return (
-    <div className="h-full w-full flex flex-col overflow-hidden bg-slate-950 select-none">
+    <div className="h-full w-full flex flex-col overflow-hidden bg-transparent select-none relative z-10">
       {isTauri() && (
         <TitleBar
           roomId={joined ? roomId : undefined}

@@ -7,14 +7,9 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <title>VoiceChat - Голосовой чат</title>
-    <link
-      rel="stylesheet"
-      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
-    />
     <style>
       html,
-      body,
-      #root {
+      body {
         margin: 0;
         padding: 0;
         width: 100%;
@@ -26,6 +21,97 @@
         position: fixed;
         inset: 0;
         touch-action: manipulation;
+      }
+
+      #root {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        height: 100dvh;
+        background-color: transparent;
+        color: #ffffff;
+        overflow: hidden;
+        position: fixed;
+        inset: 0;
+        touch-action: manipulation;
+        z-index: 10;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      #root.app-loaded {
+        opacity: 1;
+        pointer-events: auto;
+      }
+
+      .jelly-background {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        z-index: 0;
+        background: #020617;
+        pointer-events: none;
+      }
+
+      .jelly-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(65px);
+        opacity: 0.75;
+        mix-blend-mode: screen;
+        pointer-events: none;
+        will-change: transform, top, left, right, bottom, width, height, opacity;
+      }
+
+      .jelly-converged .jelly-blob {
+        top: calc(50% - 140px);
+        left: calc(50% - 140px);
+        width: 280px;
+        height: 280px;
+        animation: preloader-jelly-pulse 2.4s ease-in-out infinite;
+      }
+
+      .jelly-blob-1 { background: radial-gradient(circle, #1e3a8a 0%, #1e40af 50%, transparent 70%); }
+      .jelly-blob-2 { background: radial-gradient(circle, #172554 0%, #1e3a5f 50%, transparent 70%); animation-delay: -0.4s; }
+      .jelly-blob-3 { background: radial-gradient(circle, #312e81 0%, #1e1b4b 50%, transparent 70%); animation-delay: -0.8s; }
+      .jelly-blob-4 { background: radial-gradient(circle, #164e63 0%, #155e75 50%, transparent 70%); animation-delay: -1.2s; }
+      .jelly-blob-5 { background: radial-gradient(circle, #2563eb 0%, #1d4ed8 45%, #1e1b4b 70%, transparent 80%); animation-delay: -1.6s; }
+      .jelly-blob-6 { background: radial-gradient(circle, #4f46e5 0%, #3730a3 50%, transparent 70%); animation-delay: -0.6s; }
+      .jelly-blob-7 { background: radial-gradient(circle, #0284c7 0%, #0369a1 50%, transparent 70%); animation-delay: -1.0s; }
+
+      @keyframes preloader-jelly-pulse {
+        0%, 100% {
+          transform: scale(0.92);
+          opacity: 0.75;
+        }
+        50% {
+          transform: scale(1.08);
+          opacity: 0.95;
+        }
+      }
+
+      #app-preloader {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background-color: transparent;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        user-select: none;
+        transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
+        pointer-events: auto;
+      }
+
+      #app-preloader.fade-out {
+        opacity: 0;
+        transform: scale(1.04);
+        visibility: hidden;
+        pointer-events: none;
       }
 
       @keyframes preloader-pulse {
@@ -52,28 +138,50 @@
     </style>
   </head>
   <body style="background-color: #020617;">
-    <div id="root">
-      <div id="app-preloader" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100vw; height: 100vh; background-color: #020617; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; user-select: none;">
-        <div style="position: relative; width: 72px; height: 72px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center;">
-          <div style="position: absolute; inset: -4px; border-radius: 24px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); filter: blur(14px); animation: preloader-pulse 2s infinite ease-in-out;"></div>
-          <div style="position: relative; width: 64px; height: 64px; border-radius: 20px; background: linear-gradient(135deg, #2563eb, #7c3aed); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.5); border: 1px solid rgba(255, 255, 255, 0.2);">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-              <line x1="12" x2="12" y1="19" y2="22"/>
-            </svg>
-          </div>
+    <div id="root"></div>
+    <div id="jelly-bg" class="jelly-background jelly-converged" aria-hidden="true">
+      <div class="jelly-blob jelly-blob-1"></div>
+      <div class="jelly-blob jelly-blob-2"></div>
+      <div class="jelly-blob jelly-blob-3"></div>
+      <div class="jelly-blob jelly-blob-4"></div>
+      <div class="jelly-blob jelly-blob-5"></div>
+      <div class="jelly-blob jelly-blob-6"></div>
+      <div class="jelly-blob jelly-blob-7"></div>
+    </div>
+    <div id="app-preloader">
+      <div style="position: relative; width: 72px; height: 72px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center;">
+        <div style="position: absolute; inset: -4px; border-radius: 24px; background: linear-gradient(135deg, #3b82f6, #8b5cf6); filter: blur(14px); animation: preloader-pulse 2s infinite ease-in-out;"></div>
+        <div style="position: relative; width: 64px; height: 64px; border-radius: 20px; background: linear-gradient(135deg, #2563eb, #7c3aed); display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(59, 130, 246, 0.5); border: 1px solid rgba(255, 255, 255, 0.2);">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+            <line x1="12" x2="12" y1="19" y2="22"/>
+          </svg>
         </div>
-        <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #ffffff; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
-          <span>VoiceChat</span>
-        </div>
-        <div style="display: flex; align-items: center; gap: 6px;">
-          <div style="width: 7px; height: 7px; border-radius: 50%; background-color: #3b82f6; animation: preloader-dot 1.4s infinite ease-in-out both; animation-delay: -0.32s;"></div>
-          <div style="width: 7px; height: 7px; border-radius: 50%; background-color: #60a5fa; animation: preloader-dot 1.4s infinite ease-in-out both; animation-delay: -0.16s;"></div>
-          <div style="width: 7px; height: 7px; border-radius: 50%; background-color: #93c5fd; animation: preloader-dot 1.4s infinite ease-in-out both;"></div>
-        </div>
+      </div>
+      <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #ffffff; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+        <span>VoiceChat</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <div style="width: 7px; height: 7px; border-radius: 50%; background-color: #3b82f6; animation: preloader-dot 1.4s infinite ease-in-out both; animation-delay: -0.32s;"></div>
+        <div style="width: 7px; height: 7px; border-radius: 50%; background-color: #60a5fa; animation: preloader-dot 1.4s infinite ease-in-out both; animation-delay: -0.16s;"></div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      setTimeout(function() {
+        var r = document.getElementById('root');
+        if (r && !r.classList.contains('app-loaded')) {
+          r.classList.add('app-loaded');
+          var p = document.getElementById('app-preloader');
+          if (p) p.classList.add('fade-out');
+          var j = document.getElementById('jelly-bg');
+          if (j) {
+            j.classList.remove('jelly-converged');
+            j.classList.add('jelly-dispersed');
+          }
+        }
+      }, 3500);
+    </script>
   </body>
 </html>

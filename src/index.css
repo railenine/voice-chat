@@ -114,7 +114,7 @@
   height: 100%;
   overflow: hidden;
   z-index: 0;
-  background: #000000;
+  background: #020617;
   pointer-events: none;
 }
 
@@ -124,7 +124,7 @@
   filter: blur(95px);
   opacity: 0.65;
   mix-blend-mode: screen;
-  will-change: transform;
+  will-change: transform, top, left, right, bottom, width, height, opacity;
   pointer-events: none;
   transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1),
               height 0.6s cubic-bezier(0.16, 1, 0.3, 1),
@@ -132,6 +132,259 @@
               opacity 0.6s ease;
 }
 
+/* Converged state (during loading: all blobs concentrated behind center badge) */
+.jelly-converged .jelly-blob-1 {
+  top: calc(50% - 140px);
+  left: calc(50% - 140px);
+  width: 280px;
+  height: 280px;
+  opacity: 0.85;
+  filter: blur(65px);
+  animation: preloader-jelly-pulse 2.4s ease-in-out infinite;
+}
+
+.jelly-converged .jelly-blob-2 {
+  top: calc(50% - 140px);
+  right: calc(50% - 140px);
+  width: 280px;
+  height: 280px;
+  opacity: 0.8;
+  filter: blur(65px);
+  animation: preloader-jelly-pulse 2.4s ease-in-out -0.4s infinite;
+}
+
+.jelly-converged .jelly-blob-3 {
+  bottom: calc(50% - 140px);
+  left: calc(50% - 140px);
+  width: 280px;
+  height: 280px;
+  opacity: 0.85;
+  filter: blur(65px);
+  animation: preloader-jelly-pulse 2.4s ease-in-out -0.8s infinite;
+}
+
+.jelly-converged .jelly-blob-4 {
+  top: calc(50% - 140px);
+  left: calc(50% - 140px);
+  width: 280px;
+  height: 280px;
+  opacity: 0.8;
+  filter: blur(65px);
+  animation: preloader-jelly-pulse 2.4s ease-in-out -1.2s infinite;
+}
+
+.jelly-converged .jelly-blob-5 {
+  top: calc(50% - 140px);
+  right: calc(50% - 140px);
+  width: 280px;
+  height: 280px;
+  opacity: 0.9;
+  filter: blur(65px);
+  animation: preloader-jelly-pulse 2.4s ease-in-out -1.6s infinite;
+}
+
+.jelly-converged .jelly-blob-6 {
+  bottom: calc(50% - 140px);
+  right: calc(50% - 140px);
+  width: 280px;
+  height: 280px;
+  opacity: 0.85;
+  filter: blur(65px);
+  animation: preloader-jelly-pulse 2.4s ease-in-out -0.6s infinite;
+}
+
+.jelly-converged .jelly-blob-7 {
+  top: calc(50% - 140px);
+  left: calc(50% - 140px);
+  width: 280px;
+  height: 280px;
+  opacity: 0.8;
+  filter: blur(65px);
+  animation: preloader-jelly-pulse 2.4s ease-in-out -1.0s infinite;
+}
+
+@keyframes preloader-jelly-pulse {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(0.92);
+    opacity: 0.75;
+  }
+  50% {
+    transform: translate3d(0, 0, 0) scale(1.08);
+    opacity: 0.95;
+  }
+}
+
+/* Dispersal animation (triggered when app finishes loading) */
+.jelly-dispersed .jelly-blob-1 {
+  animation: disperse-blob-1 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, blob-1 22s ease-in-out 1.4s infinite;
+}
+.jelly-dispersed .jelly-blob-2 {
+  animation: disperse-blob-2 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, blob-2 26s ease-in-out 1.4s infinite;
+}
+.jelly-dispersed .jelly-blob-3 {
+  animation: disperse-blob-3 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, blob-3 24s ease-in-out 1.4s infinite;
+}
+.jelly-dispersed .jelly-blob-4 {
+  animation: disperse-blob-4 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, blob-4 28s ease-in-out 1.4s infinite;
+}
+.jelly-dispersed .jelly-blob-5 {
+  animation: disperse-blob-5 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, blob-5 25s ease-in-out 1.4s infinite;
+}
+.jelly-dispersed .jelly-blob-6 {
+  animation: disperse-blob-6 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, blob-6 27s ease-in-out 1.4s infinite;
+}
+.jelly-dispersed .jelly-blob-7 {
+  animation: disperse-blob-7 1.4s cubic-bezier(0.16, 1, 0.3, 1) forwards, blob-7 30s ease-in-out 1.4s infinite;
+}
+
+@keyframes disperse-blob-1 {
+  0% {
+    top: calc(50% - 140px);
+    left: calc(50% - 140px);
+    width: 280px;
+    height: 280px;
+    opacity: 0.85;
+    filter: blur(65px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    top: -8%;
+    left: -8%;
+    width: clamp(340px, 42vw, 560px);
+    height: clamp(340px, 42vw, 560px);
+    opacity: 0.65;
+    filter: blur(95px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes disperse-blob-2 {
+  0% {
+    top: calc(50% - 140px);
+    right: calc(50% - 140px);
+    width: 280px;
+    height: 280px;
+    opacity: 0.8;
+    filter: blur(65px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    top: 45%;
+    right: -12%;
+    width: clamp(380px, 46vw, 640px);
+    height: clamp(380px, 46vw, 640px);
+    opacity: 0.65;
+    filter: blur(95px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes disperse-blob-3 {
+  0% {
+    bottom: calc(50% - 140px);
+    left: calc(50% - 140px);
+    width: 280px;
+    height: 280px;
+    opacity: 0.85;
+    filter: blur(65px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    bottom: -8%;
+    left: 25%;
+    width: clamp(320px, 38vw, 520px);
+    height: clamp(320px, 38vw, 520px);
+    opacity: 0.65;
+    filter: blur(95px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes disperse-blob-4 {
+  0% {
+    top: calc(50% - 140px);
+    left: calc(50% - 140px);
+    width: 280px;
+    height: 280px;
+    opacity: 0.8;
+    filter: blur(65px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    top: 25%;
+    left: 15%;
+    width: clamp(340px, 40vw, 550px);
+    height: clamp(340px, 40vw, 550px);
+    opacity: 0.65;
+    filter: blur(95px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes disperse-blob-5 {
+  0% {
+    top: calc(50% - 140px);
+    right: calc(50% - 140px);
+    width: 280px;
+    height: 280px;
+    opacity: 0.9;
+    filter: blur(65px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    top: -6%;
+    right: 12%;
+    width: clamp(300px, 36vw, 500px);
+    height: clamp(300px, 36vw, 500px);
+    opacity: 0.65;
+    filter: blur(95px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes disperse-blob-6 {
+  0% {
+    bottom: calc(50% - 140px);
+    right: calc(50% - 140px);
+    width: 280px;
+    height: 280px;
+    opacity: 0.85;
+    filter: blur(65px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    bottom: -10%;
+    right: 18%;
+    width: clamp(320px, 38vw, 520px);
+    height: clamp(320px, 38vw, 520px);
+    opacity: 0.65;
+    filter: blur(95px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes disperse-blob-7 {
+  0% {
+    top: calc(50% - 140px);
+    left: calc(50% - 140px);
+    width: 280px;
+    height: 280px;
+    opacity: 0.8;
+    filter: blur(65px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    top: 35%;
+    left: 55%;
+    width: clamp(280px, 32vw, 440px);
+    height: clamp(280px, 32vw, 440px);
+    opacity: 0.65;
+    filter: blur(95px);
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+/* Individual idle positions and animations */
 .jelly-blob-1 {
   width: clamp(340px, 42vw, 560px);
   height: clamp(340px, 42vw, 560px);
@@ -467,7 +720,7 @@ body {
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #000000;
+  background: #020617;
 }
 
 /* Mobile optimizations */
