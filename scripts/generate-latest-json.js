@@ -135,6 +135,11 @@ function main() {
     const versionHeaderRegex = new RegExp(`##\\s*\\[${version.replace(/\./g, '\\.')}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s*\\[|$)`);
     const match = changelog.match(versionHeaderRegex);
     if (match && match[1]) {
+      const fullNotes = match[1].replace(/\n*---\s*$/, '').trim();
+      const releaseNotesPath = path.join(rootDir, 'RELEASE_NOTES.md');
+      fs.writeFileSync(releaseNotesPath, fullNotes + '\n', 'utf8');
+      console.log(`[Updater] Generated RELEASE_NOTES.md for GitHub Release.`);
+
       // Clean up markdown bullet points for notes
       const lines = match[1]
         .split('\n')
