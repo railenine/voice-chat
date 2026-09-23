@@ -18,7 +18,7 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-const APP_VERSION = '0.0.47';
+const APP_VERSION = '0.0.48';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -47,6 +47,16 @@ app.get('/peerjs/info', (req, res) => {
 let cachedManifest = null;
 let cachedManifestTime = 0;
 
+let localFallbackManifest = null;
+const latestJsonPath = path.join(__dirname, 'latest.json');
+try {
+  if (fs.existsSync(latestJsonPath)) {
+    localFallbackManifest = JSON.parse(fs.readFileSync(latestJsonPath, 'utf8'));
+  }
+} catch (e) {
+  console.warn('[Server] Could not parse local latest.json fallback:', e.message);
+}
+
 app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/latest.json'], async (req, res) => {
   const now = Date.now();
   if (cachedManifest && now - cachedManifestTime < 60000) {
@@ -68,9 +78,8 @@ app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/
     console.warn('[Updater] Failed to proxy latest.json from GitHub Releases:', err.message);
   }
 
-  const latestJsonPath = path.join(__dirname, 'latest.json');
-  if (fs.existsSync(latestJsonPath)) {
-    return res.sendFile(latestJsonPath);
+  if (localFallbackManifest) {
+    return res.json(localFallbackManifest);
   }
 
   // Default fallback manifest
@@ -94,32 +103,33 @@ const COTURN_TLS_PORT = process.env.COTURN_TLS_PORT || 5349;
 const COTURN_USER = process.env.COTURN_USER || 'voicechat';
 const COTURN_PASSWORD = process.env.COTURN_PASSWORD || 'VoiceChatSecret2026!';
 
+const CACHED_ICE_SERVERS = Object.freeze([
+  // VPS Dedicated STUN
+  { urls: `stun:${COTURN_DOMAIN}:${COTURN_PORT}` },
+  // VPS Dedicated TURN (UDP, TCP, and TURNS over TLS)
+  {
+    urls: [
+      `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=udp`,
+      `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=tcp`,
+      `turns:${COTURN_DOMAIN}:${COTURN_TLS_PORT}?transport=tcp`,
+    ],
+    username: COTURN_USER,
+    credential: COTURN_PASSWORD,
+  },
+  // Public Fallback STUNs
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:global.stun.twilio.com:3478' },
+]);
+
 function getIceServers() {
-  return [
-    // VPS Dedicated STUN
-    { urls: `stun:${COTURN_DOMAIN}:${COTURN_PORT}` },
-    // VPS Dedicated TURN (UDP, TCP, and TURNS over TLS)
-    {
-      urls: [
-        `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=udp`,
-        `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=tcp`,
-        `turns:${COTURN_DOMAIN}:${COTURN_TLS_PORT}?transport=tcp`,
-      ],
-      username: COTURN_USER,
-      credential: COTURN_PASSWORD,
-    },
-    // Public Fallback STUNs
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-  ];
+  return CACHED_ICE_SERVERS;
 }
 
-app.get('/peerjs/ice-servers', async (req, res) => {
-  const servers = await getIceServers();
-  res.json({ iceServers: servers });
+app.get('/peerjs/ice-servers', (req, res) => {
+  res.json({ iceServers: CACHED_ICE_SERVERS });
 });
 
 // In-memory room manager
@@ -177,8 +187,8 @@ function removeClientFromRoom(ws) {
   }
 }
 
-// WebSocket Server attached to HTTP server
-const wss = new WebSocketServer({ noServer: true });
+// WebSocket Server attached to HTTP server (with 64KB maxPayload protection against OOM)
+const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
 // Handle upgrade for paths starting with /peerjs
 server.on('upgrade', (request, socket, head) => {
@@ -232,7 +242,8 @@ wss.on('connection', (ws) => {
     try {
       msg = JSON.parse(raw.toString());
     } catch (e) {
-      console.warn('[WS] Invalid JSON received:', raw.toString());
+      const rawSnippet = String(raw).slice(0, 100);
+      console.warn('[WS] Invalid JSON received:', rawSnippet);
       return;
     }
 
@@ -302,15 +313,12 @@ wss.on('connection', (ws) => {
 
       console.log(`[Room ${roomId}] Peer ${peerId} (${nickname}) joined. Total peers: ${room.size}`);
 
-      // Fetch cached/live ICE servers including Metered TURN
-      const iceServers = await getIceServers();
-
       // Send existing peers, in-memory messages, and iceServers to joining client
       ws.send(JSON.stringify({
         type: 'room-state',
         peers: existingPeers,
         messages: room.messages || [],
-        iceServers,
+        iceServers: CACHED_ICE_SERVERS,
       }));
 
       // Broadcast user-joined to all other peers in the room
@@ -323,7 +331,7 @@ wss.on('connection', (ws) => {
           isDeafened: false,
           isSpeaking: false,
         },
-        iceServers,
+        iceServers: CACHED_ICE_SERVERS,
       }, peerId);
 
       return;
@@ -339,6 +347,11 @@ wss.on('connection', (ws) => {
       if (room && room.has(to)) {
         const targetClient = room.get(to);
         if (targetClient.ws.readyState === WebSocket.OPEN) {
+          // Backpressure guard: drop signal if client output buffer is severely backlogged
+          if (targetClient.ws.bufferedAmount > 512 * 1024) {
+            console.warn(`[WS] Dropping signal to ${to}: buffer clogged (${targetClient.ws.bufferedAmount} bytes)`);
+            return;
+          }
           targetClient.ws.send(JSON.stringify({
             type: 'signal',
             from: meta.peerId,
@@ -422,16 +435,20 @@ wss.on('connection', (ws) => {
       const meta = clientMeta.get(ws);
       if (!meta) return;
 
-      const { isSpeaking } = msg;
+      const isSpeaking = Boolean(msg.isSpeaking);
       const room = rooms.get(meta.roomId);
       if (room && room.has(meta.peerId)) {
         const client = room.get(meta.peerId);
-        client.isSpeaking = Boolean(isSpeaking);
+        // Optimize: Only broadcast when speaking state actually transitions!
+        if (client.isSpeaking === isSpeaking) {
+          return;
+        }
+        client.isSpeaking = isSpeaking;
 
         broadcastToRoom(meta.roomId, {
           type: 'user-speaking',
           peerId: meta.peerId,
-          isSpeaking: client.isSpeaking,
+          isSpeaking,
         }, meta.peerId);
       }
       return;
@@ -465,7 +482,7 @@ wss.on('connection', (ws) => {
       room.messages.push(chatMessage);
       // Keep only last 100 messages in memory per room
       if (room.messages.length > 100) {
-        room.messages.shift();
+        room.messages.splice(0, room.messages.length - 100);
       }
 
       broadcastToRoom(meta.roomId, {
@@ -508,14 +525,33 @@ wss.on('close', () => {
   clearInterval(pingInterval);
 });
 
-// Serve static files from dist if available
+// Serve static files from dist with HTTP caching headers
 if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  // SPA fallback for all other routes
+  const assetsPath = path.join(distPath, 'assets');
+  if (fs.existsSync(assetsPath)) {
+    // Immutable cache for content-hashed Vite assets (1 year)
+    app.use('/assets', express.static(assetsPath, {
+      maxAge: '1y',
+      immutable: true,
+    }));
+  }
+
+  // General static assets (favicon, manifest, etc.)
+  app.use(express.static(distPath, {
+    maxAge: '1h',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  }));
+
+  // SPA fallback for all other routes (always fresh index.html)
   app.get('*', (req, res) => {
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(distPath, 'index.html'));
   });
-  console.log(`[Static] Serving frontend from ${distPath}`);
+  console.log(`[Static] Serving frontend with immutable assets cache from ${distPath}`);
 } else {
   console.log('[Static] Dist folder not found, running in API/Signaling mode only');
 }

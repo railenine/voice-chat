@@ -50,6 +50,14 @@ function App() {
     installUpdate,
   } = useAppUpdater();
 
+  const handleCheckUpdates = useCallback(() => {
+    checkForUpdates(true);
+  }, [checkForUpdates]);
+
+  const handleCloseUpdateModal = useCallback(() => {
+    setIsUpdateModalOpen(false);
+  }, [setIsUpdateModalOpen]);
+
   useEffect(() => {
     // Check URL for room ID
     try {
@@ -98,6 +106,20 @@ function App() {
     });
 
     return () => cancelAnimationFrame(frameId);
+  }, []);
+
+  // In desktop app, disable default browser context menu to prevent crashes/freezes from WebView2 options
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu, { capture: true });
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu, { capture: true });
+    };
   }, []);
 
   // Prime audio playback across all platforms (PC Web, Desktop Tauri, Android, iOS Safari)
@@ -175,7 +197,7 @@ function App() {
       {isTauri() && (
         <TitleBar
           roomId={joined ? roomId : undefined}
-          onCheckUpdates={() => checkForUpdates(true)}
+          onCheckUpdates={handleCheckUpdates}
         />
       )}
       <div className="flex-1 min-h-0 w-full relative flex flex-col overflow-hidden">
@@ -190,7 +212,7 @@ function App() {
             onCreateRoom={handleCreateRoom}
             onJoinRoom={handleJoinRoom}
             deviceState={audioDevices}
-            onCheckUpdates={() => checkForUpdates(true)}
+            onCheckUpdates={handleCheckUpdates}
           />
         ) : (
           <VoiceChatScreen
@@ -205,7 +227,7 @@ function App() {
       {/* Global Update Modal (Web & Tauri Desktop) */}
       <UpdateModal
         isOpen={isUpdateModalOpen}
-        onClose={() => setIsUpdateModalOpen(false)}
+        onClose={handleCloseUpdateModal}
         status={updateStatus}
         updateInfo={updateInfo}
         downloadProgress={downloadProgress}
@@ -214,7 +236,7 @@ function App() {
         error={updateError}
         isPortable={isPortable}
         onInstall={installUpdate}
-        onCheckAgain={() => checkForUpdates(true)}
+        onCheckAgain={handleCheckUpdates}
       />
     </div>
   );

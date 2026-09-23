@@ -60,6 +60,19 @@ export function useAppUpdater() {
   const checkForUpdates = useCallback(async (manual = false) => {
     setStatus('checking');
     setError(null);
+    if (manual) {
+      setIsModalOpen(true);
+    }
+
+    const checkStartTime = Date.now();
+    const waitMinDisplay = async () => {
+      if (manual) {
+        const elapsed = Date.now() - checkStartTime;
+        if (elapsed < 650) {
+          await new Promise((r) => setTimeout(r, 650 - elapsed));
+        }
+      }
+    };
 
     try {
       if (isTauri()) {
@@ -69,6 +82,7 @@ export function useAppUpdater() {
           const { check } = await import('@tauri-apps/plugin-updater');
           const update = await check();
           if (update && update.available) {
+            await waitMinDisplay();
             tauriUpdateObjRef.current = update;
             const portableUrl = String((update as any).rawJson?.portable_url || `https://github.com/railenine/voice-chat/releases/download/v${update.version}/voice-chat.exe`);
             setUpdateInfo({
@@ -95,6 +109,7 @@ export function useAppUpdater() {
               const data = await res.json();
               const serverVersion = data.version;
               if (serverVersion && isNewerVersion(serverVersion, APP_VERSION)) {
+                await waitMinDisplay();
                 setUpdateInfo({
                   version: serverVersion,
                   currentVersion: APP_VERSION,
@@ -131,6 +146,7 @@ export function useAppUpdater() {
           }
 
           if (serverVersion && isNewerVersion(serverVersion, APP_VERSION)) {
+            await waitMinDisplay();
             setUpdateInfo({
               version: serverVersion,
               currentVersion: APP_VERSION,
@@ -145,11 +161,13 @@ export function useAppUpdater() {
         }
       }
 
+      await waitMinDisplay();
       setStatus('up-to-date');
       if (manual) {
         setIsModalOpen(true);
       }
     } catch (e: any) {
+      await waitMinDisplay();
       console.error('[Updater] Error:', e);
       setStatus('error');
       setError(e.message || 'Не удалось проверить наличие обновлений');

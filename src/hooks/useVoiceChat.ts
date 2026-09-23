@@ -1257,6 +1257,7 @@ export function useVoiceChat({
             streamRef.current = mediaStreamDest.stream;
 
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const remoteDataArray = new Uint8Array(128);
 
             vadIntervalRef.current = setInterval(() => {
               const now = Date.now();
@@ -1308,7 +1309,6 @@ export function useVoiceChat({
               }
 
               // 2. Remote peers VAD: autonomous local AnalyserNode + fallback to getSynchronizationSources
-              const remoteDataArray = new Uint8Array(128);
               peerConnectionsRef.current.forEach((pc, remotePeerId) => {
                 const peerInfo = peersInfoRef.current.get(remotePeerId);
                 if (!peerInfo) return;

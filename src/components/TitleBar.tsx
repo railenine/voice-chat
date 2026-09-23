@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Mic } from 'lucide-react';
 import { isTauri, APP_VERSION } from '../config';
 import { Tooltip } from './Tooltip';
@@ -8,14 +8,23 @@ interface TitleBarProps {
   onCheckUpdates?: () => void;
 }
 
-export const TitleBar: React.FC<TitleBarProps> = ({ roomId, onCheckUpdates }) => {
+let cachedInvoke: (<T>(command: string, args?: Record<string, any>) => Promise<T>) | null = null;
+async function getTauriInvoke() {
+  if (!cachedInvoke) {
+    const mod = await import('@tauri-apps/api/core');
+    cachedInvoke = mod.invoke;
+  }
+  return cachedInvoke;
+}
+
+export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates }) => {
   const [isMaximized, setIsMaximized] = useState(false);
 
-  // Invoke helper with graceful fallback
+  // Invoke helper with cached import and graceful fallback
   const invokeCommand = useCallback(async <T = any>(command: string, args?: Record<string, any>): Promise<T | null> => {
     if (!isTauri()) return null;
     try {
-      const { invoke } = await import('@tauri-apps/api/core');
+      const invoke = await getTauriInvoke();
       return await invoke<T>(command, args);
     } catch (err) {
       console.warn(`[TitleBar] Failed to invoke '${command}':`, err);
@@ -23,7 +32,7 @@ export const TitleBar: React.FC<TitleBarProps> = ({ roomId, onCheckUpdates }) =>
     }
   }, []);
 
-  // Check initial maximized state
+  // Check initial maximized state & listen for resize events with rAF throttling
   useEffect(() => {
     if (!isTauri()) return;
     invokeCommand<boolean>('is_window_maximized').then((res) => {
@@ -32,16 +41,24 @@ export const TitleBar: React.FC<TitleBarProps> = ({ roomId, onCheckUpdates }) =>
       }
     });
 
+    let resizeRafId: number | null = null;
     const handleResize = () => {
-      invokeCommand<boolean>('is_window_maximized').then((res) => {
-        if (typeof res === 'boolean') {
-          setIsMaximized(res);
-        }
+      if (resizeRafId !== null) return;
+      resizeRafId = requestAnimationFrame(() => {
+        resizeRafId = null;
+        invokeCommand<boolean>('is_window_maximized').then((res) => {
+          if (typeof res === 'boolean') {
+            setIsMaximized(res);
+          }
+        });
       });
     };
 
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
+    };
   }, [invokeCommand]);
 
   const handleMinimize = async (e: React.MouseEvent) => {
@@ -179,4 +196,6 @@ export const TitleBar: React.FC<TitleBarProps> = ({ roomId, onCheckUpdates }) =>
       </div>
     </div>
   );
-};
+});
+
+TitleBar.displayName = 'TitleBar';

@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { Settings2, ChevronDown, Dices, Mic, LogIn, Lock } from 'lucide-react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { AudioDeviceSettings } from './AudioDeviceSettings';
-import { extractRoomId } from '../utils/nicknames';
+import { extractRoomId, generateNickname } from '../utils/nicknames';
 import { APP_VERSION } from '../config';
 import { Tooltip } from './Tooltip';
 import { JellyBackground } from './JellyBackground';
@@ -20,7 +20,7 @@ interface LobbyScreenProps {
   onCheckUpdates?: () => void;
 }
 
-export const LobbyScreen: React.FC<LobbyScreenProps> = ({
+export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
   nickname,
   setNickname,
   mode,
@@ -88,9 +88,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        const adjectives = ['Быстрый', 'Тихий', 'Мудрый', 'Смелый', 'Весёлый', 'Добрый', 'Храбрый', 'Ловкий', 'Грозный', 'Спокойный', 'Яркий', 'Тёмный', 'Золотой', 'Серебряный', 'Огненный'];
-                        const animals = ['Волк', 'Тигр', 'Орёл', 'Дракон', 'Феникс', 'Лев', 'Медведь', 'Ястреб', 'Пантера', 'Лис', 'Кот', 'Пёс', 'Сова', 'Дельфин', 'Кит'];
-                        const newNick = `${adjectives[Math.floor(Math.random() * adjectives.length)]}${animals[Math.floor(Math.random() * animals.length)]}${Math.floor(Math.random() * 100)}`;
+                        const newNick = generateNickname();
                         setNickname(newNick);
                         try {
                           sessionStorage.setItem('voicechat-nickname', newNick);
@@ -239,4 +237,6 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
       </div>
     </>
   );
-};
+});
+
+LobbyScreen.displayName = 'LobbyScreen';

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 
 export interface TooltipProps {
@@ -12,7 +12,7 @@ export interface TooltipProps {
   disabled?: boolean;
 }
 
-export const Tooltip: React.FC<TooltipProps> = ({
+export const Tooltip: React.FC<TooltipProps> = memo(({
   content,
   description,
   hotkey,
@@ -172,4 +172,6 @@ export const Tooltip: React.FC<TooltipProps> = ({
         )}
     </>
   );
-};
+});
+
+Tooltip.displayName = 'Tooltip';

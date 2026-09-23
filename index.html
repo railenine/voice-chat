@@ -169,6 +169,15 @@
     </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // Disable default WebView2 browser context menu on desktop to prevent hangs
+      if (typeof window !== 'undefined') {
+        window.addEventListener('contextmenu', function(e) {
+          if ('__TAURI_INTERNALS__' in window || '__TAURI__' in window) {
+            e.preventDefault();
+          }
+        }, { capture: true });
+      }
+
       setTimeout(function() {
         var r = document.getElementById('root');
         if (r && !r.classList.contains('app-loaded')) {

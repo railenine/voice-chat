@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useVoiceChat } from '../hooks/useVoiceChat';
 import {
@@ -52,7 +52,7 @@ interface VoiceChatScreenProps {
   onLeave?: () => void;
 }
 
-export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
+export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
   nickname,
   roomId,
   deviceState,
@@ -1797,4 +1797,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
         )}
     </>
   );
-};
+});
+
+VoiceChatScreen.displayName = 'VoiceChatScreen';

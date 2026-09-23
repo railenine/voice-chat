@@ -165,19 +165,23 @@ export function useAudioDevices() {
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       setIsTestingMic(true);
 
-      const checkVolume = () => {
+      let lastUpdate = 0;
+      const checkVolume = (now: number) => {
         analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < dataArray.length; i++) {
-          sum += dataArray[i];
+        if (now - lastUpdate >= 45) {
+          lastUpdate = now;
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            sum += dataArray[i];
+          }
+          const avg = sum / dataArray.length;
+          // Normalize 0 to 100
+          const level = Math.min(100, Math.round((avg / 128) * 100));
+          setMicVolume(level);
         }
-        const avg = sum / dataArray.length;
-        // Normalize 0 to 100
-        const level = Math.min(100, Math.round((avg / 128) * 100));
-        setMicVolume(level);
         testAnimFrameRef.current = requestAnimationFrame(checkVolume);
       };
-      checkVolume();
+      testAnimFrameRef.current = requestAnimationFrame(checkVolume);
     } catch (err) {
       console.warn('[AudioDevices] Failed to start mic test:', err);
       stopMicTest();

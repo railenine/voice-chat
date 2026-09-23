@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { MessageSquare, Send } from 'lucide-react';
 import { ChatMessage } from '../hooks/useVoiceChat';
 import { Tooltip } from './Tooltip';
@@ -14,7 +14,7 @@ interface ChatPanelProps {
   participantCount?: number;
 }
 
-export const ChatPanel: React.FC<ChatPanelProps> = ({
+export const ChatPanel: React.FC<ChatPanelProps> = memo(({
   roomId,
   messages,
   myPeerId,
@@ -187,4 +187,6 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
       </form>
     </div>
   );
-};
+});
+
+ChatPanel.displayName = 'ChatPanel';

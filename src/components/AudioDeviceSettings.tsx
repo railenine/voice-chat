@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { Mic, Volume2, Play, Square } from 'lucide-react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { Tooltip } from './Tooltip';
@@ -8,7 +8,7 @@ interface AudioDeviceSettingsProps {
   compact?: boolean;
 }
 
-export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = ({
+export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
   deviceState,
   compact = false,
 }) => {
@@ -152,4 +152,6 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = ({
       </div>
     </div>
   );
-};
+});
+
+AudioDeviceSettings.displayName = 'AudioDeviceSettings';
