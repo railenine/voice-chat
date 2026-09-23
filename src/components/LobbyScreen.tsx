@@ -198,7 +198,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
                     setJoinRoomId(extractRoomId(text));
                   }}
                   placeholder="ID КОМНАТЫ ИЛИ ССЫЛКА"
-                  className="w-full py-2.5 px-3 sm:px-4 compact-h-input bg-white/10 border border-white/20 rounded-xl text-white text-center text-xs sm:text-base font-mono tracking-wider sm:tracking-widest placeholder:text-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 mb-3 transition-colors"
+                  className="w-full py-2.5 px-3 sm:px-4 compact-h-input bg-white/10 border border-white/20 rounded-xl text-white text-center text-base font-mono tracking-wider sm:tracking-widest placeholder:text-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 mb-3 transition-colors"
                   maxLength={128}
                 />
                 <button

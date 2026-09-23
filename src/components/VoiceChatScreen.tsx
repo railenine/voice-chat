@@ -28,11 +28,13 @@ import {
   Copy,
   UserPlus,
   AppWindow,
+  MessageSquare,
   Monitor,
   AlertTriangle,
   Shield,
   Info,
   Volume1,
+  Settings,
 } from 'lucide-react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { AudioDeviceSettings } from './AudioDeviceSettings';
@@ -159,7 +161,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
 
   const [showHotkeyModal, setShowHotkeyModal] = useState(false);
   const [showAudioModal, setShowAudioModal] = useState(false);
-  const [showMobileDrawer, setShowMobileDrawer] = useState(false);
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
   const isPipSupported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
@@ -262,7 +263,38 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
   const shareTimerRef = useRef<number | null>(null);
   const [myNickname, setMyNickname] = useState(nickname);
   const [isEditingNick, setIsEditingNick] = useState(false);
+  const [isMobileEditingNick, setIsMobileEditingNick] = useState(false);
   const [newNickInput, setNewNickInput] = useState(nickname);
+
+  // Selected peer for mobile volume modal
+  const [selectedMobilePeer, setSelectedMobilePeer] = useState<any | null>(null);
+
+  const getInitials = useCallback((name: string) => {
+    if (!name) return '?';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }, []);
+
+  const getAvatarGradient = useCallback((idOrName: string) => {
+    const gradients = [
+      'from-blue-600 to-indigo-800',
+      'from-violet-600 to-purple-800',
+      'from-cyan-600 to-blue-800',
+      'from-emerald-600 to-teal-800',
+      'from-amber-600 to-orange-800',
+      'from-rose-600 to-pink-800',
+      'from-fuchsia-600 to-indigo-800',
+    ];
+    let hash = 0;
+    for (let i = 0; i < idOrName.length; i++) {
+      hash = idOrName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % gradients.length;
+    return gradients[index];
+  }, []);
 
   const closeShare = useCallback(() => {
     if (shareTimerRef.current) {
@@ -696,68 +728,35 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
           </div>
         </div>
 
-        {/* Reimagined Unified Mobile Header (< 1024px) */}
-        <header className="lg:hidden px-3 py-2 border-b border-white/10 backdrop-blur-md bg-slate-950/70 flex items-center justify-between gap-2.5 flex-shrink-0 z-20">
-          {/* Left: Single Participants Button & Room Info */}
+        {/* Reimagined Unified Mobile Header (< 1024px) with Safe-Area Padding */}
+        <header
+          style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
+          className="lg:hidden px-3.5 pb-2.5 pt-2 border-b border-white/10 backdrop-blur-md bg-slate-950/80 flex items-center justify-between gap-2.5 flex-shrink-0 z-20"
+        >
+          {/* Left: Branding & Room Info */}
           <div className="flex items-center gap-2.5 min-w-0">
-            {/* Participants Pill Button */}
-            <Tooltip content="Участники" description="Список участников и настройки комнаты" position="bottom">
-              <button
-                type="button"
-                onClick={() => setShowMobileDrawer(true)}
-                className="px-2.5 py-1.5 bg-white/5 hover:bg-white/10 active:scale-95 border border-white/15 rounded-xl flex items-center gap-1.5 text-white transition-all shadow-sm flex-shrink-0"
-              >
-                <Users className="w-3.5 h-3.5 text-blue-400" />
-                <span className="font-mono text-xs font-bold text-blue-400">
-                  {peers.length + 1}
-                </span>
-                {peers.length + 1 >= 8 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-                )}
-              </button>
-            </Tooltip>
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white shadow-md flex-shrink-0">
+              <Volume2 className="w-4 h-4" />
+            </div>
 
-            {/* Room Branding & Live Status */}
-            <div className="min-w-0 flex flex-col justify-center">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs sm:text-sm font-bold text-white tracking-tight">VoiceChat</span>
-                <Tooltip content="Скопировать ссылку" description="Скопировать ссылку на комнату в буфер" position="bottom">
-                  <button
-                    type="button"
-                    onClick={copyRoomId}
-                    className="text-[10px] text-gray-400 hover:text-blue-300 font-mono transition-colors flex items-center gap-1 truncate"
-                  >
-                    <span className="truncate">#{roomId}</span>
-                    {copied ? (
-                      <span className="text-[9px] text-green-400 font-sans font-medium flex items-center gap-0.5 flex-shrink-0">
-                        <Check className="w-2.5 h-2.5" /> скопировано
-                      </span>
-                    ) : (
-                      <Copy className="w-2.5 h-2.5 text-gray-500 opacity-60 hover:opacity-100 flex-shrink-0" />
-                    )}
-                  </button>
-                </Tooltip>
-              </div>
-
-              {/* Dynamic Live Speech / Room Status Subtitle */}
-              <div className="flex items-center gap-1 text-[11px] min-w-0 mt-0.5">
-                {!isConnected ? (
-                  <span className="text-yellow-400 animate-pulse truncate flex items-center gap-1 text-[10px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 flex-shrink-0"></span>
-                    <span className="truncate">{connectionStatus}</span>
-                  </span>
-                ) : activeSpeakers.length > 0 ? (
-                  <span className="text-green-400 font-medium truncate flex items-center gap-1 text-[10px]">
-                    <Volume2 className="w-3 h-3 text-green-400 flex-shrink-0 animate-pulse" />
-                    <span className="truncate">{activeSpeakers.join(', ')}</span>
-                  </span>
-                ) : (
-                  <span className="text-gray-400 text-[10px] truncate flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/60 flex-shrink-0"></span>
-                    <span className="truncate">Тишина в комнате</span>
-                  </span>
-                )}
-              </div>
+            <div className="min-w-0 flex items-center gap-2">
+              <span className="text-sm font-bold text-white tracking-tight">VoiceChat</span>
+              <Tooltip content="Скопировать ссылку" description="Скопировать ссылку на комнату в буфер" position="bottom">
+                <button
+                  type="button"
+                  onClick={copyRoomId}
+                  className="text-xs text-gray-400 hover:text-blue-300 font-mono transition-colors flex items-center gap-1 truncate"
+                >
+                  <span className="truncate">#{roomId}</span>
+                  {copied ? (
+                    <span className="text-[10px] text-green-400 font-sans font-medium flex items-center gap-0.5 flex-shrink-0">
+                      <Check className="w-2.5 h-2.5" /> скопировано
+                    </span>
+                  ) : (
+                    <Copy className="w-2.5 h-2.5 text-gray-500 opacity-60 hover:opacity-100 flex-shrink-0" />
+                  )}
+                </button>
+              </Tooltip>
             </div>
           </div>
 
@@ -769,7 +768,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                   onClick={() => setShowAudioModal(true)}
                   className="p-2 text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 active:scale-95 rounded-xl border border-white/10 text-xs transition-all flex items-center justify-center"
                 >
-                  <Headphones className="w-4 h-4" />
+                  <Settings className="w-4 h-4" />
                 </button>
               </Tooltip>
             )}
@@ -787,6 +786,171 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
             </Tooltip>
           </div>
         </header>
+
+        {/* Clubhouse-Style Mobile Participants Card (< 1024px) */}
+        <div className="lg:hidden px-2 pt-2 sm:px-4 sm:pt-4 flex-shrink-0 z-10">
+          <div className="bg-slate-950/40 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl px-3 py-2 sm:px-4 sm:py-2.5 overflow-hidden">
+            <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar py-2.5 px-1">
+              {/* 1. Self Participant Circle */}
+              <Tooltip
+                content={myNickname}
+                description="Нажмите, чтобы изменить свой никнейм"
+                position="bottom"
+              >
+                <div
+                  onClick={() => {
+                    setNewNickInput(myNickname);
+                    setIsMobileEditingNick(true);
+                  }}
+                  className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform"
+                >
+                  <div className="relative">
+                    <div
+                      className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-md transition-all ${
+                        isSpeaking && !isMuted
+                          ? 'bg-gradient-to-br from-emerald-600 to-teal-800 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 shadow-emerald-500/40 animate-pulse scale-105 text-white'
+                          : isDeafened
+                          ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
+                          : isMuted
+                          ? 'bg-white/10 border border-white/15 text-gray-400'
+                          : 'bg-gradient-to-br from-blue-600 to-indigo-800 border border-blue-400/30 text-white'
+                      }`}
+                    >
+                      {getInitials(myNickname)}
+                    </div>
+
+                    {/* Hover Edit Pencil Overlay on Avatar */}
+                    <div className="absolute inset-0 rounded-full bg-slate-950/70 backdrop-blur-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-inner">
+                      <Pencil className="w-4 h-4 text-white drop-shadow-md" />
+                    </div>
+
+                    {/* Status Badge in corner */}
+                    {isDeafened ? (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
+                        <VolumeX className="w-2.5 h-2.5" />
+                      </span>
+                    ) : isMuted ? (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
+                        <MicOff className="w-2.5 h-2.5" />
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-col items-center gap-0.5 mt-0.5">
+                    <span
+                      className={`text-[11px] font-semibold truncate max-w-[68px] text-center ${
+                        isSpeaking && !isMuted ? 'text-emerald-400' : 'text-blue-300'
+                      }`}
+                    >
+                      {myNickname}
+                    </span>
+                    <div className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-blue-500/20 border border-blue-500/30 text-blue-300 flex items-center justify-center">
+                      Вы
+                    </div>
+                  </div>
+                </div>
+              </Tooltip>
+
+              {/* 2. Remote Peers Circles */}
+              {peers.map((peer) => {
+                const vol = peerVolumes[peer.peerId] ?? 100;
+                const isPeerSpeaking = peer.isSpeaking && !peer.isMuted && !peer.isDeafened;
+                const gradient = getAvatarGradient(peer.peerId || peer.nickname);
+
+                return (
+                  <Tooltip
+                    key={peer.peerId}
+                    content={peer.nickname}
+                    description={`Громкость: ${vol}%. Нажмите для настройки звука`}
+                    position="bottom"
+                  >
+                    <div
+                      onClick={() => setSelectedMobilePeer(peer)}
+                      className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform"
+                    >
+                      <div className="relative">
+                        <div
+                          className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-md transition-all ${
+                            isPeerSpeaking
+                              ? 'bg-gradient-to-br from-emerald-600 to-teal-800 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 shadow-emerald-500/40 animate-pulse scale-105 text-white'
+                              : peer.isDeafened
+                              ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
+                              : peer.isMuted
+                              ? 'bg-white/10 border border-white/15 text-gray-400'
+                              : `bg-gradient-to-br ${gradient} border border-white/20 text-white`
+                          }`}
+                        >
+                          {getInitials(peer.nickname)}
+                        </div>
+
+                        {/* Hover Settings Gear Overlay on Avatar */}
+                        <div className="absolute inset-0 rounded-full bg-slate-950/70 backdrop-blur-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-inner">
+                          <Settings className="w-5 h-5 text-white drop-shadow-md" />
+                        </div>
+
+                        {/* Status Badge in corner */}
+                        {peer.isDeafened ? (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
+                            <VolumeX className="w-2.5 h-2.5" />
+                          </span>
+                        ) : peer.isMuted ? (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
+                            <MicOff className="w-2.5 h-2.5" />
+                          </span>
+                        ) : null}
+                      </div>
+
+                      <div className="flex flex-col items-center gap-0.5 mt-0.5">
+                        <span
+                          className={`text-[11px] font-medium truncate max-w-[68px] text-center ${
+                            isPeerSpeaking ? 'text-emerald-400 font-semibold' : 'text-gray-200'
+                          }`}
+                        >
+                          {peer.nickname}
+                        </span>
+                        <div
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-semibold flex items-center justify-center border transition-all ${
+                            vol === 0
+                              ? 'bg-red-500/20 border-red-500/30 text-red-300'
+                              : vol > 100
+                              ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400 font-bold'
+                              : 'bg-white/10 border-white/10 text-gray-300 group-hover:bg-white/15 group-hover:text-white'
+                          }`}
+                        >
+                          {vol === 0 ? '0%' : `${vol}%`}
+                        </div>
+                      </div>
+                    </div>
+                  </Tooltip>
+                );
+              })}
+
+              {/* 3. Invite Button */}
+              <Tooltip
+                content="Пригласить друга"
+                description={copied ? "Ссылка уже в буфере обмена!" : "Скопировать ссылку на комнату"}
+                position="bottom"
+              >
+                <div
+                  onClick={copyRoomId}
+                  className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform"
+                >
+                  <div className="w-12 h-12 rounded-full border border-dashed border-white/25 bg-white/5 hover:bg-white/10 flex items-center justify-center text-blue-400 group-hover:text-blue-300 transition-colors shadow-sm">
+                    {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <UserPlus className="w-5 h-5" />}
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5 mt-0.5">
+                    <span className="text-[11px] text-gray-400 group-hover:text-blue-300 font-medium truncate max-w-[68px] text-center transition-colors">
+                      {copied ? 'Готово' : '+ Друг'}
+                    </span>
+                    <div className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-white/5 border border-white/10 text-gray-400 group-hover:border-blue-400/30 group-hover:text-blue-300">
+                      Инвайт
+                    </div>
+                  </div>
+                </div>
+              </Tooltip>
+            </div>
+          </div>
+        </div>
 
         {/* Desktop & Main Content Split (Option 3 Layout) */}
         <div className="flex-1 flex min-h-0 overflow-hidden relative">
@@ -813,7 +977,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                       onClick={() => setShowAudioModal(true)}
                       className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex items-center justify-center"
                     >
-                      <Headphones className="w-4 h-4" />
+                      <Settings className="w-4 h-4" />
                     </button>
                   </Tooltip>
                 )}
@@ -1004,21 +1168,23 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
           </aside>
 
           {/* MAIN CHAT AREA (Full height, center on desktop, full screen on mobile) */}
-          <main className="flex-1 flex flex-col min-w-0 p-2 sm:p-4 lg:p-5 overflow-hidden">
+          <main className="flex-1 flex flex-col min-w-0 p-2 pt-2 sm:p-4 sm:pt-3 lg:p-5 overflow-hidden">
             <ChatPanel
               roomId={roomId}
               messages={messages}
               myPeerId={myPeerId}
               onSendMessage={sendChatMessage}
-              onOpenMobileDrawer={() => setShowMobileDrawer(true)}
               participantCount={peers.length + 1}
               className="flex-1 min-h-0"
             />
           </main>
         </div>
 
-        {/* Mobile Sticky Bottom Controls (< 1024px) */}
-        <div className="lg:hidden p-2.5 sm:p-3 bg-black/50 backdrop-blur-md border-t border-white/10 flex items-center justify-center gap-2.5 sm:gap-3 flex-shrink-0 z-20">
+        {/* Mobile Sticky Bottom Controls (< 1024px) with Safe-Area Inset */}
+        <div
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.625rem)' }}
+          className="lg:hidden p-2.5 sm:p-3 bg-black/50 backdrop-blur-md border-t border-white/10 flex items-center justify-center gap-2.5 sm:gap-3 flex-shrink-0 z-20"
+        >
           <Tooltip
             content={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
             description={isMuted ? 'Включить передачу вашего голоса' : 'Отключить передачу звука'}
@@ -1093,84 +1259,168 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
             </button>
           </Tooltip>
         </div>
+      </div>
 
-        {/* Mobile Slide-Over Drawer for Participants (< 1024px) */}
-        {showMobileDrawer && (
-          <div
-            className="lg:hidden absolute inset-0 z-40 flex bg-black/70 backdrop-blur-sm animate-fade-in"
-            onClick={() => setShowMobileDrawer(false)}
-          >
-            <div
-              className="w-4/5 max-w-sm h-full bg-slate-900/95 border-r border-white/20 p-4 flex flex-col shadow-2xl space-y-4 animate-slide-in select-none"
-              onClick={(e) => e.stopPropagation()}
+      {/* Mobile Peer Volume Modal */}
+      {selectedMobilePeer && (
+        <Modal
+          isOpen={true}
+          onClose={() => setSelectedMobilePeer(null)}
+        >
+          <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-5 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Volume2 className="w-5 h-5 text-blue-400" />
+              <h3 className="font-bold text-sm sm:text-base">Громкость: {selectedMobilePeer.nickname}</h3>
+            </div>
+            <button
+              onClick={() => setSelectedMobilePeer(null)}
+              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
+              title="Закрыть"
             >
-              {/* Drawer Header */}
-              <div className="flex items-center justify-between border-b border-white/10 pb-3">
-                <div className="flex items-center gap-2">
-                  <Users className="w-5 h-5 text-blue-400" />
-                  <h3 className="font-bold text-sm sm:text-base text-white">Участники ({peers.length + 1})</h3>
-                  {peers.length + 1 >= 8 && (
-                    <span
-                      className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono"
-                      title="В комнате более 8 участников. P2P mesh-сеть передаёт аудио напрямую каждому участнику."
-                    >
-                      Mesh P2P (8+)
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={() => setShowMobileDrawer(false)}
-                  className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
-                  title="Закрыть"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
+              <X className="w-5 h-5" />
+            </button>
+          </div>
 
-              {/* Drawer Content */}
-              <div className="flex-1 overflow-y-auto space-y-3 min-h-0 pr-1">
-                {renderParticipantList()}
+          <div className="modal-content-scroll p-4 sm:p-5 space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+              <div
+                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-base bg-gradient-to-br ${getAvatarGradient(
+                  selectedMobilePeer.peerId || selectedMobilePeer.nickname
+                )} text-white`}
+              >
+                {getInitials(selectedMobilePeer.nickname)}
               </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-white font-semibold text-sm truncate">{selectedMobilePeer.nickname}</p>
+                <p className="text-xs text-gray-400">
+                  {selectedMobilePeer.isDeafened
+                    ? 'Заглушил весь звук'
+                    : selectedMobilePeer.isMuted
+                    ? 'Микрофон отключен'
+                    : selectedMobilePeer.isSpeaking
+                    ? 'Говорит прямо сейчас'
+                    : 'В комнате'}
+                </p>
+              </div>
+            </div>
 
-              {/* Drawer Quick Actions */}
-              <div className="pt-2 border-t border-white/10 space-y-2">
-                <button
-                  onClick={() => {
-                    setShowMobileDrawer(false);
-                    triggerShare();
-                  }}
-                  className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs flex items-center justify-center gap-2 text-gray-300 hover:text-white transition-colors"
-                >
-                  <Share2 className="w-4 h-4 text-blue-400" />
-                  <span>Поделиться ссылкой на комнату</span>
-                </button>
-                {deviceState && (
-                  <button
-                    onClick={() => {
-                      setShowMobileDrawer(false);
-                      setShowAudioModal(true);
-                    }}
-                    className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs flex items-center justify-center gap-2 text-gray-300 hover:text-white transition-colors"
-                  >
-                    <Headphones className="w-4 h-4 text-purple-400" />
-                    <span>Настройка звуковых устройств</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    setShowMobileDrawer(false);
-                    setShowHotkeyModal(true);
-                  }}
-                  className="w-full py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-xs flex items-center justify-center gap-2 text-gray-300 hover:text-white transition-colors"
-                >
-                  <Keyboard className="w-4 h-4 text-amber-400" />
-                  <span>Горячие клавиши [{muteHotkey.label} / {deafenHotkey.label}]</span>
-                </button>
+            {/* Volume slider */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-gray-300">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Volume2 className="w-4 h-4 text-blue-400" />
+                  <span>Громкость участника</span>
+                </span>
+                <span className="font-mono font-bold text-blue-300">
+                  {peerVolumes[selectedMobilePeer.peerId] ?? 100}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="200"
+                value={peerVolumes[selectedMobilePeer.peerId] ?? 100}
+                onChange={(e) => setPeerVolume(selectedMobilePeer.peerId, Number(e.target.value))}
+                className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-white/15 accent-blue-500"
+              />
+              <div className="flex justify-between text-[10px] text-gray-500 font-mono">
+                <span>0% (Mute)</span>
+                <span>100% (Норма)</span>
+                <span>200% (Усиление)</span>
               </div>
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="flex items-center justify-between p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-black/20 rounded-b-2xl">
+            <button
+              type="button"
+              onClick={() => {
+                const current = peerVolumes[selectedMobilePeer.peerId] ?? 100;
+                setPeerVolume(selectedMobilePeer.peerId, current === 0 ? 100 : 0);
+              }}
+              className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+                (peerVolumes[selectedMobilePeer.peerId] ?? 100) === 0
+                  ? 'bg-red-500/20 text-red-300 border-red-500/30'
+                  : 'bg-white/5 text-gray-300 border-white/10 hover:text-white'
+              }`}
+            >
+              <VolumeX className="w-3.5 h-3.5" />
+              <span>{(peerVolumes[selectedMobilePeer.peerId] ?? 100) === 0 ? 'Включить звук' : 'Заглушить'}</span>
+            </button>
+            <button
+              onClick={() => setSelectedMobilePeer(null)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95"
+            >
+              Готово
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Nickname Edit Modal (Mobile Only) */}
+      {isMobileEditingNick && (
+        <Modal
+          isOpen={true}
+          onClose={() => setIsMobileEditingNick(false)}
+        >
+          <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-5 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Pencil className="w-5 h-5 text-blue-400" />
+              <h3 className="font-bold text-sm sm:text-base">Ваш никнейм</h3>
+            </div>
+            <button
+              onClick={() => setIsMobileEditingNick(false)}
+              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
+              title="Закрыть"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const trimmed = newNickInput.trim();
+              if (trimmed) {
+                changeNickname(trimmed);
+                setMyNickname(trimmed);
+                try {
+                  localStorage.setItem('voice_chat_nickname', trimmed);
+                } catch (err) {}
+                setIsMobileEditingNick(false);
+              }
+            }}
+          >
+            <div className="modal-content-scroll p-4 sm:p-5 space-y-3">
+              <label className="text-xs text-gray-400 block">Введите никнейм для отображения в комнате:</label>
+              <input
+                type="text"
+                value={newNickInput}
+                onChange={(e) => setNewNickInput(e.target.value)}
+                maxLength={24}
+                autoFocus
+                className="w-full py-2.5 px-3 bg-white/10 border border-white/20 rounded-xl text-white text-base focus:outline-none focus:border-blue-400"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-black/20 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => setIsMobileEditingNick(false)}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs sm:text-sm font-medium transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95"
+              >
+                Сохранить
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
 
       {/* Audio Devices Modal */}
       <Modal

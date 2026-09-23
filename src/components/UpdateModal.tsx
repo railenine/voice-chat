@@ -259,7 +259,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
           {status === 'downloaded' && (
             <button
               type="button"
-              onClick={onInstall}
+              onClick={() => onInstall()}
               className="w-full py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-xs font-semibold shadow-lg shadow-green-600/40 active:scale-95 transition-all"
             >
               Перезапустить сейчас

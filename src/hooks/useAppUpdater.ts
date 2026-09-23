@@ -70,7 +70,7 @@ export function useAppUpdater() {
           const update = await check();
           if (update && update.available) {
             tauriUpdateObjRef.current = update;
-            const portableUrl = update.rawJson?.portable_url || `https://github.com/railenine/voice-chat/releases/download/v${update.version}/voice-chat.exe`;
+            const portableUrl = String((update as any).rawJson?.portable_url || `https://github.com/railenine/voice-chat/releases/download/v${update.version}/voice-chat.exe`);
             setUpdateInfo({
               version: update.version,
               currentVersion: update.currentVersion || APP_VERSION,
@@ -260,6 +260,7 @@ export function useAppUpdater() {
     error,
     isModalOpen,
     setIsModalOpen,
+    isPortable,
     checkForUpdates,
     installUpdate,
   };

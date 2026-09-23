@@ -37,12 +37,22 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight <= threshold;
   };
 
+  // Safe scroll to bottom within the message container only (never scrolling window or ancestors)
+  const scrollToBottom = useCallback((smooth = true) => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: smooth ? 'smooth' : 'auto',
+    });
+  }, []);
+
   // Scroll to bottom when messages change if user was already at bottom
   useEffect(() => {
     if (isAtBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollToBottom(true);
     }
-  }, [messages]);
+  }, [messages, scrollToBottom]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +62,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
     setInputText('');
     isAtBottomRef.current = true;
     setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      scrollToBottom(true);
     }, 50);
   };
 
@@ -157,7 +167,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           onKeyDown={handleKeyDown}
           maxLength={1000}
           placeholder={`Сообщение в #${roomId}... (Enter для отправки)`}
-          className="flex-1 bg-white/5 hover:bg-white/[0.08] focus:bg-white/10 border border-white/10 focus:border-blue-500/50 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all"
+          className="flex-1 h-11 bg-white/5 hover:bg-white/[0.08] focus:bg-white/10 border border-white/10 focus:border-blue-500/50 rounded-xl px-3.5 text-base sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all"
         />
         <Tooltip
           content="Отправить сообщение"
@@ -169,9 +179,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <button
             type="submit"
             disabled={!inputText.trim()}
-            className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all flex items-center justify-center shadow-lg shadow-blue-600/30 active:scale-95 flex-shrink-0"
+            className="w-11 h-11 rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-all flex items-center justify-center shadow-lg shadow-blue-600/30 active:scale-95 flex-shrink-0"
           >
-            <Send className="w-4 h-4" />
+            <Send className="w-5 h-5" />
           </button>
         </Tooltip>
       </form>

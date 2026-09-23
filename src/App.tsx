@@ -117,8 +117,25 @@ function App() {
 
   const audioDevices = useAudioDevices();
 
+  // Prevent mobile window-level scrolling quirks
+  useEffect(() => {
+    const resetScroll = () => {
+      if (window.scrollY !== 0 || window.scrollX !== 0) {
+        window.scrollTo(0, 0);
+      }
+    };
+    window.addEventListener('resize', resetScroll);
+    window.addEventListener('orientationchange', resetScroll);
+    window.addEventListener('scroll', resetScroll);
+    return () => {
+      window.removeEventListener('resize', resetScroll);
+      window.removeEventListener('orientationchange', resetScroll);
+      window.removeEventListener('scroll', resetScroll);
+    };
+  }, []);
+
   return (
-    <div className="h-screen h-[100dvh] w-full flex flex-col overflow-hidden bg-slate-950 select-none">
+    <div className="h-full w-full flex flex-col overflow-hidden bg-slate-950 select-none">
       {isTauri() && (
         <TitleBar
           roomId={joined ? roomId : undefined}
