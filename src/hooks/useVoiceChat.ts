@@ -135,17 +135,31 @@ export function useVoiceChat({
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const isSettingRemoteAnswerPendingRef = useRef<Map<string, boolean>>(new Map());
   const failedRecoveryTimersRef = useRef<Map<string, any>>(new Map());
-  const rebuildPeerRef = useRef<(peerId: string) => void>(() => {});
+  const disconnectedTimersRef = useRef<Map<string, any>>(new Map());
+  const rebuildPeerRef = useRef<(peerId: string, notifyRemote?: boolean) => void>(() => {});
   const initDoneRef = useRef(false);
   const wasConnectedRef = useRef(false);
   const isIntentionalDisconnectRef = useRef(false);
   const reconnectTimerRef = useRef<any>(null);
   const iceServersRef = useRef<RTCIceServer[]>([
+    { urls: 'stun:rvxis.site:3478' },
+    {
+      urls: 'turn:rvxis.site:3478?transport=udp',
+      username: 'voicechat',
+      credential: 'VoiceChatSecret2026!',
+    },
+    {
+      urls: 'turn:rvxis.site:3478?transport=tcp',
+      username: 'voicechat',
+      credential: 'VoiceChatSecret2026!',
+    },
+    {
+      urls: 'turns:rvxis.site:5349?transport=tcp',
+      username: 'voicechat',
+      credential: 'VoiceChatSecret2026!',
+    },
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
   ]);
 
   // VAD refs
@@ -222,8 +236,9 @@ export function useVoiceChat({
     audioElementsRef.current.forEach((audio, peerId) => {
       const pVol = peerVolumesRef.current.get(peerId) ?? 100;
       const pMuted = pVol === 0;
-      audio.muted = isDeafenedRef.current ? true : pMuted;
-      audio.volume = Math.min(1.0, pVol / 100);
+      const hasWebAudio = !isIOS && gainNodesRef.current.has(peerId);
+      audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : pMuted);
+      audio.volume = hasWebAudio ? 0 : Math.min(1.0, pVol / 100);
       audio.play().then(() => {
         console.log(`[Audio] Unlocked playback for ${peerId}`);
         setNeedsAudioUnlock(false);
@@ -259,8 +274,9 @@ export function useVoiceChat({
       audioElementsRef.current.forEach((audio, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
         const pMuted = pVol === 0;
-        audio.muted = isDeafenedRef.current ? true : pMuted;
-        audio.volume = Math.min(1.0, pVol / 100);
+        const hasWebAudio = !isIOS && gainNodesRef.current.has(peerId);
+        audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : pMuted);
+        audio.volume = hasWebAudio ? 0 : Math.min(1.0, pVol / 100);
         if (audio.paused) {
           audio.play().then(() => {
             setNeedsAudioUnlock(false);
@@ -358,17 +374,18 @@ export function useVoiceChat({
       });
     }
 
-    // 2. Web Audio GainNode (provides boost for volume > 100% up to 200%)
+    // 2. Web Audio GainNode (provides full 0% to 200% volume for non-iOS)
     const gainNode = gainNodesRef.current.get(peerId);
     if (gainNode) {
-      gainNode.gain.value = isDeafenedRef.current ? 0 : Math.max(0, (clamped - 100) / 100);
+      gainNode.gain.value = isDeafenedRef.current ? 0 : clamped / 100;
     }
 
-    // 3. Audio element (primary sound emitter for 0% to 100%)
+    // 3. Audio element (only sound emitter for iOS; kept muted on non-iOS to prevent doubling)
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
-      audio.muted = isDeafenedRef.current ? true : isMuted;
-      audio.volume = Math.min(1.0, clamped / 100);
+      const hasWebAudio = !isIOS && Boolean(gainNode);
+      audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : isMuted);
+      audio.volume = hasWebAudio ? 0 : Math.min(1.0, clamped / 100);
     }
 
     const peerInfo = peersInfoRef.current.get(peerId);
@@ -382,6 +399,35 @@ export function useVoiceChat({
   // Handle incoming remote audio stream
   const handleRemoteStream = useCallback((peerId: string, stream: MediaStream) => {
     console.log(`[Audio] Received remote audio stream for peer: ${peerId}`);
+    const prevStream = remoteStreamsRef.current.get(peerId);
+    if (prevStream && prevStream.id !== stream.id) {
+      console.log(`[Audio] Stream changed for peer: ${peerId}, cleaning previous audio graph`);
+      const oldSource = peerSourceNodesRef.current.get(peerId);
+      if (oldSource) {
+        try { oldSource.disconnect(); } catch (e) {}
+        peerSourceNodesRef.current.delete(peerId);
+      }
+      const oldMerger = peerMergerNodesRef.current.get(peerId);
+      if (oldMerger) {
+        try { oldMerger.disconnect(); } catch (e) {}
+        peerMergerNodesRef.current.delete(peerId);
+      }
+      const oldGain = gainNodesRef.current.get(peerId);
+      if (oldGain) {
+        try { oldGain.disconnect(); } catch (e) {}
+        gainNodesRef.current.delete(peerId);
+      }
+      const oldComp = peerCompressorNodesRef.current.get(peerId);
+      if (oldComp) {
+        try { oldComp.disconnect(); } catch (e) {}
+        peerCompressorNodesRef.current.delete(peerId);
+      }
+      const oldAnalyser = remoteAnalysersRef.current.get(peerId);
+      if (oldAnalyser) {
+        try { oldAnalyser.disconnect(); } catch (e) {}
+        remoteAnalysersRef.current.delete(peerId);
+      }
+    }
     remoteStreamsRef.current.set(peerId, stream);
 
     const currentVol = peerVolumesRef.current.get(peerId) ?? 100;
@@ -408,7 +454,7 @@ export function useVoiceChat({
         peerMergerNodesRef.current.set(peerId, merger);
 
         gainNode = ctx.createGain();
-        gainNode.gain.value = currentVol / 100;
+        gainNode.gain.value = isDeafenedRef.current ? 0 : currentVol / 100;
         merger.connect(gainNode);
 
         // Dynamics compressor limiter to prevent clipping when boosted above 100%
@@ -428,11 +474,11 @@ export function useVoiceChat({
         merger.connect(remoteAnalyser);
         remoteAnalysersRef.current.set(peerId, remoteAnalyser);
 
-        // Web Audio GainNode & Limiter for boost above 100% (non-iOS only)
+        // Web Audio GainNode & Limiter for boost up to 200% (non-iOS only)
         if (!isIOS) {
           compressor.connect(ctx.destination);
           gainNodesRef.current.set(peerId, gainNode);
-          console.log(`[Audio] Web Audio GainNode & Limiter ready for peer ${peerId} (boost above 100%)`);
+          console.log(`[Audio] Web Audio GainNode & Limiter active for peer ${peerId} (0-200% volume)`);
         } else {
           gainNodesRef.current.set(peerId, gainNode);
           console.log(`[Audio] iOS detected: remote audio for ${peerId} will play exclusively via <audio> element`);
@@ -447,8 +493,10 @@ export function useVoiceChat({
         console.warn(`[Audio] Could not create Web Audio graph for ${peerId}, falling back to direct <audio>:`, err);
       }
     } else if (gainNode) {
-      gainNode.gain.value = isDeafenedRef.current ? 0 : Math.max(0, (currentVol - 100) / 100);
+      gainNode.gain.value = isDeafenedRef.current ? 0 : currentVol / 100;
     }
+
+    const hasWebAudio = !isIOS && Boolean(gainNodesRef.current.get(peerId));
 
     let audio = audioElementsRef.current.get(peerId);
     if (!audio) {
@@ -459,9 +507,10 @@ export function useVoiceChat({
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('webkit-playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
-      // <audio> element is the primary sound emitter for 0% to 100% volume
-      audio.muted = isDeafenedRef.current ? true : isMuted;
-      audio.volume = Math.min(1.0, currentVol / 100);
+      // On non-iOS with active Web Audio, <audio> element MUST be muted to prevent double playback / echo / cave effect!
+      // On iOS, <audio> element is the sole sound emitter.
+      audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : isMuted);
+      audio.volume = hasWebAudio ? 0 : Math.min(1.0, currentVol / 100);
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
       audio.style.top = '-9999px';
@@ -478,8 +527,8 @@ export function useVoiceChat({
         });
       }
     } else {
-      audio.muted = isDeafenedRef.current ? true : isMuted;
-      audio.volume = Math.min(1.0, currentVol / 100);
+      audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : isMuted);
+      audio.volume = hasWebAudio ? 0 : Math.min(1.0, currentVol / 100);
 
       if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
         (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
@@ -508,6 +557,9 @@ export function useVoiceChat({
     stream.getAudioTracks().forEach((track) => {
       track.onunmute = () => {
         console.log(`[Audio] Track unmuted for peer: ${peerId}`);
+        if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+          audioContextRef.current.resume().catch(() => {});
+        }
         playAudio();
       };
     });
@@ -561,6 +613,11 @@ export function useVoiceChat({
       clearTimeout(timer);
       failedRecoveryTimersRef.current.delete(peerId);
     }
+    const discTimer = disconnectedTimersRef.current.get(peerId);
+    if (discTimer) {
+      clearTimeout(discTimer);
+      disconnectedTimersRef.current.delete(peerId);
+    }
     pendingCandidatesRef.current.delete(peerId);
     isSettingRemoteAnswerPendingRef.current.delete(peerId);
 
@@ -590,7 +647,12 @@ export function useVoiceChat({
     if (pc) return pc;
 
     console.log(`[WebRTC] Creating RTCPeerConnection for: ${remotePeerId}`);
-    pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
+    pc = new RTCPeerConnection({
+      iceServers: iceServersRef.current,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
+      iceCandidatePoolSize: 2,
+    });
     peerConnectionsRef.current.set(remotePeerId, pc);
 
     // Polite peer determination (symmetric & deterministic)
@@ -643,38 +705,80 @@ export function useVoiceChat({
       handleRemoteStream(remotePeerId, remoteStream);
     };
 
-    // Connection & ICE state monitoring with automatic recovery for long sessions
+    // Connection & ICE state monitoring with automatic multi-tiered recovery (ICE restart + Coordinated Rebuild)
     const checkStateAndRecover = () => {
       const connState = pc!.connectionState;
       const iceState = pc!.iceConnectionState;
       console.log(`[WebRTC] Peer ${remotePeerId} state: conn=${connState}, ice=${iceState}`);
 
-      if (connState === 'failed' || iceState === 'failed') {
-        try {
-          pc!.restartIce();
-        } catch (e) {}
-
-        if (!failedRecoveryTimersRef.current.has(remotePeerId)) {
-          const timer = setTimeout(() => {
-            failedRecoveryTimersRef.current.delete(remotePeerId);
-            const currentPc = peerConnectionsRef.current.get(remotePeerId);
-            if (
-              currentPc &&
-              (currentPc.connectionState === 'failed' ||
-                currentPc.iceConnectionState === 'failed' ||
-                currentPc.connectionState === 'disconnected')
-            ) {
-              console.log(`[WebRTC] Auto-rebuilding failed connection for ${remotePeerId}...`);
-              rebuildPeerRef.current(remotePeerId);
-            }
-          }, 3500);
-          failedRecoveryTimersRef.current.set(remotePeerId, timer);
-        }
-      } else if (connState === 'connected' || iceState === 'connected') {
+      if (
+        connState === 'connected' ||
+        iceState === 'connected' ||
+        iceState === 'completed'
+      ) {
         const timer = failedRecoveryTimersRef.current.get(remotePeerId);
         if (timer) {
           clearTimeout(timer);
           failedRecoveryTimersRef.current.delete(remotePeerId);
+        }
+        const discTimer = disconnectedTimersRef.current.get(remotePeerId);
+        if (discTimer) {
+          clearTimeout(discTimer);
+          disconnectedTimersRef.current.delete(remotePeerId);
+        }
+        return;
+      }
+
+      // 1. If connection drops into 'disconnected', give it 2.5s grace period then attempt ICE restart
+      if (connState === 'disconnected' || iceState === 'disconnected') {
+        if (!disconnectedTimersRef.current.has(remotePeerId)) {
+          const discTimer = setTimeout(async () => {
+            disconnectedTimersRef.current.delete(remotePeerId);
+            const curPc = peerConnectionsRef.current.get(remotePeerId);
+            if (
+              curPc &&
+              (curPc.connectionState === 'disconnected' || curPc.iceConnectionState === 'disconnected')
+            ) {
+              console.log(`[WebRTC] Peer ${remotePeerId} disconnected >2.5s, triggering ICE restart...`);
+              try {
+                curPc.restartIce();
+                const offer = await curPc.createOffer({ iceRestart: true });
+                await curPc.setLocalDescription(offer);
+                const sdp = curPc.localDescription?.sdp ? optimizeAudioSdp(curPc.localDescription.sdp) : undefined;
+                sendWsMessage({
+                  type: 'signal',
+                  to: remotePeerId,
+                  data: {
+                    description: curPc.localDescription ? { type: curPc.localDescription.type, sdp } : undefined,
+                  },
+                });
+              } catch (e) {
+                console.warn(`[WebRTC] ICE restart failed for ${remotePeerId}:`, e);
+              }
+            }
+          }, 2500);
+          disconnectedTimersRef.current.set(remotePeerId, discTimer);
+        }
+      }
+
+      // 2. If connection is 'failed' or stays disconnected/failed for >5s, trigger coordinated rebuild
+      if (connState === 'failed' || iceState === 'failed') {
+        if (!failedRecoveryTimersRef.current.has(remotePeerId)) {
+          const timer = setTimeout(() => {
+            failedRecoveryTimersRef.current.delete(remotePeerId);
+            const curPc = peerConnectionsRef.current.get(remotePeerId);
+            if (
+              curPc &&
+              (curPc.connectionState === 'failed' ||
+                curPc.iceConnectionState === 'failed' ||
+                curPc.connectionState === 'disconnected' ||
+                curPc.iceConnectionState === 'disconnected')
+            ) {
+              console.log(`[WebRTC] Auto-rebuilding failed connection for ${remotePeerId} (coordinated)...`);
+              rebuildPeerRef.current(remotePeerId, true);
+            }
+          }, 3500);
+          failedRecoveryTimersRef.current.set(remotePeerId, timer);
         }
       }
     };
@@ -685,12 +789,28 @@ export function useVoiceChat({
     return pc;
   }, [sendWsMessage, handleRemoteStream]);
 
-  // Rebuild an unrecoverable peer connection
-  const rebuildPeer = useCallback((remotePeerId: string) => {
-    console.log(`[WebRTC] Rebuilding peer connection for ${remotePeerId}`);
+  // Rebuild an unrecoverable peer connection (supports coordinated reset with remote peer)
+  const rebuildPeer = useCallback((remotePeerId: string, notifyRemote = false) => {
+    console.log(`[WebRTC] Rebuilding peer connection for ${remotePeerId} (notifyRemote=${notifyRemote})`);
+
+    if (notifyRemote) {
+      sendWsMessage({
+        type: 'signal',
+        to: remotePeerId,
+        data: { reconnect: true },
+      });
+    }
+
     const oldPc = peerConnectionsRef.current.get(remotePeerId);
     if (oldPc) {
-      try { oldPc.close(); } catch (e) {}
+      try {
+        oldPc.onconnectionstatechange = null;
+        oldPc.oniceconnectionstatechange = null;
+        oldPc.onicecandidate = null;
+        oldPc.ontrack = null;
+        oldPc.onnegotiationneeded = null;
+        oldPc.close();
+      } catch (e) {}
       peerConnectionsRef.current.delete(remotePeerId);
     }
     makingOfferRef.current.delete(remotePeerId);
@@ -698,16 +818,36 @@ export function useVoiceChat({
     isSettingRemoteAnswerPendingRef.current.delete(remotePeerId);
     pendingCandidatesRef.current.delete(remotePeerId);
 
-    const newPc = getOrCreatePeerConnection(remotePeerId);
-    if (newPc && newPc.onnegotiationneeded) {
-      newPc.onnegotiationneeded(new Event('negotiationneeded'));
+    const timer = failedRecoveryTimersRef.current.get(remotePeerId);
+    if (timer) {
+      clearTimeout(timer);
+      failedRecoveryTimersRef.current.delete(remotePeerId);
     }
-  }, [getOrCreatePeerConnection]);
+    const discTimer = disconnectedTimersRef.current.get(remotePeerId);
+    if (discTimer) {
+      clearTimeout(discTimer);
+      disconnectedTimersRef.current.delete(remotePeerId);
+    }
+
+    setTimeout(() => {
+      const newPc = getOrCreatePeerConnection(remotePeerId);
+      if (newPc && newPc.onnegotiationneeded) {
+        newPc.onnegotiationneeded(new Event('negotiationneeded'));
+      }
+    }, 50);
+  }, [getOrCreatePeerConnection, sendWsMessage]);
 
   rebuildPeerRef.current = rebuildPeer;
 
-  // Handle incoming signaling message (W3C Perfect Negotiation)
+  // Handle incoming signaling message (W3C Perfect Negotiation + Coordinated Rebuild)
   const handleSignal = useCallback(async (from: string, data: any) => {
+    // 0. Coordinated reset requested by remote peer
+    if (data.reconnect) {
+      console.log(`[WebRTC] Received coordinated reconnect request from ${from}`);
+      rebuildPeer(from, false);
+      return;
+    }
+
     const pc = getOrCreatePeerConnection(from);
     const polite = myPeerIdRef.current > from;
 
@@ -719,7 +859,7 @@ export function useVoiceChat({
 
         const readyForOffer = !isMakingOffer &&
           (pc.signalingState === 'stable' || isSettingRemoteAnswerPending);
-        const offerCollision = (description.type === 'offer') && !readyForOffer;
+        const offerCollision = description.type === 'offer' && !readyForOffer;
 
         const ignoreOffer = !polite && offerCollision;
         ignoreOfferRef.current.set(from, ignoreOffer);
@@ -729,23 +869,15 @@ export function useVoiceChat({
           return;
         }
 
-        if (offerCollision && polite) {
-          console.log(`[WebRTC] Collision detected with ${from} (polite peer rolls back local offer)`);
-          try {
-            await pc.setLocalDescription({ type: 'rollback' });
-          } catch (e) {
-            console.warn('[WebRTC] Rollback error:', e);
-          }
-        }
-
-        if (description.type === 'answer') {
-          isSettingRemoteAnswerPendingRef.current.set(from, true);
-        }
-
+        isSettingRemoteAnswerPendingRef.current.set(from, description.type === 'answer');
         try {
           await pc.setRemoteDescription(description);
         } finally {
           isSettingRemoteAnswerPendingRef.current.set(from, false);
+        }
+
+        if (description.type === 'answer') {
+          ignoreOfferRef.current.set(from, false);
         }
 
         // Process any queued ICE candidates that arrived before setRemoteDescription
@@ -776,6 +908,11 @@ export function useVoiceChat({
           });
         }
       } else if (data.candidate) {
+        const isIgnoring = ignoreOfferRef.current.get(from) || false;
+        if (isIgnoring) {
+          return;
+        }
+
         // Queue candidate if remote description is not set yet
         if (!pc.remoteDescription || !pc.remoteDescription.type) {
           let queue = pendingCandidatesRef.current.get(from);
@@ -789,16 +926,14 @@ export function useVoiceChat({
           try {
             await pc.addIceCandidate(data.candidate);
           } catch (err) {
-            if (!ignoreOfferRef.current.get(from)) {
-              console.warn(`[WebRTC] Error adding ICE candidate from ${from}:`, err);
-            }
+            console.warn(`[WebRTC] Error adding ICE candidate from ${from}:`, err);
           }
         }
       }
     } catch (err) {
       console.error(`[WebRTC] Error handling signal from ${from}:`, err);
     }
-  }, [getOrCreatePeerConnection, sendWsMessage]);
+  }, [getOrCreatePeerConnection, sendWsMessage, rebuildPeer]);
 
   // Change nickname function exposed to UI
   const changeNickname = useCallback((newNickname: string) => {
@@ -936,12 +1071,13 @@ export function useVoiceChat({
 
       audioElementsRef.current.forEach((audio, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
-        audio.muted = pVol === 0;
-        audio.volume = Math.min(1.0, pVol / 100);
+        const hasWebAudio = !isIOS && gainNodesRef.current.has(peerId);
+        audio.muted = hasWebAudio ? true : pVol === 0;
+        audio.volume = hasWebAudio ? 0 : Math.min(1.0, pVol / 100);
       });
       gainNodesRef.current.forEach((gn, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
-        gn.gain.value = Math.max(0, (pVol - 100) / 100);
+        gn.gain.value = pVol / 100;
       });
     }
 
@@ -1009,12 +1145,13 @@ export function useVoiceChat({
       // Restore incoming audio
       audioElementsRef.current.forEach((audio, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
-        audio.muted = pVol === 0;
-        audio.volume = Math.min(1.0, pVol / 100);
+        const hasWebAudio = !isIOS && gainNodesRef.current.has(peerId);
+        audio.muted = hasWebAudio ? true : pVol === 0;
+        audio.volume = hasWebAudio ? 0 : Math.min(1.0, pVol / 100);
       });
       gainNodesRef.current.forEach((gn, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
-        gn.gain.value = Math.max(0, (pVol - 100) / 100);
+        gn.gain.value = pVol / 100;
       });
 
       sendWsMessage({ type: 'update-deafen', isDeafened: false });
@@ -1438,8 +1575,14 @@ export function useVoiceChat({
                     const savedVol = getSavedVolume(p.nickname);
                     peerVolumesRef.current.set(p.peerId, savedVol);
                     newVols[p.peerId] = savedVol;
-                    // Create PeerConnection for existing peer (triggers negotiation)
-                    getOrCreatePeerConnection(p.peerId);
+                    // Create or recover PeerConnection for existing peer
+                    const existingPc = peerConnectionsRef.current.get(p.peerId);
+                    if (existingPc && (existingPc.connectionState === 'failed' || existingPc.connectionState === 'disconnected')) {
+                      console.log(`[WebRTC] Peer ${p.peerId} was in ${existingPc.connectionState}, rebuilding on room-state`);
+                      rebuildPeerRef.current(p.peerId, true);
+                    } else {
+                      getOrCreatePeerConnection(p.peerId);
+                    }
                   });
                   setPeerVolumes((prev) => ({ ...prev, ...newVols }));
                   updatePeersState();
@@ -1468,7 +1611,14 @@ export function useVoiceChat({
                 const savedVol = getSavedVolume(msg.peer.nickname);
                 peerVolumesRef.current.set(msg.peer.peerId, savedVol);
                 setPeerVolumes((prev) => ({ ...prev, [msg.peer.peerId]: savedVol }));
-                getOrCreatePeerConnection(msg.peer.peerId);
+
+                const existingPc = peerConnectionsRef.current.get(msg.peer.peerId);
+                if (existingPc && (existingPc.connectionState === 'failed' || existingPc.connectionState === 'disconnected')) {
+                  console.log(`[WebRTC] Peer ${msg.peer.peerId} was in ${existingPc.connectionState}, rebuilding on user-joined`);
+                  rebuildPeerRef.current(msg.peer.peerId, true);
+                } else {
+                  getOrCreatePeerConnection(msg.peer.peerId);
+                }
                 updatePeersState();
               }
 

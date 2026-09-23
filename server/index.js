@@ -18,7 +18,7 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-const APP_VERSION = '0.0.48';
+const APP_VERSION = '0.0.49';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -106,22 +106,25 @@ const COTURN_PASSWORD = process.env.COTURN_PASSWORD || 'VoiceChatSecret2026!';
 const CACHED_ICE_SERVERS = Object.freeze([
   // VPS Dedicated STUN
   { urls: `stun:${COTURN_DOMAIN}:${COTURN_PORT}` },
-  // VPS Dedicated TURN (UDP, TCP, and TURNS over TLS)
+  // VPS Dedicated TURN (UDP, TCP, and TURNS over TLS on port 5349 separated for reliable candidate gathering)
   {
-    urls: [
-      `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=udp`,
-      `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=tcp`,
-      `turns:${COTURN_DOMAIN}:${COTURN_TLS_PORT}?transport=tcp`,
-    ],
+    urls: `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=udp`,
     username: COTURN_USER,
     credential: COTURN_PASSWORD,
   },
-  // Public Fallback STUNs
+  {
+    urls: `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=tcp`,
+    username: COTURN_USER,
+    credential: COTURN_PASSWORD,
+  },
+  {
+    urls: `turns:${COTURN_DOMAIN}:${COTURN_TLS_PORT}?transport=tcp`,
+    username: COTURN_USER,
+    credential: COTURN_PASSWORD,
+  },
+  // Public Fallback STUNs (compact to prevent STUN flood timeouts across multiple VPN adapters)
   { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-  { urls: 'stun:stun2.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
-  { urls: 'stun:global.stun.twilio.com:3478' },
 ]);
 
 function getIceServers() {
