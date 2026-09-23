@@ -220,14 +220,19 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = ({
               <span>Peer-to-peer шифрование • Без записи разговоров</span>
             </p>
             {onCheckUpdates && (
-              <button
-                type="button"
-                onClick={onCheckUpdates}
-                className="text-[10px] text-gray-500 hover:text-blue-400 font-mono transition-colors"
-                title="Нажмите, чтобы проверить наличие обновлений"
+              <Tooltip
+                content="Проверить обновления"
+                description="Нажмите, чтобы проверить наличие новой версии"
+                position="top"
               >
-                VoiceChat v{APP_VERSION}
-              </button>
+                <button
+                  type="button"
+                  onClick={onCheckUpdates}
+                  className="text-[10px] text-gray-500 hover:text-blue-400 font-mono transition-colors cursor-pointer"
+                >
+                  VoiceChat v{APP_VERSION}
+                </button>
+              </Tooltip>
             )}
           </div>
         </div>

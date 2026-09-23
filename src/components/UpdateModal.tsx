@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { RefreshCw, Sparkles, AlertTriangle, Rocket } from 'lucide-react';
+import { RefreshCw, Sparkles, AlertTriangle, Rocket, X } from 'lucide-react';
 import { UpdateInfo, UpdateStatus } from '../hooks/useAppUpdater';
 import { isTauri } from '../config';
+import { Tooltip } from './Tooltip';
 
 interface UpdateModalProps {
   isOpen: boolean;
@@ -110,12 +111,16 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
           </div>
 
           {status !== 'downloading' && (
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white text-xl leading-none p-1 rounded-lg hover:bg-white/10 transition-colors"
-            >
-              &times;
-            </button>
+            <Tooltip content="Закрыть" position="bottom">
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center -mr-1 -mt-1"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </Tooltip>
           )}
         </div>
 
@@ -218,14 +223,19 @@ export const UpdateModal: React.FC<UpdateModalProps> = ({
               </button>
 
               {isDesktop && isPortable && (
-                <button
-                  type="button"
-                  onClick={() => onInstall('installer')}
-                  title="Скачать и запустить установщик Windows (с ярлыками и записью в список программ)"
-                  className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 border border-white/10 rounded-xl text-xs font-medium transition-all"
+                <Tooltip
+                  content="Установить в систему"
+                  description="Скачать и запустить установщик Windows (с ярлыками и записью в список программ)"
+                  position="top"
                 >
-                  Установить в систему
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onInstall('installer')}
+                    className="px-3 py-2 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-gray-200 border border-white/10 rounded-xl text-xs font-medium transition-all"
+                  >
+                    Установить в систему
+                  </button>
+                </Tooltip>
               )}
 
               <button

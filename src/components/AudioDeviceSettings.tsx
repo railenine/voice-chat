@@ -1,6 +1,7 @@
 import React from 'react';
 import { Mic, Volume2, Play, Square } from 'lucide-react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
+import { Tooltip } from './Tooltip';
 
 interface AudioDeviceSettingsProps {
   deviceState: ReturnType<typeof useAudioDevices>;
@@ -111,15 +112,16 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = ({
             <Volume2 className="w-3.5 h-3.5 text-blue-400" />
             <span>Динамики / Наушники</span>
           </label>
-          <button
-            type="button"
-            onClick={playTestSound}
-            className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1"
-            title="Воспроизвести проверочный сигнал"
-          >
-            <Play className="w-3 h-3 fill-current" />
-            <span>Проверить звук</span>
-          </button>
+          <Tooltip content="Проверить динамики" description="Воспроизвести проверочный сигнал" position="top">
+            <button
+              type="button"
+              onClick={playTestSound}
+              className="text-[11px] text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
+            >
+              <Play className="w-3 h-3 fill-current" />
+              <span>Проверить звук</span>
+            </button>
+          </Tooltip>
         </div>
 
         {isSinkSupported ? (

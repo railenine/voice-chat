@@ -101,7 +101,7 @@ function main() {
   if (shouldPush) {
     console.log('\n📦 Creating git commit, tag, and pushing to origin...');
     try {
-      execSync('git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src/config.ts server/index.js public/health CHANGELOG.md', {
+      execSync('git add -A', {
         cwd: rootDir,
         stdio: 'inherit',
       });

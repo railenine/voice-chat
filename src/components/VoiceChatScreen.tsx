@@ -439,24 +439,29 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                   autoFocus
                   className="flex-1 min-w-0 px-2 py-0.5 text-xs bg-white/10 border border-blue-400 rounded text-white focus:outline-none"
                 />
-                <button type="submit" title="Сохранить" className="text-green-400 hover:text-green-300 p-0.5 rounded hover:bg-white/10 transition-colors">
-                  <Check className="w-3.5 h-3.5" />
-                </button>
-                <button type="button" onClick={() => setIsEditingNick(false)} title="Отмена" className="text-red-400 hover:text-red-300 p-0.5 rounded hover:bg-white/10 transition-colors">
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                <Tooltip content="Сохранить" position="top">
+                  <button type="submit" className="text-green-400 hover:text-green-300 p-0.5 rounded hover:bg-white/10 transition-colors">
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                </Tooltip>
+                <Tooltip content="Отмена" position="top">
+                  <button type="button" onClick={() => setIsEditingNick(false)} className="text-red-400 hover:text-red-300 p-0.5 rounded hover:bg-white/10 transition-colors">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </Tooltip>
               </form>
             ) : (
-              <div
-                onClick={() => setIsEditingNick(true)}
-                className="group cursor-pointer flex items-center gap-1.5 hover:text-blue-300 transition-colors"
-                title="Нажмите, чтобы изменить никнейм"
-              >
-                <span className="text-white font-semibold text-xs sm:text-sm truncate max-w-[120px]">
-                  {myNickname}
-                </span>
-                <Pencil className="w-3.5 h-3.5 text-gray-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-300 flex-shrink-0 transition-all" />
-              </div>
+              <Tooltip content="Изменить никнейм" description="Нажмите, чтобы изменить свой никнейм" position="top">
+                <div
+                  onClick={() => setIsEditingNick(true)}
+                  className="group cursor-pointer flex items-center gap-1.5 hover:text-blue-300 transition-colors"
+                >
+                  <span className="text-white font-semibold text-xs sm:text-sm truncate max-w-[120px]">
+                    {myNickname}
+                  </span>
+                  <Pencil className="w-3.5 h-3.5 text-gray-400 opacity-60 group-hover:opacity-100 group-hover:text-blue-300 flex-shrink-0 transition-all" />
+                </div>
+              </Tooltip>
             )}
             <div className="flex items-center gap-1.5 mt-0.5">
               {isDeafened ? (
@@ -1024,12 +1029,15 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                     Участники ({peers.length + 1})
                   </span>
                   {peers.length + 1 >= 8 && (
-                    <span
-                      className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono"
-                      title="В комнате более 8 участников. P2P mesh-сеть передаёт аудио напрямую каждому участнику."
+                    <Tooltip
+                      content="Mesh P2P (8+)"
+                      description="В комнате более 8 участников. P2P mesh-сеть передаёт аудио напрямую каждому участнику."
+                      position="bottom"
                     >
-                      Mesh P2P (8+)
-                    </span>
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono cursor-default">
+                        Mesh P2P (8+)
+                      </span>
+                    </Tooltip>
                   )}
                 </div>
                 <span className="text-[10px] text-blue-400 font-mono">
@@ -1144,24 +1152,26 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setShowHotkeyModal(true)}
-                    className="font-mono text-[10px] bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1"
-                    title="Горячая клавиша микрофона"
-                  >
-                    <Mic className="w-3 h-3 text-blue-400" />
-                    <span>[{muteHotkey.label}]</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowHotkeyModal(true)}
-                    className="font-mono text-[10px] bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1"
-                    title="Горячая клавиша отключения звука и микрофона"
-                  >
-                    <VolumeX className="w-3 h-3 text-red-400" />
-                    <span>[{deafenHotkey.label}]</span>
-                  </button>
+                  <Tooltip content="Хоткей микрофона" description={`Текущая клавиша: [${muteHotkey.label}]`} position="top">
+                    <button
+                      type="button"
+                      onClick={() => setShowHotkeyModal(true)}
+                      className="font-mono text-[10px] bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1"
+                    >
+                      <Mic className="w-3 h-3 text-blue-400" />
+                      <span>[{muteHotkey.label}]</span>
+                    </button>
+                  </Tooltip>
+                  <Tooltip content="Хоткей звука" description={`Текущая клавиша: [${deafenHotkey.label}]`} position="top">
+                    <button
+                      type="button"
+                      onClick={() => setShowHotkeyModal(true)}
+                      className="font-mono text-[10px] bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1"
+                    >
+                      <VolumeX className="w-3 h-3 text-red-400" />
+                      <span>[{deafenHotkey.label}]</span>
+                    </button>
+                  </Tooltip>
                 </div>
               </div>
             </div>
@@ -1272,13 +1282,15 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
               <Volume2 className="w-5 h-5 text-blue-400" />
               <h3 className="font-bold text-sm sm:text-base">Громкость: {selectedMobilePeer.nickname}</h3>
             </div>
-            <button
-              onClick={() => setSelectedMobilePeer(null)}
-              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
-              title="Закрыть"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <Tooltip content="Закрыть" position="bottom">
+              <button
+                onClick={() => setSelectedMobilePeer(null)}
+                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </Tooltip>
           </div>
 
           <div className="modal-content-scroll p-4 sm:p-5 space-y-4">
@@ -1368,13 +1380,15 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
               <Pencil className="w-5 h-5 text-blue-400" />
               <h3 className="font-bold text-sm sm:text-base">Ваш никнейм</h3>
             </div>
-            <button
-              onClick={() => setIsMobileEditingNick(false)}
-              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
-              title="Закрыть"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <Tooltip content="Закрыть" position="bottom">
+              <button
+                onClick={() => setIsMobileEditingNick(false)}
+                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </Tooltip>
           </div>
 
           <form
@@ -1432,13 +1446,15 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
             <Headphones className="w-5 h-5 text-blue-400" />
             <h3 className="font-bold text-sm sm:text-base">Настройка звуковых устройств</h3>
           </div>
-          <button
-            onClick={() => setShowAudioModal(false)}
-            className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
-            title="Закрыть"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <Tooltip content="Закрыть" position="bottom">
+            <button
+              onClick={() => setShowAudioModal(false)}
+              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
+              aria-label="Закрыть"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </Tooltip>
         </div>
 
         <div className="modal-content-scroll p-4 sm:p-5">
@@ -1469,17 +1485,19 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                 <Keyboard className="w-5 h-5 text-blue-400" />
                 <h3 className="font-bold text-sm sm:text-base">Настройка горячих клавиш</h3>
               </div>
-              <button
-                onClick={() => {
-                  cancelMuteRecording();
-                  cancelDeafenRecording();
-                  setShowHotkeyModal(false);
-                }}
-                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
-                title="Закрыть"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <Tooltip content="Закрыть" position="bottom">
+                <button
+                  onClick={() => {
+                    cancelMuteRecording();
+                    cancelDeafenRecording();
+                    setShowHotkeyModal(false);
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
+                  aria-label="Закрыть"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </Tooltip>
             </div>
 
             <div className="modal-content-scroll p-4 sm:p-5 space-y-4">
@@ -1490,14 +1508,16 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                     <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
                     <span className="leading-snug">{hotkeyConflictNotice}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setHotkeyConflictNotice(null)}
-                    className="p-1 text-blue-300 hover:text-white rounded hover:bg-white/10 transition-colors flex items-center justify-center"
-                    title="Закрыть"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  <Tooltip content="Закрыть" position="left">
+                    <button
+                      type="button"
+                      onClick={() => setHotkeyConflictNotice(null)}
+                      className="p-1 text-blue-300 hover:text-white rounded hover:bg-white/10 transition-colors flex items-center justify-center"
+                      aria-label="Закрыть"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </Tooltip>
                 </div>
               )}
 
@@ -1539,13 +1559,14 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                     >
                       {isMuteRecording ? 'Отмена' : 'Назначить'}
                     </button>
-                    <button
-                      onClick={resetMuteHotkey}
-                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg text-xs transition-all"
-                      title="Сбросить на Ё / `"
-                    >
-                      Сброс (Ё)
-                    </button>
+                    <Tooltip content="Сбросить хоткей" description="Сбросить микрофон на клавишу Ё / `" position="top">
+                      <button
+                        onClick={resetMuteHotkey}
+                        className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg text-xs transition-all"
+                      >
+                        Сброс (Ё)
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -1563,7 +1584,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                           ? 'bg-blue-600/30 border-blue-500 text-blue-300 font-semibold shadow-sm'
                           : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
                       }`}
-                      title={opt.label}
                     >
                       {opt.label}
                     </button>
@@ -1618,13 +1638,14 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                     >
                       {isDeafenRecording ? 'Отмена' : 'Назначить'}
                     </button>
-                    <button
-                      onClick={resetDeafenHotkey}
-                      className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg text-xs transition-all"
-                      title="Сбросить на \"
-                    >
-                      Сброс (\)
-                    </button>
+                    <Tooltip content="Сбросить хоткей" description="Сбросить звук на клавишу \" position="top">
+                      <button
+                        onClick={resetDeafenHotkey}
+                        className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg text-xs transition-all"
+                      >
+                        Сброс (\)
+                      </button>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -1642,7 +1663,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = ({
                           ? 'bg-rose-600/30 border-rose-500 text-rose-300 font-semibold shadow-sm'
                           : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
                       }`}
-                      title={opt.label}
                     >
                       {opt.label}
                     </button>

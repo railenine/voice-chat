@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Mic } from 'lucide-react';
 import { isTauri, APP_VERSION } from '../config';
+import { Tooltip } from './Tooltip';
 
 interface TitleBarProps {
   roomId?: string;
@@ -99,14 +100,19 @@ export const TitleBar: React.FC<TitleBarProps> = ({ roomId, onCheckUpdates }) =>
             #{roomId}
           </span>
         ) : (
-          <button
-            type="button"
-            onClick={onCheckUpdates}
-            className="text-[10px] text-gray-500 hover:text-blue-400 font-mono transition-colors"
-            title="Нажмите, чтобы проверить наличие обновлений"
+          <Tooltip
+            content="Проверить обновления"
+            description="Нажмите, чтобы проверить наличие новой версии"
+            position="bottom"
           >
-            v{APP_VERSION}
-          </button>
+            <button
+              type="button"
+              onClick={onCheckUpdates}
+              className="text-[10px] text-gray-500 hover:text-blue-400 font-mono transition-colors cursor-pointer"
+            >
+              v{APP_VERSION}
+            </button>
+          </Tooltip>
         )}
       </div>
 
