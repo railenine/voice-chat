@@ -5,6 +5,8 @@
 
 let fallbackAudioCtx: AudioContext | null = null;
 let currentOutputSinkId: string = '';
+let sfxAudioElement: HTMLAudioElement | null = null;
+let sfxDestinationNode: MediaStreamAudioDestinationNode | null = null;
 
 function getFallbackAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -22,6 +24,43 @@ function getFallbackAudioContext(): AudioContext | null {
   }
 }
 
+function getSfxDestination(ctx: AudioContext): AudioNode {
+  if (typeof document === 'undefined') {
+    return ctx.destination;
+  }
+  try {
+    if (!sfxDestinationNode || sfxDestinationNode.context !== ctx) {
+      sfxDestinationNode = ctx.createMediaStreamDestination();
+    }
+    if (!sfxAudioElement) {
+      sfxAudioElement = document.createElement('audio');
+      sfxAudioElement.autoplay = true;
+      (sfxAudioElement as any).playsInline = true;
+      sfxAudioElement.setAttribute('playsinline', 'true');
+      sfxAudioElement.style.position = 'fixed';
+      sfxAudioElement.style.top = '-9999px';
+      sfxAudioElement.style.left = '-9999px';
+      sfxAudioElement.style.width = '1px';
+      sfxAudioElement.style.height = '1px';
+      sfxAudioElement.style.opacity = '0.01';
+      document.body.appendChild(sfxAudioElement);
+    }
+    if (sfxAudioElement.srcObject !== sfxDestinationNode.stream) {
+      sfxAudioElement.srcObject = sfxDestinationNode.stream;
+    }
+    if (typeof (sfxAudioElement as any).setSinkId === 'function') {
+      (sfxAudioElement as any).setSinkId(currentOutputSinkId || '').catch(() => {});
+    }
+    if (sfxAudioElement.paused) {
+      sfxAudioElement.play().catch(() => {});
+    }
+    return sfxDestinationNode;
+  } catch (e) {
+    console.warn('[SoundEffects] Fallback to ctx.destination:', e);
+    return ctx.destination;
+  }
+}
+
 // User-gesture unlocker
 if (typeof window !== 'undefined') {
   const unlockAudio = () => {
@@ -29,6 +68,9 @@ if (typeof window !== 'undefined') {
       const ctx = getFallbackAudioContext();
       if (ctx && ctx.state === 'suspended') {
         ctx.resume().catch(() => {});
+      }
+      if (sfxAudioElement && sfxAudioElement.paused) {
+        sfxAudioElement.play().catch(() => {});
       }
     } catch {}
   };
@@ -38,11 +80,18 @@ if (typeof window !== 'undefined') {
 }
 
 export function setSoundOutputDevice(sinkId: string) {
-  currentOutputSinkId = sinkId;
+  currentOutputSinkId = sinkId || '';
+  if (sfxAudioElement && typeof (sfxAudioElement as any).setSinkId === 'function') {
+    try {
+      (sfxAudioElement as any).setSinkId(sinkId || '').catch((err: any) => {
+        console.warn('[SoundEffects] Failed to set sinkId on sfxAudioElement:', err);
+      });
+    } catch {}
+  }
   const ctx = getFallbackAudioContext();
   if (ctx && typeof (ctx as any).setSinkId === 'function') {
     try {
-      (ctx as any).setSinkId(sinkId).catch((err: any) => {
+      (ctx as any).setSinkId(sinkId || '').catch((err: any) => {
         console.warn('[SoundEffects] Failed to set sinkId on AudioContext:', err);
       });
     } catch {}
@@ -79,7 +128,8 @@ function playHarmonicChime(
       osc.stop(startTime + duration + 0.02);
     });
 
-    gain.connect(ctx.destination);
+    const dest = getSfxDestination(ctx);
+    gain.connect(dest);
   } catch (e) {
     console.warn('[SoundEffects] playHarmonicChime error:', e);
   }
@@ -109,7 +159,8 @@ function playTactileSweep(
     gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    const dest = getSfxDestination(ctx);
+    gain.connect(dest);
 
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);

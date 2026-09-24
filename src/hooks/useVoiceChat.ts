@@ -131,6 +131,10 @@ export function useVoiceChat({
   const peerMergerNodesRef = useRef<Map<string, ChannelMergerNode>>(new Map());
   const peerSourceNodesRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
   const peerCompressorNodesRef = useRef<Map<string, DynamicsCompressorNode>>(new Map());
+  const peerProcessedDestNodesRef = useRef<Map<string, MediaStreamAudioDestinationNode>>(new Map());
+  const peerPrimerAudioRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const audioOutputDeviceIdRef = useRef(audioOutputDeviceId);
+  audioOutputDeviceIdRef.current = audioOutputDeviceId;
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const isSettingRemoteAnswerPendingRef = useRef<Map<string, boolean>>(new Map());
@@ -236,13 +240,14 @@ export function useVoiceChat({
     audioElementsRef.current.forEach((audio, peerId) => {
       const pVol = peerVolumesRef.current.get(peerId) ?? 100;
       const pMuted = pVol === 0;
-      const hasWebAudio = !isIOS && gainNodesRef.current.has(peerId);
-      audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : pMuted);
-      audio.volume = hasWebAudio ? 0 : Math.min(1.0, pVol / 100);
+      const hasProcessedStream = !isIOS && Boolean(peerProcessedDestNodesRef.current.get(peerId));
+      audio.muted = isDeafenedRef.current ? true : pMuted;
+      audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, pVol / 100));
       audio.play().then(() => {
         console.log(`[Audio] Unlocked playback for ${peerId}`);
         setNeedsAudioUnlock(false);
       }).catch((err) => {
+        if (err?.name === 'AbortError') return;
         console.warn(`[Audio] Play failed for ${peerId}:`, err);
       });
     });
@@ -274,13 +279,15 @@ export function useVoiceChat({
       audioElementsRef.current.forEach((audio, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
         const pMuted = pVol === 0;
-        const hasWebAudio = !isIOS && gainNodesRef.current.has(peerId);
-        audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : pMuted);
-        audio.volume = hasWebAudio ? 0 : Math.min(1.0, pVol / 100);
+        const hasProcessedStream = !isIOS && Boolean(peerProcessedDestNodesRef.current.get(peerId));
+        audio.muted = isDeafenedRef.current ? true : pMuted;
+        audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, pVol / 100));
         if (audio.paused) {
           audio.play().then(() => {
             setNeedsAudioUnlock(false);
-          }).catch(() => {});
+          }).catch((err) => {
+            if (err?.name === 'AbortError') return;
+          });
         }
       });
       requestWakeLock();
@@ -333,8 +340,9 @@ export function useVoiceChat({
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass) {
         audioContextRef.current = new AudioContextClass();
-        if (audioOutputDeviceId && typeof (audioContextRef.current as any).setSinkId === 'function') {
-          (audioContextRef.current as any).setSinkId(audioOutputDeviceId).catch(() => {});
+        const sinkId = audioOutputDeviceIdRef.current;
+        if (sinkId && typeof (audioContextRef.current as any).setSinkId === 'function') {
+          (audioContextRef.current as any).setSinkId(sinkId).catch(() => {});
         }
       }
     }
@@ -342,7 +350,7 @@ export function useVoiceChat({
       audioContextRef.current.resume().catch(() => {});
     }
     return audioContextRef.current;
-  }, [audioOutputDeviceId]);
+  }, []);
 
   // Helper to read saved volume by nickname from localStorage
   const getSavedVolume = useCallback((nick: string): number => {
@@ -380,12 +388,12 @@ export function useVoiceChat({
       gainNode.gain.value = isDeafenedRef.current ? 0 : clamped / 100;
     }
 
-    // 3. Audio element (only sound emitter for iOS; kept muted on non-iOS to prevent doubling)
+    // 3. Audio element
     const audio = audioElementsRef.current.get(peerId);
     if (audio) {
-      const hasWebAudio = !isIOS && Boolean(gainNode);
-      audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : isMuted);
-      audio.volume = hasWebAudio ? 0 : Math.min(1.0, clamped / 100);
+      const hasProcessedStream = !isIOS && Boolean(peerProcessedDestNodesRef.current.get(peerId));
+      audio.muted = isDeafenedRef.current ? true : isMuted;
+      audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, clamped / 100));
     }
 
     const peerInfo = peersInfoRef.current.get(peerId);
@@ -400,8 +408,12 @@ export function useVoiceChat({
   const handleRemoteStream = useCallback((peerId: string, stream: MediaStream) => {
     console.log(`[Audio] Received remote audio stream for peer: ${peerId}`);
     const prevStream = remoteStreamsRef.current.get(peerId);
-    if (prevStream && prevStream.id !== stream.id) {
-      console.log(`[Audio] Stream changed for peer: ${peerId}, cleaning previous audio graph`);
+    const prevTrack = prevStream?.getAudioTracks()[0];
+    const newTrack = stream.getAudioTracks()[0];
+    const trackChanged = !prevTrack || prevTrack.id !== newTrack?.id || prevTrack.readyState === 'ended';
+
+    if (prevStream && (prevStream.id !== stream.id || trackChanged)) {
+      console.log(`[Audio] Stream/track changed for peer: ${peerId}, cleaning previous audio graph`);
       const oldSource = peerSourceNodesRef.current.get(peerId);
       if (oldSource) {
         try { oldSource.disconnect(); } catch (e) {}
@@ -422,6 +434,11 @@ export function useVoiceChat({
         try { oldComp.disconnect(); } catch (e) {}
         peerCompressorNodesRef.current.delete(peerId);
       }
+      const oldProcessedDest = peerProcessedDestNodesRef.current.get(peerId);
+      if (oldProcessedDest) {
+        try { oldProcessedDest.disconnect(); } catch (e) {}
+        peerProcessedDestNodesRef.current.delete(peerId);
+      }
       const oldAnalyser = remoteAnalysersRef.current.get(peerId);
       if (oldAnalyser) {
         try { oldAnalyser.disconnect(); } catch (e) {}
@@ -429,6 +446,32 @@ export function useVoiceChat({
       }
     }
     remoteStreamsRef.current.set(peerId, stream);
+
+    // Prime the remote WebRTC stream with a dedicated muted audio element to prevent Chromium
+    // from suspending/idling the underlying WebRTC decoder (Chromium Issue 687574 / 933677)
+    if (!isIOS) {
+      let primerAudio = peerPrimerAudioRef.current.get(peerId);
+      if (!primerAudio) {
+        primerAudio = document.createElement('audio');
+        primerAudio.muted = true;
+        primerAudio.autoplay = true;
+        (primerAudio as any).playsInline = true;
+        primerAudio.style.position = 'fixed';
+        primerAudio.style.top = '-9999px';
+        primerAudio.style.left = '-9999px';
+        primerAudio.style.width = '1px';
+        primerAudio.style.height = '1px';
+        primerAudio.style.opacity = '0.01';
+        document.body.appendChild(primerAudio);
+        peerPrimerAudioRef.current.set(peerId, primerAudio);
+      }
+      if (primerAudio.srcObject !== stream) {
+        primerAudio.srcObject = stream;
+      }
+      if (primerAudio.paused) {
+        primerAudio.play().catch(() => {});
+      }
+    }
 
     const currentVol = peerVolumesRef.current.get(peerId) ?? 100;
     const isMuted = currentVol === 0;
@@ -474,14 +517,19 @@ export function useVoiceChat({
         merger.connect(remoteAnalyser);
         remoteAnalysersRef.current.set(peerId, remoteAnalyser);
 
-        // Web Audio GainNode & Limiter for boost up to 200% (non-iOS only)
+        // Single-sink audio routing:
+        // Web Audio graph outputs exclusively to MediaStreamAudioDestinationNode (never to ctx.destination).
+        // The resulting stream is played by the <audio> element which honors setSinkId.
+        // This guarantees zero double-playback across two devices (e.g. speakers + headphones).
         if (!isIOS) {
-          compressor.connect(ctx.destination);
+          const processedDest = ctx.createMediaStreamDestination();
+          compressor.connect(processedDest);
+          peerProcessedDestNodesRef.current.set(peerId, processedDest);
           gainNodesRef.current.set(peerId, gainNode);
-          console.log(`[Audio] Web Audio GainNode & Limiter active for peer ${peerId} (0-200% volume)`);
+          console.log(`[Audio] Single-sink Web Audio pipeline active for peer ${peerId} (0-200% volume via processedDest)`);
         } else {
           gainNodesRef.current.set(peerId, gainNode);
-          console.log(`[Audio] iOS detected: remote audio for ${peerId} will play exclusively via <audio> element`);
+          console.log(`[Audio] iOS detected: remote audio for ${peerId} will play exclusively via direct <audio> stream`);
         }
 
         if (!ctx.onstatechange) {
@@ -496,7 +544,12 @@ export function useVoiceChat({
       gainNode.gain.value = isDeafenedRef.current ? 0 : currentVol / 100;
     }
 
-    const hasWebAudio = !isIOS && Boolean(gainNodesRef.current.get(peerId));
+    const hasProcessedStream = !isIOS && Boolean(peerProcessedDestNodesRef.current.get(peerId));
+    const targetStream = hasProcessedStream
+      ? peerProcessedDestNodesRef.current.get(peerId)!.stream
+      : stream;
+
+    const sinkId = audioOutputDeviceIdRef.current || '';
 
     let audio = audioElementsRef.current.get(peerId);
     if (!audio) {
@@ -507,10 +560,8 @@ export function useVoiceChat({
       audio.setAttribute('playsinline', 'true');
       audio.setAttribute('webkit-playsinline', 'true');
       audio.setAttribute('autoplay', 'true');
-      // On non-iOS with active Web Audio, <audio> element MUST be muted to prevent double playback / echo / cave effect!
-      // On iOS, <audio> element is the sole sound emitter.
-      audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : isMuted);
-      audio.volume = hasWebAudio ? 0 : Math.min(1.0, currentVol / 100);
+      audio.muted = isDeafenedRef.current ? true : isMuted;
+      audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, currentVol / 100));
       // Position off-screen so the browser keeps it in the render tree (never use display: none)
       audio.style.position = 'fixed';
       audio.style.top = '-9999px';
@@ -521,24 +572,24 @@ export function useVoiceChat({
       document.body.appendChild(audio);
       audioElementsRef.current.set(peerId, audio);
 
-      if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
-        (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
+      if (typeof (audio as any).setSinkId === 'function') {
+        (audio as any).setSinkId(sinkId).catch((err: any) => {
           console.warn(`[Audio] Failed to set sinkId on peer ${peerId}:`, err);
         });
       }
     } else {
-      audio.muted = isDeafenedRef.current ? true : (hasWebAudio ? true : isMuted);
-      audio.volume = hasWebAudio ? 0 : Math.min(1.0, currentVol / 100);
+      audio.muted = isDeafenedRef.current ? true : isMuted;
+      audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, currentVol / 100));
 
-      if (audioOutputDeviceId && typeof (audio as any).setSinkId === 'function') {
-        (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
+      if (typeof (audio as any).setSinkId === 'function') {
+        (audio as any).setSinkId(sinkId).catch((err: any) => {
           console.warn(`[Audio] Failed to update sinkId on peer ${peerId}:`, err);
         });
       }
     }
 
-    if (audio.srcObject !== stream) {
-      audio.srcObject = stream;
+    if (audio.srcObject !== targetStream) {
+      audio.srcObject = targetStream;
     }
 
     const playAudio = () => {
@@ -547,6 +598,7 @@ export function useVoiceChat({
         console.log(`[Audio] Playing remote audio for peer ${peerId}`);
         setNeedsAudioUnlock(false);
       }).catch((err) => {
+        if (err?.name === 'AbortError') return;
         console.warn(`[Audio] Autoplay blocked for peer ${peerId}:`, err);
         setNeedsAudioUnlock(true);
       });
@@ -563,7 +615,7 @@ export function useVoiceChat({
         playAudio();
       };
     });
-  }, [getAudioContext, audioOutputDeviceId]);
+  }, [getAudioContext]);
 
   // Cleanup a peer connection and audio
   const cleanupPeer = useCallback((peerId: string) => {
@@ -595,6 +647,11 @@ export function useVoiceChat({
     if (compressor) {
       try { compressor.disconnect(); } catch (e) {}
       peerCompressorNodesRef.current.delete(peerId);
+    }
+    const processedDest = peerProcessedDestNodesRef.current.get(peerId);
+    if (processedDest) {
+      try { processedDest.disconnect(); } catch (e) {}
+      peerProcessedDestNodesRef.current.delete(peerId);
     }
     const merger = peerMergerNodesRef.current.get(peerId);
     if (merger) {
@@ -628,6 +685,15 @@ export function useVoiceChat({
         audio.remove();
       } catch (e) {}
       audioElementsRef.current.delete(peerId);
+    }
+
+    const primer = peerPrimerAudioRef.current.get(peerId);
+    if (primer) {
+      try {
+        primer.srcObject = null;
+        primer.remove();
+      } catch (e) {}
+      peerPrimerAudioRef.current.delete(peerId);
     }
 
     peersInfoRef.current.delete(peerId);
@@ -828,6 +894,44 @@ export function useVoiceChat({
       clearTimeout(discTimer);
       disconnectedTimersRef.current.delete(remotePeerId);
     }
+
+    // Clean up previous audio graph for this peer so new connection creates fresh audio pipeline
+    const oldSource = peerSourceNodesRef.current.get(remotePeerId);
+    if (oldSource) {
+      try { oldSource.disconnect(); } catch (e) {}
+      peerSourceNodesRef.current.delete(remotePeerId);
+    }
+    const oldMerger = peerMergerNodesRef.current.get(remotePeerId);
+    if (oldMerger) {
+      try { oldMerger.disconnect(); } catch (e) {}
+      peerMergerNodesRef.current.delete(remotePeerId);
+    }
+    const oldGain = gainNodesRef.current.get(remotePeerId);
+    if (oldGain) {
+      try { oldGain.disconnect(); } catch (e) {}
+      gainNodesRef.current.delete(remotePeerId);
+    }
+    const oldComp = peerCompressorNodesRef.current.get(remotePeerId);
+    if (oldComp) {
+      try { oldComp.disconnect(); } catch (e) {}
+      peerCompressorNodesRef.current.delete(remotePeerId);
+    }
+    const oldProcessedDest = peerProcessedDestNodesRef.current.get(remotePeerId);
+    if (oldProcessedDest) {
+      try { oldProcessedDest.disconnect(); } catch (e) {}
+      peerProcessedDestNodesRef.current.delete(remotePeerId);
+    }
+    const oldAnalyser = remoteAnalysersRef.current.get(remotePeerId);
+    if (oldAnalyser) {
+      try { oldAnalyser.disconnect(); } catch (e) {}
+      remoteAnalysersRef.current.delete(remotePeerId);
+    }
+    const primer = peerPrimerAudioRef.current.get(remotePeerId);
+    if (primer) {
+      try { primer.srcObject = null; primer.remove(); } catch (e) {}
+      peerPrimerAudioRef.current.delete(remotePeerId);
+    }
+    remoteStreamsRef.current.delete(remotePeerId);
 
     setTimeout(() => {
       const newPc = getOrCreatePeerConnection(remotePeerId);
@@ -1071,9 +1175,9 @@ export function useVoiceChat({
 
       audioElementsRef.current.forEach((audio, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
-        const hasWebAudio = !isIOS && gainNodesRef.current.has(peerId);
-        audio.muted = hasWebAudio ? true : pVol === 0;
-        audio.volume = hasWebAudio ? 0 : Math.min(1.0, pVol / 100);
+        const hasProcessedStream = !isIOS && Boolean(peerProcessedDestNodesRef.current.get(peerId));
+        audio.muted = pVol === 0;
+        audio.volume = hasProcessedStream ? 1.0 : Math.min(1.0, pVol / 100);
       });
       gainNodesRef.current.forEach((gn, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
@@ -1145,9 +1249,9 @@ export function useVoiceChat({
       // Restore incoming audio
       audioElementsRef.current.forEach((audio, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
-        const hasWebAudio = !isIOS && gainNodesRef.current.has(peerId);
-        audio.muted = hasWebAudio ? true : pVol === 0;
-        audio.volume = hasWebAudio ? 0 : Math.min(1.0, pVol / 100);
+        const hasProcessedStream = !isIOS && Boolean(peerProcessedDestNodesRef.current.get(peerId));
+        audio.muted = pVol === 0;
+        audio.volume = hasProcessedStream ? 1.0 : Math.min(1.0, pVol / 100);
       });
       gainNodesRef.current.forEach((gn, peerId) => {
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
@@ -1220,16 +1324,17 @@ export function useVoiceChat({
 
   // Update output sink for all peer audio elements and AudioContext when audioOutputDeviceId changes
   useEffect(() => {
-    if (!audioOutputDeviceId) return;
+    const sinkId = audioOutputDeviceId || '';
+    audioOutputDeviceIdRef.current = sinkId;
     audioElementsRef.current.forEach((audio, peerId) => {
       if (typeof (audio as any).setSinkId === 'function') {
-        (audio as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
+        (audio as any).setSinkId(sinkId).catch((err: any) => {
           console.warn(`[Audio] Failed to set sinkId on peer ${peerId}:`, err);
         });
       }
     });
     if (audioContextRef.current && typeof (audioContextRef.current as any).setSinkId === 'function') {
-      (audioContextRef.current as any).setSinkId(audioOutputDeviceId).catch((err: any) => {
+      (audioContextRef.current as any).setSinkId(sinkId).catch((err: any) => {
         console.warn('[Audio] Failed to set sinkId on AudioContext:', err);
       });
     }
@@ -1259,7 +1364,19 @@ export function useVoiceChat({
                 autoGainControl: true,
               },
         };
-        const newRawStream = await navigator.mediaDevices.getUserMedia(constraints);
+        let newRawStream: MediaStream;
+        try {
+          newRawStream = await navigator.mediaDevices.getUserMedia(constraints);
+        } catch (deviceErr) {
+          console.warn('[Audio] Failed with exact input device, falling back to default mic:', deviceErr);
+          newRawStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: false,
+              autoGainControl: true,
+            },
+          });
+        }
         const newRawTrack = newRawStream.getAudioTracks()[0];
         if (!newRawTrack) return;
 
@@ -1267,13 +1384,21 @@ export function useVoiceChat({
           rawMicStreamRef.current.getAudioTracks().forEach((t) => t.stop());
         }
         rawMicStreamRef.current = newRawStream;
-        newRawTrack.enabled = !isMuted;
+        newRawTrack.enabled = !isMutedRef.current;
+
+        const audioCtx = getAudioContext();
+        if (audioCtx) {
+          if (micSourceNodeRef.current) {
+            try { micSourceNodeRef.current.disconnect(); } catch (e) {}
+          }
+          micSourceNodeRef.current = audioCtx.createMediaStreamSource(newRawStream);
+        }
 
         connectMicGraph();
 
         const activeTrack = streamRef.current?.getAudioTracks()[0] || newRawTrack;
         peerConnectionsRef.current.forEach((pc) => {
-          const sender = pc.getSenders().find((s) => s.track && s.track.kind === 'audio');
+          const sender = pc.getSenders().find((s) => !s.track || s.track.kind === 'audio');
           if (sender && activeTrack) {
             sender.replaceTrack(activeTrack).catch((err) => {
               console.warn('[WebRTC] Error replacing track on device change:', err);
@@ -1286,7 +1411,23 @@ export function useVoiceChat({
     };
 
     switchMic();
-  }, [audioInputDeviceId, isMuted, connectMicGraph]);
+  }, [audioInputDeviceId, connectMicGraph, getAudioContext]);
+
+  // Stable callback refs for main effect and WebSocket handlers (prevents room teardown cascade on device changes)
+  const handleSignalRef = useRef(handleSignal);
+  handleSignalRef.current = handleSignal;
+  const getOrCreatePeerConnectionRef = useRef(getOrCreatePeerConnection);
+  getOrCreatePeerConnectionRef.current = getOrCreatePeerConnection;
+  const cleanupPeerRef = useRef(cleanupPeer);
+  cleanupPeerRef.current = cleanupPeer;
+  const updatePeersStateRef = useRef(updatePeersState);
+  updatePeersStateRef.current = updatePeersState;
+  const sendWsMessageRef = useRef(sendWsMessage);
+  sendWsMessageRef.current = sendWsMessage;
+  const unlockAudioRef = useRef(unlockAudio);
+  unlockAudioRef.current = unlockAudio;
+  const setPeerVolumeRef = useRef(setPeerVolume);
+  setPeerVolumeRef.current = setPeerVolume;
 
   // Main initialization effect
   useEffect(() => {
@@ -1412,7 +1553,7 @@ export function useVoiceChat({
                   if (isSpeakingRef.current) {
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
-                    sendWsMessage({ type: 'speaking', isSpeaking: false });
+                    sendWsMessageRef.current({ type: 'speaking', isSpeaking: false });
                   }
                 } else {
                   analyserRef.current.getByteFrequencyData(dataArray);
@@ -1430,17 +1571,17 @@ export function useVoiceChat({
                     if (!isSpeakingRef.current) {
                       isSpeakingRef.current = true;
                       setIsSpeaking(true);
-                      sendWsMessage({ type: 'speaking', isSpeaking: true });
+                      sendWsMessageRef.current({ type: 'speaking', isSpeaking: true });
                       lastBroadcastSpeakingRef.current = now;
                     } else if (now - lastBroadcastSpeakingRef.current > 150) {
                       // Keep-alive broadcast every 150ms while speaking
-                      sendWsMessage({ type: 'speaking', isSpeaking: true });
+                      sendWsMessageRef.current({ type: 'speaking', isSpeaking: true });
                       lastBroadcastSpeakingRef.current = now;
                     }
                   } else if (isSpeakingRef.current && now > speechHangoverRef.current) {
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
-                    sendWsMessage({ type: 'speaking', isSpeaking: false });
+                    sendWsMessageRef.current({ type: 'speaking', isSpeaking: false });
                   }
                 }
               }
@@ -1581,11 +1722,11 @@ export function useVoiceChat({
                       console.log(`[WebRTC] Peer ${p.peerId} was in ${existingPc.connectionState}, rebuilding on room-state`);
                       rebuildPeerRef.current(p.peerId, true);
                     } else {
-                      getOrCreatePeerConnection(p.peerId);
+                      getOrCreatePeerConnectionRef.current(p.peerId);
                     }
                   });
                   setPeerVolumes((prev) => ({ ...prev, ...newVols }));
-                  updatePeersState();
+                  updatePeersStateRef.current();
                 }
               }
 
@@ -1602,7 +1743,7 @@ export function useVoiceChat({
                   for (const [oldId, oldInfo] of peersInfoRef.current.entries()) {
                     if (oldId !== msg.peer.peerId && oldInfo.nickname === msg.peer.nickname) {
                       console.log(`[WebRTC] Removing duplicate old peer ${oldId} for ${msg.peer.nickname}`);
-                      cleanupPeer(oldId);
+                      cleanupPeerRef.current(oldId);
                     }
                   }
                 }
@@ -1617,14 +1758,14 @@ export function useVoiceChat({
                   console.log(`[WebRTC] Peer ${msg.peer.peerId} was in ${existingPc.connectionState}, rebuilding on user-joined`);
                   rebuildPeerRef.current(msg.peer.peerId, true);
                 } else {
-                  getOrCreatePeerConnection(msg.peer.peerId);
+                  getOrCreatePeerConnectionRef.current(msg.peer.peerId);
                 }
-                updatePeersState();
+                updatePeersStateRef.current();
               }
 
               // WebRTC signaling message
               else if (type === 'signal') {
-                handleSignal(msg.from, msg.data);
+                handleSignalRef.current(msg.from, msg.data);
               }
 
               // Peer updated nickname
@@ -1634,8 +1775,8 @@ export function useVoiceChat({
                   info.nickname = msg.nickname;
                   peersInfoRef.current.set(msg.peerId, info);
                   const savedVol = getSavedVolume(msg.nickname);
-                  setPeerVolume(msg.peerId, savedVol);
-                  updatePeersState();
+                  setPeerVolumeRef.current(msg.peerId, savedVol);
+                  updatePeersStateRef.current();
                 }
               }
 
@@ -1645,7 +1786,7 @@ export function useVoiceChat({
                 if (info) {
                   info.isMuted = msg.isMuted;
                   peersInfoRef.current.set(msg.peerId, info);
-                  updatePeersState();
+                  updatePeersStateRef.current();
                 }
               }
 
@@ -1659,7 +1800,7 @@ export function useVoiceChat({
                     info.isSpeaking = false;
                   }
                   peersInfoRef.current.set(msg.peerId, info);
-                  updatePeersState();
+                  updatePeersStateRef.current();
                 }
               }
 
@@ -1675,7 +1816,7 @@ export function useVoiceChat({
                     remoteHangoverRef.current.delete(msg.peerId);
                   }
                   peersInfoRef.current.set(msg.peerId, info);
-                  updatePeersState();
+                  updatePeersStateRef.current();
                 }
               }
 
@@ -1683,7 +1824,7 @@ export function useVoiceChat({
               else if (type === 'user-left') {
                 console.log(`[WS] Peer left: ${msg.peerId}`);
                 playLeaveSound();
-                cleanupPeer(msg.peerId);
+                cleanupPeerRef.current(msg.peerId);
               }
 
               // In-room chat message
@@ -1744,9 +1885,12 @@ export function useVoiceChat({
     init();
 
     // User gesture listeners to unlock audio
-    window.addEventListener('click', unlockAudio);
-    window.addEventListener('touchstart', unlockAudio);
-    window.addEventListener('keydown', unlockAudio);
+    const onUnlock = () => {
+      unlockAudioRef.current();
+    };
+    window.addEventListener('click', onUnlock);
+    window.addEventListener('touchstart', onUnlock);
+    window.addEventListener('keydown', onUnlock);
 
     return () => {
       isIntentionalDisconnectRef.current = true;
@@ -1755,9 +1899,9 @@ export function useVoiceChat({
         reconnectTimerRef.current = null;
       }
 
-      window.removeEventListener('click', unlockAudio);
-      window.removeEventListener('touchstart', unlockAudio);
-      window.removeEventListener('keydown', unlockAudio);
+      window.removeEventListener('click', onUnlock);
+      window.removeEventListener('touchstart', onUnlock);
+      window.removeEventListener('keydown', onUnlock);
 
       // Stop VAD
       if (vadIntervalRef.current) {
@@ -1799,6 +1943,14 @@ export function useVoiceChat({
       });
       audioElementsRef.current.clear();
 
+      peerPrimerAudioRef.current.forEach((primer) => {
+        try {
+          primer.srcObject = null;
+          primer.remove();
+        } catch (e) {}
+      });
+      peerPrimerAudioRef.current.clear();
+
       gainNodesRef.current.forEach((gn) => {
         try { gn.disconnect(); } catch (e) {}
       });
@@ -1807,6 +1959,10 @@ export function useVoiceChat({
         try { c.disconnect(); } catch (e) {}
       });
       peerCompressorNodesRef.current.clear();
+      peerProcessedDestNodesRef.current.forEach((d) => {
+        try { d.disconnect(); } catch (e) {}
+      });
+      peerProcessedDestNodesRef.current.clear();
       peerMergerNodesRef.current.forEach((m) => {
         try { m.disconnect(); } catch (e) {}
       });
@@ -1863,7 +2019,7 @@ export function useVoiceChat({
         silentAudioRef.current = null;
       }
     };
-  }, [roomId, unlockAudio, getOrCreatePeerConnection, handleSignal, cleanupPeer, updatePeersState, sendWsMessage]);
+  }, [roomId]);
 
   return {
     isConnected,
