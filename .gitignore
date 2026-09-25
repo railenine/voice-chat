@@ -48,3 +48,7 @@ src-tauri/gen/
 *.exe
 RELEASE_NOTES.md
 
+# Internal context & conversation backups
+CONVERSATION_HISTORY.md
+PROJECT_CONTEXT_HANDOFF.md
+scripts/export-chat.js

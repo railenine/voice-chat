@@ -638,6 +638,8 @@
   animation: modal-scale-out 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+
+
 /* Smooth accordion grid utilities for zero-jerk layout transitions */
 .grid-accordion {
   display: grid;
@@ -745,8 +747,42 @@ body {
   }
 }
 
+/* Mode card content consistent fixed height across modes to prevent layout shifts */
+.mode-card-content {
+  height: 136px;
+}
+@media (min-width: 640px) {
+  .mode-card-content {
+    height: 142px;
+  }
+}
+
+/* Tab content fade animation without vertical jerking */
+@keyframes tab-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-tab-fade {
+  animation: tab-fade 0.18s ease-out;
+}
+
+/* Responsive share button text for narrow viewports */
+@media (max-width: 420px) {
+  .share-btn-text {
+    display: none;
+  }
+}
+
 /* Height-responsive compact layout utilities */
 @media (max-height: 760px) {
+  .mode-card-content {
+    height: 122px;
+  }
   .compact-h-hide {
     display: none !important;
   }
@@ -789,6 +825,9 @@ body {
 }
 
 @media (max-height: 640px) {
+  .mode-card-content {
+    height: 112px;
+  }
   .ultra-compact-h-hide {
     display: none !important;
   }

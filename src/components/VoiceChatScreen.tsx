@@ -44,6 +44,7 @@ import { playLeaveSound } from '../utils/soundEffects';
 import { Tooltip } from './Tooltip';
 import { JellyBackground } from './JellyBackground';
 import { Modal } from './Modal';
+import { useIsSmartphone } from '../utils/device';
 
 interface VoiceChatScreenProps {
   nickname: string;
@@ -159,8 +160,10 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
     updateMuteHotkeyRef.current = updateMuteHotkey;
   }, [muteHotkey, updateMuteHotkey]);
 
-  const [showHotkeyModal, setShowHotkeyModal] = useState(false);
-  const [showAudioModal, setShowAudioModal] = useState(false);
+  const isSmartphone = useIsSmartphone();
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'audio' | 'hotkeys'>('audio');
+  const effectiveTab = isSmartphone ? 'audio' : settingsTab;
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
   const isPipSupported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
@@ -268,6 +271,13 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
 
   // Selected peer for mobile volume modal
   const [selectedMobilePeer, setSelectedMobilePeer] = useState<any | null>(null);
+  const [cachedMobilePeer, setCachedMobilePeer] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (selectedMobilePeer) {
+      setCachedMobilePeer(selectedMobilePeer);
+    }
+  }, [selectedMobilePeer]);
 
   const getInitials = useCallback((name: string) => {
     if (!name) return '?';
@@ -388,30 +398,39 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
   const renderParticipantList = () => (
     <div className="space-y-2.5">
       {/* Current User Card */}
-      <div className={`p-3 rounded-xl border transition-all bg-white/5 backdrop-blur-md ${
-        isSpeaking && !isMuted
-          ? 'border-green-400/60 shadow-md shadow-green-500/20 ring-1 ring-green-400/50'
-          : 'border-white/10 hover:border-white/20'
-      }`}>
+      <div
+        className={`p-3 rounded-xl border transition-all ${
+          isSpeaking && !isMuted && !isDeafened
+            ? 'border-green-500/50 bg-green-500/[0.06] shadow-sm shadow-green-500/20 ring-1 ring-green-500/30'
+            : 'bg-black/30 hover:bg-black/40 border-blue-500/30 hover:border-blue-500/45'
+        }`}
+      >
         <div className="flex items-center gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-            isDeafened
-              ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
-              : isMuted
-              ? 'bg-red-500/20 border border-red-500/50 text-red-400'
-              : isSpeaking
-              ? 'bg-gradient-to-br from-green-600 to-emerald-800 ring-2 ring-green-400 shadow-md shadow-green-500/50 scale-105 text-white'
-              : 'bg-gradient-to-br from-blue-700 to-blue-900 shadow-md text-blue-200'
-          }`}>
+          <div className="relative flex-shrink-0">
+            <div
+              className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-md transition-all ${
+                isSpeaking && !isMuted && !isDeafened
+                  ? 'bg-gradient-to-br from-emerald-600 to-teal-800 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 shadow-emerald-500/40 animate-pulse scale-105 text-white'
+                  : isDeafened
+                  ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
+                  : isMuted
+                  ? 'bg-red-500/20 border border-red-500/50 text-red-400'
+                  : 'bg-gradient-to-br from-blue-600 to-indigo-800 border border-blue-400/30 text-white shadow-md'
+              }`}
+            >
+              {getInitials(myNickname)}
+            </div>
+
+            {/* Avatar Status Badge in corner */}
             {isDeafened ? (
-              <VolumeX className="w-5 h-5" />
+              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
+                <VolumeX className="w-2.5 h-2.5" />
+              </span>
             ) : isMuted ? (
-              <MicOff className="w-5 h-5" />
-            ) : isSpeaking ? (
-              <Volume2 className="w-5 h-5" />
-            ) : (
-              <Mic className="w-5 h-5" />
-            )}
+              <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
+                <MicOff className="w-2.5 h-2.5" />
+              </span>
+            ) : null}
           </div>
 
           <div className="flex-1 min-w-0">
@@ -437,7 +456,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   onChange={(e) => setNewNickInput(e.target.value)}
                   maxLength={24}
                   autoFocus
-                  className="flex-1 min-w-0 px-2 py-0.5 text-xs bg-white/10 border border-blue-400 rounded text-white focus:outline-none"
+                  className="flex-1 min-w-0 px-2 py-0.5 text-xs bg-black/40 border border-blue-400/60 rounded text-white focus:outline-none"
                 />
                 <Tooltip content="Сохранить" position="top">
                   <button type="submit" className="text-green-400 hover:text-green-300 p-0.5 rounded hover:bg-white/10 transition-colors">
@@ -478,7 +497,9 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   Говорит
                 </span>
               ) : (
-                <span className="text-[11px] text-blue-400 font-medium">Вы</span>
+                <span className="text-[10px] bg-blue-500/15 text-blue-300 px-1.5 py-0.2 rounded border border-blue-500/30 font-semibold">
+                  Вы
+                </span>
               )}
             </div>
           </div>
@@ -488,34 +509,44 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
       {/* Remote Peers Cards */}
       {peers.map((peer) => {
         const vol = peerVolumes[peer.peerId] ?? 100;
+        const isPeerSpeaking = peer.isSpeaking && !peer.isMuted && !peer.isDeafened;
+        const gradient = getAvatarGradient(peer.peerId || peer.nickname);
+
         return (
           <div
             key={peer.peerId}
-            className={`p-3 rounded-xl border transition-all bg-white/5 backdrop-blur-md ${
-              peer.isSpeaking && !peer.isMuted && !peer.isDeafened
-                ? 'border-green-400/60 shadow-md shadow-green-500/20 ring-1 ring-green-400/50'
-                : 'border-white/10 hover:border-white/20'
+            className={`p-3 rounded-xl border transition-all animate-fade-in ${
+              isPeerSpeaking
+                ? 'border-green-500/50 bg-green-500/[0.06] shadow-sm shadow-green-500/20 ring-1 ring-green-500/30'
+                : 'bg-black/30 hover:bg-black/40 border-white/10 hover:border-white/20'
             }`}
           >
             <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 transition-all ${
-                peer.isDeafened
-                  ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
-                  : peer.isMuted
-                  ? 'bg-red-500/20 border border-red-500/50 text-red-400'
-                  : peer.isSpeaking
-                  ? 'bg-gradient-to-br from-green-600 to-emerald-800 ring-2 ring-green-400 shadow-md shadow-green-500/50 scale-105 text-white'
-                  : 'bg-gradient-to-br from-blue-700 to-blue-900 shadow-md text-blue-200'
-              }`}>
+              <div className="relative flex-shrink-0">
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-md transition-all ${
+                    isPeerSpeaking
+                      ? 'bg-gradient-to-br from-emerald-600 to-teal-800 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 shadow-emerald-500/40 animate-pulse scale-105 text-white'
+                      : peer.isDeafened
+                      ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
+                      : peer.isMuted
+                      ? 'bg-red-500/20 border border-red-500/50 text-red-400'
+                      : `bg-gradient-to-br ${gradient} border border-white/20 text-white shadow-md`
+                  }`}
+                >
+                  {getInitials(peer.nickname)}
+                </div>
+
+                {/* Avatar Status Badge in corner */}
                 {peer.isDeafened ? (
-                  <VolumeX className="w-5 h-5" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
+                    <VolumeX className="w-2.5 h-2.5" />
+                  </span>
                 ) : peer.isMuted ? (
-                  <MicOff className="w-5 h-5" />
-                ) : peer.isSpeaking ? (
-                  <Volume2 className="w-5 h-5" />
-                ) : (
-                  <Headphones className="w-5 h-5" />
-                )}
+                  <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
+                    <MicOff className="w-2.5 h-2.5" />
+                  </span>
+                ) : null}
               </div>
 
               <div className="flex-1 min-w-0">
@@ -531,7 +562,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.2 rounded border border-red-500/30 font-medium">
                       Заглушен
                     </span>
-                  ) : peer.isSpeaking ? (
+                  ) : isPeerSpeaking ? (
                     <span className="text-[10px] bg-green-500/20 text-green-300 px-1.5 py-0.2 rounded border border-green-500/40 font-medium flex items-center gap-1 animate-pulse">
                       <span className="w-1.5 h-1.5 rounded-full bg-green-400"></span>
                       Говорит
@@ -562,7 +593,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                       setPeerVolume(peer.peerId, prev);
                     }
                   }}
-                  className="hover:text-white transition-colors flex items-center gap-1.5 text-[11px] p-0.5 -m-0.5"
+                  className="hover:text-white transition-colors flex items-center gap-1.5 text-[11px] p-0.5 -m-0.5 cursor-pointer"
                   title={vol === 0 ? 'Включить звук' : 'Заглушить'}
                 >
                   {vol === 0 ? (
@@ -610,21 +641,30 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             onClick={copyRoomId}
             role="button"
             tabIndex={0}
-            className="bg-white/5 hover:bg-white/10 active:scale-[0.98] cursor-pointer transition-all rounded-xl p-3.5 border border-dashed border-white/20 hover:border-white/30 text-center select-none"
+            className="bg-black/30 hover:bg-black/40 border border-white/10 hover:border-white/20 active:scale-[0.98] cursor-pointer transition-all rounded-xl p-3 flex items-center gap-3 select-none group animate-fade-in"
           >
-            <div className="w-10 h-10 mx-auto mb-2 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center shadow-inner">
-              {copied ? (
-                <Check className="w-5 h-5 text-green-400" />
-              ) : (
-                <UserPlus className="w-5 h-5 text-blue-400" />
-              )}
+            <div className="w-10 h-10 rounded-full bg-white/[0.06] border border-white/10 flex items-center justify-center text-gray-400 group-hover:text-blue-400 group-hover:border-blue-400/30 transition-all flex-shrink-0">
+              <div className="relative w-5 h-5 flex items-center justify-center">
+                <Check
+                  className={`w-5 h-5 text-emerald-400 absolute transition-all duration-300 ease-out ${
+                    copied ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 rotate-[-45deg] pointer-events-none'
+                  }`}
+                />
+                <UserPlus
+                  className={`w-5 h-5 text-gray-400 group-hover:text-blue-400 absolute transition-all duration-300 ease-out ${
+                    copied ? 'opacity-0 scale-50 rotate-45 pointer-events-none' : 'opacity-100 scale-100 rotate-0'
+                  }`}
+                />
+              </div>
             </div>
-            <p className={`text-xs font-medium ${copied ? 'text-green-400 font-semibold' : 'text-gray-400'}`}>
-              {copied ? 'Ссылка скопирована!' : 'Ожидание участников...'}
-            </p>
-            <p className="text-[11px] text-gray-500 mt-0.5">
-              {copied ? 'Отправьте её друзьям' : 'Поделитесь ссылкой на комнату'}
-            </p>
+            <div className="flex-1 min-w-0">
+              <span className={`text-xs font-medium truncate block transition-colors duration-200 ${copied ? 'text-emerald-400 font-semibold' : 'text-gray-300 group-hover:text-white'}`}>
+                {copied ? 'Ссылка скопирована!' : 'Ожидание участников...'}
+              </span>
+              <span className={`text-[11px] truncate block mt-0.5 transition-colors duration-200 ${copied ? 'text-emerald-400/80' : 'text-gray-500'}`}>
+                {copied ? 'Отправьте её друзьям' : 'Нажмите, чтобы скопировать'}
+              </span>
+            </div>
           </div>
         </Tooltip>
       )}
@@ -638,7 +678,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
 
       {/* Root Layout */}
       <div
-        className="content-wrapper h-full w-full flex-1 flex flex-col overflow-hidden text-white font-sans"
+        className="content-wrapper h-full w-full flex-1 flex flex-col overflow-hidden text-white font-sans animate-fade-in"
         onClick={() => {
           if (needsAudioUnlock) unlockAudio();
         }}
@@ -650,7 +690,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               e.stopPropagation();
               unlockAudio();
             }}
-            className="cursor-pointer bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-600 hover:from-amber-500 hover:to-yellow-500 text-white px-3 sm:px-4 py-2 text-center text-xs sm:text-sm font-medium shadow-lg flex items-center justify-center gap-2 border-b border-amber-400/40 transition-all z-50 animate-pulse flex-shrink-0"
+            className="cursor-pointer bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-600 hover:from-amber-500 hover:to-yellow-500 text-white px-3 sm:px-4 py-2 text-center text-xs sm:text-sm font-medium shadow-lg flex items-center justify-center gap-2 border-b border-amber-400/40 transition-all z-50 animate-slide-down-fade flex-shrink-0"
           >
             <Volume2 className="w-4 h-4 flex-shrink-0 text-white" />
             <span>
@@ -673,46 +713,69 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         >
           <div className="overflow-hidden min-h-0">
             <div
-              className={`bg-slate-950/90 backdrop-blur-xl border-b border-blue-500/25 px-3 py-2.5 sm:py-3 relative shadow-2xl accordion-inner ${
+              className={`bg-slate-950/80 backdrop-blur-xl border-b border-blue-500/25 px-3 py-2.5 sm:py-3 relative shadow-2xl accordion-inner ${
                 showShare ? 'accordion-inner-expanded' : 'accordion-inner-collapsed'
               }`}
             >
-              <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2.5 flex-shrink-0 w-full sm:w-auto">
+              <div className="max-w-4xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
+                {/* Desktop Left Info: Share icon & title (hidden on < 640px) */}
+                <div className="hidden sm:flex items-center gap-2.5 min-w-0 flex-shrink-0">
                   <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-sm flex-shrink-0">
                     <Share2 className="w-4 h-4" />
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-xs font-semibold text-white">Ссылка на комнату</span>
-                    <span className="text-[10px] text-blue-300/80">Исчезнет через 10 секунд</span>
+                    <span className="text-xs font-semibold text-white truncate">Ссылка на комнату</span>
+                    <span className="text-[10px] text-blue-300/80 truncate">Исчезнет через 10 секунд</span>
                   </div>
                 </div>
 
-                <div className="flex-1 w-full flex items-center gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={shareLink}
-                    onClick={(e) => (e.target as HTMLInputElement).select()}
-                    className="flex-1 min-w-0 py-1.5 px-3 bg-white/5 border border-white/15 rounded-xl text-white text-xs font-mono select-all focus:outline-none focus:border-blue-400/50 transition-colors"
-                  />
-                  <Tooltip content="Скопировать ссылку" description="Скопировать ссылку в буфер обмена" position="bottom">
+                {/* Unified Link & Action Row: single streamlined row on mobile and desktop */}
+                <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
+                  {/* On mobile: compact share icon */}
+                  <div className="sm:hidden w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
+                    <Share2 className="w-3.5 h-3.5" />
+                  </div>
+
+                  {/* Input with tap-to-copy */}
+                  <div className="relative flex-1 min-w-0">
+                    <input
+                      type="text"
+                      readOnly
+                      value={shareLink}
+                      onClick={(e) => {
+                        (e.target as HTMLInputElement).select();
+                        copyRoomId();
+                      }}
+                      className="w-full py-1.5 sm:py-2 px-2.5 sm:px-3 bg-black/40 hover:bg-black/50 border border-white/10 focus:border-blue-400/50 rounded-xl text-white text-xs font-mono select-all focus:outline-none transition-colors truncate cursor-pointer"
+                    />
+                  </div>
+
+                  {/* Copy Button */}
+                  <Tooltip content={copied ? "Скопировано!" : "Скопировать ссылку"} description="Скопировать ссылку в буфер обмена" position="bottom">
                     <button
+                      type="button"
                       onClick={copyRoomId}
-                      className={`px-3.5 py-1.5 rounded-xl font-medium transition-all text-xs flex items-center gap-1.5 flex-shrink-0 shadow-sm ${
+                      className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl font-medium transition-all text-xs flex items-center justify-center gap-1.5 flex-shrink-0 shadow-sm active:scale-95 whitespace-nowrap cursor-pointer ${
                         copied
-                          ? 'bg-green-600 text-white shadow-green-600/30'
-                          : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/30 active:scale-95'
+                          ? 'bg-emerald-600 text-white shadow-emerald-600/30'
+                          : 'bg-gradient-to-r from-blue-700 to-blue-900 hover:from-blue-600 hover:to-blue-800 text-white shadow-blue-900/40'
                       }`}
                     >
-                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copied ? 'Скопировано!' : 'Копировать'}</span>
+                      {copied ? (
+                        <Check className="w-3.5 h-3.5 flex-shrink-0 text-white animate-scale-up" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5 flex-shrink-0 text-white" />
+                      )}
+                      <span className="share-btn-text">{copied ? 'Скопировано!' : 'Копировать'}</span>
                     </button>
                   </Tooltip>
+
+                  {/* Single Close Button */}
                   <Tooltip content="Закрыть" description="Скрыть панель ссылки" position="bottom">
                     <button
                       onClick={closeShare}
-                      className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center flex-shrink-0"
+                      className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
+                      aria-label="Закрыть"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -736,7 +799,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         {/* Reimagined Unified Mobile Header (< 1024px) with Safe-Area Padding */}
         <header
           style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
-          className="lg:hidden px-3.5 pb-2.5 pt-2 border-b border-white/10 backdrop-blur-md bg-slate-950/80 flex items-center justify-between gap-2.5 flex-shrink-0 z-20"
+          className="lg:hidden px-3.5 pb-2.5 pt-2 border-b border-white/10 backdrop-blur-xl bg-slate-950/60 flex items-center justify-between gap-2.5 flex-shrink-0 z-20"
         >
           {/* Left: Branding & Room Info */}
           <div className="flex items-center gap-2.5 min-w-0">
@@ -744,21 +807,19 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               <Volume2 className="w-4 h-4" />
             </div>
 
-            <div className="min-w-0 flex items-center gap-2">
-              <span className="text-sm font-bold text-white tracking-tight">VoiceChat</span>
-              <Tooltip content="Скопировать ссылку" description="Скопировать ссылку на комнату в буфер" position="bottom">
+            <div className="min-w-0 flex items-center gap-2 flex-shrink-0">
+              <span className="text-sm font-bold text-white tracking-tight flex-shrink-0">VoiceChat</span>
+              <Tooltip content={copied ? "Скопировано!" : "Скопировать ссылку"} description="Скопировать ссылку на комнату в буфер" position="bottom">
                 <button
                   type="button"
                   onClick={copyRoomId}
-                  className="text-xs text-gray-400 hover:text-blue-300 font-mono transition-colors flex items-center gap-1 truncate"
+                  className="text-xs text-gray-400 hover:text-blue-300 font-mono transition-colors flex items-center gap-1.5 flex-shrink-0 cursor-pointer py-1 px-1.5 rounded-lg hover:bg-white/5 active:scale-95"
                 >
-                  <span className="truncate">#{roomId}</span>
+                  <span className="font-semibold">#{roomId}</span>
                   {copied ? (
-                    <span className="text-[10px] text-green-400 font-sans font-medium flex items-center gap-0.5 flex-shrink-0">
-                      <Check className="w-2.5 h-2.5" /> скопировано
-                    </span>
+                    <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 animate-scale-up" />
                   ) : (
-                    <Copy className="w-2.5 h-2.5 text-gray-500 opacity-60 hover:opacity-100 flex-shrink-0" />
+                    <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white flex-shrink-0 transition-colors" />
                   )}
                 </button>
               </Tooltip>
@@ -767,23 +828,29 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
 
           {/* Right: Quick Actions */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
-            {deviceState && (
-              <Tooltip content="Настройки звука" description="Выбор микрофона и динамиков" position="bottom">
-                <button
-                  onClick={() => setShowAudioModal(true)}
-                  className="p-2 text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 active:scale-95 rounded-xl border border-white/10 text-xs transition-all flex items-center justify-center"
-                >
-                  <Settings className="w-4 h-4" />
-                </button>
-              </Tooltip>
-            )}
+            <Tooltip
+              content={isSmartphone ? "Настройки звука" : "Настройки"}
+              description={isSmartphone ? "Выбор микрофона и динамиков" : "Звук, микрофон и горячие клавиши"}
+              position="bottom"
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsTab('audio');
+                  setShowSettingsModal(true);
+                }}
+                className="p-2 text-gray-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 rounded-xl border border-white/10 text-xs transition-all flex items-center justify-center cursor-pointer"
+              >
+                <Settings className="w-4 h-4" />
+              </button>
+            </Tooltip>
             <Tooltip content="Поделиться ссылкой" description="Показать ссылку на комнату на 10 секунд" position="bottom">
               <button
                 onClick={triggerShare}
                 className={`p-2 active:scale-95 rounded-xl border text-xs transition-all flex items-center justify-center ${
                   showShare
                     ? 'bg-blue-600/30 border-blue-500 text-blue-300'
-                    : 'text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10'
+                    : 'text-gray-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border-white/10'
                 }`}
               >
                 <Share2 className="w-4 h-4" />
@@ -794,7 +861,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
 
         {/* Clubhouse-Style Mobile Participants Card (< 1024px) */}
         <div className="lg:hidden px-2 pt-2 sm:px-4 sm:pt-4 flex-shrink-0 z-10">
-          <div className="bg-slate-950/40 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl px-3 py-2 sm:px-4 sm:py-2.5 overflow-hidden">
+          <div className="bg-slate-950/45 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl shadow-black/40 px-3 py-2 sm:px-4 sm:py-2.5 overflow-hidden">
             <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar py-2.5 px-1">
               {/* 1. Self Participant Circle */}
               <Tooltip
@@ -871,7 +938,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   >
                     <div
                       onClick={() => setSelectedMobilePeer(peer)}
-                      className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform"
+                      className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform animate-fade-in"
                     >
                       <div className="relative">
                         <div
@@ -940,15 +1007,66 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   onClick={copyRoomId}
                   className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform"
                 >
-                  <div className="w-12 h-12 rounded-full border border-dashed border-white/25 bg-white/5 hover:bg-white/10 flex items-center justify-center text-blue-400 group-hover:text-blue-300 transition-colors shadow-sm">
-                    {copied ? <Check className="w-5 h-5 text-emerald-400" /> : <UserPlus className="w-5 h-5" />}
+                  <div
+                    className={`w-12 h-12 rounded-full border transition-all duration-300 ease-out flex items-center justify-center shadow-md ${
+                      copied
+                        ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400 shadow-emerald-950/40'
+                        : 'border-blue-500/30 bg-blue-500/15 hover:bg-blue-500/25 text-blue-300 group-hover:text-white shadow-blue-950/40'
+                    }`}
+                  >
+                    <div className="relative w-5 h-5 flex items-center justify-center">
+                      <Check
+                        className={`w-5 h-5 text-emerald-400 absolute transition-all duration-300 ease-out ${
+                          copied ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 rotate-[-45deg] pointer-events-none'
+                        }`}
+                      />
+                      <UserPlus
+                        className={`w-5 h-5 text-blue-400 group-hover:text-white absolute transition-all duration-300 ease-out ${
+                          copied ? 'opacity-0 scale-50 rotate-45 pointer-events-none' : 'opacity-100 scale-100 rotate-0'
+                        }`}
+                      />
+                    </div>
                   </div>
                   <div className="flex flex-col items-center gap-0.5 mt-0.5">
-                    <span className="text-[11px] text-gray-400 group-hover:text-blue-300 font-medium truncate max-w-[68px] text-center transition-colors">
-                      {copied ? 'Готово' : '+ Друг'}
-                    </span>
-                    <div className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-white/5 border border-white/10 text-gray-400 group-hover:border-blue-400/30 group-hover:text-blue-300">
-                      Инвайт
+                    <div className="relative h-4 w-16 flex items-center justify-center overflow-hidden">
+                      <span
+                        className={`text-[11px] font-semibold text-emerald-400 whitespace-nowrap text-center transition-all duration-300 ease-out absolute inset-x-0 ${
+                          copied ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-2 scale-90 pointer-events-none'
+                        }`}
+                      >
+                        Готово
+                      </span>
+                      <span
+                        className={`text-[11px] text-gray-300 group-hover:text-blue-300 font-medium whitespace-nowrap text-center transition-all duration-300 ease-out absolute inset-x-0 ${
+                          copied ? 'opacity-0 -translate-y-2 scale-90 pointer-events-none' : 'opacity-100 translate-y-0 scale-100'
+                        }`}
+                      >
+                        + Друг
+                      </span>
+                    </div>
+                    <div
+                      className={`px-2 py-0.5 rounded-full text-[9px] font-medium border transition-all duration-300 ease-out ${
+                        copied
+                          ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
+                          : 'bg-blue-500/15 border-blue-500/25 text-blue-300 group-hover:border-blue-400/40'
+                      }`}
+                    >
+                      <div className="relative h-3 w-14 flex items-center justify-center overflow-hidden">
+                        <span
+                          className={`transition-all duration-300 ease-out absolute inset-x-0 text-center whitespace-nowrap ${
+                            copied ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
+                          }`}
+                        >
+                          Скопировано
+                        </span>
+                        <span
+                          className={`transition-all duration-300 ease-out absolute inset-x-0 text-center whitespace-nowrap ${
+                            copied ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'
+                          }`}
+                        >
+                          Инвайт
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -960,9 +1078,9 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         {/* Desktop & Main Content Split (Option 3 Layout) */}
         <div className="flex-1 flex min-h-0 overflow-hidden relative">
           {/* DESKTOP SIDEBAR (>= 1024px) */}
-          <aside className="hidden lg:flex flex-col w-80 xl:w-84 2xl:w-96 border-r border-white/10 bg-slate-950/40 backdrop-blur-md flex-shrink-0 select-none">
+          <aside className="hidden lg:flex flex-col w-80 xl:w-84 2xl:w-96 border-r border-white/10 bg-slate-950/45 backdrop-blur-xl flex-shrink-0 select-none">
             {/* Sidebar Top: Logo & Room info */}
-            <div className="p-3.5 px-4 border-b border-white/10 flex items-center justify-between bg-white/[0.02]">
+            <div className="p-3.5 px-4 border-b border-white/10 flex items-center justify-between bg-slate-950/60 backdrop-blur-xl">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-700 to-blue-900 flex items-center justify-center shadow-md flex-shrink-0">
                   <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -976,28 +1094,23 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               </div>
 
               <div className="flex items-center gap-1.5 flex-shrink-0">
-                {deviceState && (
-                  <Tooltip content="Настройки звука" description="Выбор микрофона, динамиков и тест звука" position="bottom">
-                    <button
-                      onClick={() => setShowAudioModal(true)}
-                      className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex items-center justify-center"
-                    >
-                      <Settings className="w-4 h-4" />
-                    </button>
-                  </Tooltip>
-                )}
-                <Tooltip content="Горячие клавиши" description={`Хоткеи и кнопки мыши [${muteHotkey.label} / ${deafenHotkey.label}]`} position="bottom">
+                <Tooltip content="Настройки" description="Звук, микрофон и горячие клавиши" position="bottom">
                   <button
-                    onClick={() => setShowHotkeyModal(true)}
-                    className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex items-center justify-center"
+                    type="button"
+                    onClick={() => {
+                      setSettingsTab('audio');
+                      setShowSettingsModal(true);
+                    }}
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex items-center justify-center cursor-pointer active:scale-95"
                   >
-                    <Keyboard className="w-4 h-4" />
+                    <Settings className="w-4 h-4" />
                   </button>
                 </Tooltip>
                 <Tooltip content="Поделиться ссылкой" description="Показать ссылку на комнату на 10 секунд" position="bottom">
                   <button
+                    type="button"
                     onClick={triggerShare}
-                    className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex items-center justify-center"
+                    className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors flex items-center justify-center cursor-pointer active:scale-95"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
@@ -1049,7 +1162,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             </div>
 
             {/* Desktop Sidebar Bottom Dock: Mic, Deafen, Noise Suppression, Status */}
-            <div className="p-3 border-t border-white/10 bg-black/40 backdrop-blur-md space-y-2.5 flex-shrink-0">
+            <div className="p-3 border-t border-white/10 bg-slate-950/60 backdrop-blur-xl space-y-2.5 flex-shrink-0">
               <div className="flex items-center justify-start gap-2">
                 {/* Mute toggle button */}
                 <Tooltip
@@ -1063,7 +1176,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
                       isMuted
                         ? 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 shadow-sm shadow-red-950/40'
-                        : 'bg-white/10 hover:bg-white/15 border border-white/20 text-white'
+                        : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
                     }`}
                   >
                     {isMuted ? (
@@ -1086,7 +1199,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
                       isDeafened
                         ? 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 shadow-sm shadow-red-950/40'
-                        : 'bg-white/10 hover:bg-white/15 border border-white/20 text-white'
+                        : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
                     }`}
                   >
                     {isDeafened ? (
@@ -1107,8 +1220,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     onClick={toggleNoiseSuppression}
                     className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
                       isNoiseSuppression
-                        ? 'bg-white/10 border-white/20 text-white hover:bg-white/15'
-                        : 'bg-white/5 border-white/10 text-gray-400 hover:text-gray-200'
+                        ? 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
+                        : 'bg-white/[0.04] border border-white/10 text-gray-400 hover:text-gray-200'
                     }`}
                   >
                     <Sparkles className="w-5 h-5" />
@@ -1155,8 +1268,11 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   <Tooltip content="Хоткей микрофона" description={`Текущая клавиша: [${muteHotkey.label}]`} position="top">
                     <button
                       type="button"
-                      onClick={() => setShowHotkeyModal(true)}
-                      className="font-mono text-[10px] bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1"
+                      onClick={() => {
+                        setSettingsTab('hotkeys');
+                        setShowSettingsModal(true);
+                      }}
+                      className="font-mono text-[10px] bg-white/[0.05] hover:bg-white/[0.10] px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1 cursor-pointer"
                     >
                       <Mic className="w-3 h-3 text-blue-400" />
                       <span>[{muteHotkey.label}]</span>
@@ -1165,8 +1281,11 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   <Tooltip content="Хоткей звука" description={`Текущая клавиша: [${deafenHotkey.label}]`} position="top">
                     <button
                       type="button"
-                      onClick={() => setShowHotkeyModal(true)}
-                      className="font-mono text-[10px] bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1"
+                      onClick={() => {
+                        setSettingsTab('hotkeys');
+                        setShowSettingsModal(true);
+                      }}
+                      className="font-mono text-[10px] bg-white/[0.05] hover:bg-white/[0.10] px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1 cursor-pointer"
                     >
                       <VolumeX className="w-3 h-3 text-red-400" />
                       <span>[{deafenHotkey.label}]</span>
@@ -1193,7 +1312,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         {/* Mobile Sticky Bottom Controls (< 1024px) with Safe-Area Inset */}
         <div
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.625rem)' }}
-          className="lg:hidden p-2.5 sm:p-3 bg-black/50 backdrop-blur-md border-t border-white/10 flex items-center justify-center gap-2.5 sm:gap-3 flex-shrink-0 z-20"
+          className="lg:hidden p-2.5 sm:p-3 bg-slate-950/60 backdrop-blur-xl border-t border-white/10 flex items-center justify-center gap-2.5 sm:gap-3 flex-shrink-0 z-20"
         >
           <Tooltip
             content={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
@@ -1206,7 +1325,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
                 isMuted
                   ? 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 shadow-sm shadow-red-950/40'
-                  : 'bg-white/10 hover:bg-white/15 border border-white/20 text-white'
+                  : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
               }`}
             >
               {isMuted ? (
@@ -1228,7 +1347,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
                 isDeafened
                   ? 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 shadow-sm shadow-red-950/40'
-                  : 'bg-white/10 hover:bg-white/15 border border-white/20 text-white'
+                  : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
               }`}
             >
               {isDeafened ? (
@@ -1248,8 +1367,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               onClick={toggleNoiseSuppression}
               className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
                 isNoiseSuppression
-                  ? 'bg-white/10 border-white/20 text-white hover:bg-white/15'
-                  : 'bg-white/5 border-white/10 text-gray-400 hover:text-gray-200'
+                  ? 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
+                  : 'bg-white/[0.04] border border-white/10 text-gray-400 hover:text-gray-200'
               }`}
             >
               <Sparkles className="w-5 h-5" />
@@ -1272,226 +1391,20 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
       </div>
 
       {/* Mobile Peer Volume Modal */}
-      {selectedMobilePeer && (
-        <Modal
-          isOpen={true}
-          onClose={() => setSelectedMobilePeer(null)}
-        >
-          <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-5 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <Volume2 className="w-5 h-5 text-blue-400" />
-              <h3 className="font-bold text-sm sm:text-base">Громкость: {selectedMobilePeer.nickname}</h3>
-            </div>
-            <Tooltip content="Закрыть" position="bottom">
-              <button
-                onClick={() => setSelectedMobilePeer(null)}
-                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
-                aria-label="Закрыть"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </Tooltip>
-          </div>
-
-          <div className="modal-content-scroll p-4 sm:p-5 space-y-4">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
-              <div
-                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-base bg-gradient-to-br ${getAvatarGradient(
-                  selectedMobilePeer.peerId || selectedMobilePeer.nickname
-                )} text-white`}
-              >
-                {getInitials(selectedMobilePeer.nickname)}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-white font-semibold text-sm truncate">{selectedMobilePeer.nickname}</p>
-                <p className="text-xs text-gray-400">
-                  {selectedMobilePeer.isDeafened
-                    ? 'Заглушил весь звук'
-                    : selectedMobilePeer.isMuted
-                    ? 'Микрофон отключен'
-                    : selectedMobilePeer.isSpeaking
-                    ? 'Говорит прямо сейчас'
-                    : 'В комнате'}
-                </p>
-              </div>
-            </div>
-
-            {/* Volume slider */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-xs text-gray-300">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <Volume2 className="w-4 h-4 text-blue-400" />
-                  <span>Громкость участника</span>
-                </span>
-                <span className="font-mono font-bold text-blue-300">
-                  {peerVolumes[selectedMobilePeer.peerId] ?? 100}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="200"
-                value={peerVolumes[selectedMobilePeer.peerId] ?? 100}
-                onChange={(e) => setPeerVolume(selectedMobilePeer.peerId, Number(e.target.value))}
-                className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-white/15 accent-blue-500"
-              />
-              <div className="flex justify-between text-[10px] text-gray-500 font-mono">
-                <span>0% (Mute)</span>
-                <span>100% (Норма)</span>
-                <span>200% (Усиление)</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-black/20 rounded-b-2xl">
-            <button
-              type="button"
-              onClick={() => {
-                const current = peerVolumes[selectedMobilePeer.peerId] ?? 100;
-                setPeerVolume(selectedMobilePeer.peerId, current === 0 ? 100 : 0);
-              }}
-              className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${
-                (peerVolumes[selectedMobilePeer.peerId] ?? 100) === 0
-                  ? 'bg-red-500/20 text-red-300 border-red-500/30'
-                  : 'bg-white/5 text-gray-300 border-white/10 hover:text-white'
-              }`}
-            >
-              <VolumeX className="w-3.5 h-3.5" />
-              <span>{(peerVolumes[selectedMobilePeer.peerId] ?? 100) === 0 ? 'Включить звук' : 'Заглушить'}</span>
-            </button>
-            <button
-              onClick={() => setSelectedMobilePeer(null)}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95"
-            >
-              Готово
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Nickname Edit Modal (Mobile Only) */}
-      {isMobileEditingNick && (
-        <Modal
-          isOpen={true}
-          onClose={() => setIsMobileEditingNick(false)}
-        >
-          <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-5 flex-shrink-0">
-            <div className="flex items-center gap-2">
-              <Pencil className="w-5 h-5 text-blue-400" />
-              <h3 className="font-bold text-sm sm:text-base">Ваш никнейм</h3>
-            </div>
-            <Tooltip content="Закрыть" position="bottom">
-              <button
-                onClick={() => setIsMobileEditingNick(false)}
-                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
-                aria-label="Закрыть"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </Tooltip>
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const trimmed = newNickInput.trim();
-              if (trimmed) {
-                changeNickname(trimmed);
-                setMyNickname(trimmed);
-                try {
-                  localStorage.setItem('voice_chat_nickname', trimmed);
-                } catch (err) {}
-                setIsMobileEditingNick(false);
-              }
-            }}
-          >
-            <div className="modal-content-scroll p-4 sm:p-5 space-y-3">
-              <label className="text-xs text-gray-400 block">Введите никнейм для отображения в комнате:</label>
-              <input
-                type="text"
-                value={newNickInput}
-                onChange={(e) => setNewNickInput(e.target.value)}
-                maxLength={24}
-                autoFocus
-                className="w-full py-2.5 px-3 bg-white/10 border border-white/20 rounded-xl text-white text-base focus:outline-none focus:border-blue-400"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-black/20 rounded-b-2xl">
-              <button
-                type="button"
-                onClick={() => setIsMobileEditingNick(false)}
-                className="px-4 py-2 bg-white/5 hover:bg-white/10 text-gray-300 rounded-xl text-xs sm:text-sm font-medium transition-colors"
-              >
-                Отмена
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95"
-              >
-                Сохранить
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-
-      {/* Audio Devices Modal */}
       <Modal
-        isOpen={showAudioModal && !!deviceState}
-        onClose={() => setShowAudioModal(false)}
+        isOpen={Boolean(selectedMobilePeer)}
+        onClose={() => setSelectedMobilePeer(null)}
       >
-        <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-5 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Headphones className="w-5 h-5 text-blue-400" />
-            <h3 className="font-bold text-sm sm:text-base">Настройка звуковых устройств</h3>
-          </div>
-          <Tooltip content="Закрыть" position="bottom">
-            <button
-              onClick={() => setShowAudioModal(false)}
-              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
-              aria-label="Закрыть"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </Tooltip>
-        </div>
-
-        <div className="modal-content-scroll p-4 sm:p-5">
-          {deviceState && <AudioDeviceSettings deviceState={deviceState} />}
-        </div>
-
-        <div className="flex justify-end p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-black/20 rounded-b-2xl">
-          <button
-            onClick={() => setShowAudioModal(false)}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95"
-          >
-            Готово
-          </button>
-        </div>
-      </Modal>
-
-      {/* Hotkey & Background Controls Modal */}
-      <Modal
-        isOpen={showHotkeyModal}
-        onClose={() => {
-          cancelMuteRecording();
-          cancelDeafenRecording();
-          setShowHotkeyModal(false);
-        }}
-      >
-        <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-5 flex-shrink-0">
+        {cachedMobilePeer && (
+          <>
+            <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-5 flex-shrink-0">
               <div className="flex items-center gap-2">
-                <Keyboard className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-sm sm:text-base">Настройка горячих клавиш</h3>
+                <Volume2 className="w-5 h-5 text-blue-400" />
+                <h3 className="font-bold text-sm sm:text-base">Громкость: {cachedMobilePeer.nickname}</h3>
               </div>
               <Tooltip content="Закрыть" position="bottom">
                 <button
-                  onClick={() => {
-                    cancelMuteRecording();
-                    cancelDeafenRecording();
-                    setShowHotkeyModal(false);
-                  }}
+                  onClick={() => setSelectedMobilePeer(null)}
                   className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
                   aria-label="Закрыть"
                 >
@@ -1501,6 +1414,243 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             </div>
 
             <div className="modal-content-scroll p-4 sm:p-5 space-y-4">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                <div
+                  className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-base bg-gradient-to-br ${getAvatarGradient(
+                    cachedMobilePeer.peerId || cachedMobilePeer.nickname
+                  )} text-white`}
+                >
+                  {getInitials(cachedMobilePeer.nickname)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-white font-semibold text-sm truncate">{cachedMobilePeer.nickname}</p>
+                  <p className="text-xs text-gray-400">
+                    {cachedMobilePeer.isDeafened
+                      ? 'Заглушил весь звук'
+                      : cachedMobilePeer.isMuted
+                      ? 'Микрофон отключен'
+                      : cachedMobilePeer.isSpeaking
+                      ? 'Говорит прямо сейчас'
+                      : 'В комнате'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Volume slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-gray-300">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Volume2 className="w-4 h-4 text-blue-400" />
+                    <span>Громкость участника</span>
+                  </span>
+                  <span className="font-mono font-bold text-blue-300">
+                    {peerVolumes[cachedMobilePeer.peerId] ?? 100}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="200"
+                  value={peerVolumes[cachedMobilePeer.peerId] ?? 100}
+                  onChange={(e) => setPeerVolume(cachedMobilePeer.peerId, Number(e.target.value))}
+                  className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-white/15 accent-blue-500"
+                />
+                <div className="flex justify-between text-[10px] text-gray-500 font-mono">
+                  <span>0% (Mute)</span>
+                  <span>100% (Норма)</span>
+                  <span>200% (Усиление)</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-slate-950/50 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={() => {
+                  const current = peerVolumes[cachedMobilePeer.peerId] ?? 100;
+                  setPeerVolume(cachedMobilePeer.peerId, current === 0 ? 100 : 0);
+                }}
+                className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center gap-1.5 border transition-all ${
+                  (peerVolumes[cachedMobilePeer.peerId] ?? 100) === 0
+                    ? 'bg-red-500/20 text-red-300 border-red-500/30'
+                    : 'bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 border-white/10 hover:text-white'
+                }`}
+              >
+                <VolumeX className="w-3.5 h-3.5" />
+                <span>{(peerVolumes[cachedMobilePeer.peerId] ?? 100) === 0 ? 'Включить звук' : 'Заглушить'}</span>
+              </button>
+              <button
+                onClick={() => setSelectedMobilePeer(null)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95"
+              >
+                Готово
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* Nickname Edit Modal (Mobile Only) */}
+      <Modal
+        isOpen={isMobileEditingNick}
+        onClose={() => setIsMobileEditingNick(false)}
+      >
+        <div className="flex items-center justify-between border-b border-white/10 p-4 sm:p-5 flex-shrink-0 bg-white/[0.02]">
+          <div className="flex items-center gap-2">
+            <Pencil className="w-5 h-5 text-blue-400" />
+            <h3 className="font-bold text-sm sm:text-base">Ваш никнейм</h3>
+          </div>
+          <Tooltip content="Закрыть" position="bottom">
+            <button
+              onClick={() => setIsMobileEditingNick(false)}
+              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center"
+              aria-label="Закрыть"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </Tooltip>
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const trimmed = newNickInput.trim();
+            if (trimmed) {
+              changeNickname(trimmed);
+              setMyNickname(trimmed);
+              try {
+                localStorage.setItem('voice_chat_nickname', trimmed);
+              } catch (err) {}
+              setIsMobileEditingNick(false);
+            }
+          }}
+        >
+          <div className="modal-content-scroll p-4 sm:p-5 space-y-3">
+            <label className="text-xs text-gray-400 block">Введите никнейм для отображения в комнате:</label>
+            <input
+              type="text"
+              value={newNickInput}
+              onChange={(e) => setNewNickInput(e.target.value)}
+              maxLength={24}
+              autoFocus
+              className="w-full py-2.5 px-3 bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl text-white text-base focus:outline-none transition-all"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-slate-950/50 rounded-b-2xl">
+            <button
+              type="button"
+              onClick={() => setIsMobileEditingNick(false)}
+              className="px-4 py-2 bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 rounded-xl text-xs sm:text-sm font-medium transition-colors"
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95"
+            >
+              Сохранить
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Unified Settings Modal */}
+      <Modal
+        isOpen={showSettingsModal}
+        onClose={() => {
+          cancelMuteRecording();
+          cancelDeafenRecording();
+          setShowSettingsModal(false);
+        }}
+        className="max-w-lg"
+      >
+        <div className="border-b border-white/10 p-4 sm:p-5 flex-shrink-0 bg-white/[0.02]">
+          <div className={`flex items-center justify-between ${!isSmartphone ? 'mb-3.5' : ''}`}>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                {isSmartphone ? <Headphones className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
+              </div>
+              <div>
+                <h3 className="font-bold text-sm sm:text-base leading-snug">
+                  {isSmartphone ? 'Настройки звука' : 'Настройки'}
+                </h3>
+                <p className="text-[11px] text-gray-400">
+                  {isSmartphone ? 'Выбор микрофона и динамиков' : 'Управление звуком, микрофоном и клавишами'}
+                </p>
+              </div>
+            </div>
+            <Tooltip content="Закрыть" position="bottom">
+              <button
+                type="button"
+                onClick={() => {
+                  cancelMuteRecording();
+                  cancelDeafenRecording();
+                  setShowSettingsModal(false);
+                }}
+                className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer"
+                aria-label="Закрыть"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </Tooltip>
+          </div>
+
+          {/* Segmented Tab Switcher (скрыт на смартфонах) */}
+          {!isSmartphone && (
+            <div className="flex items-center p-1 bg-white/[0.04] border border-white/10 rounded-xl gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  cancelMuteRecording();
+                  cancelDeafenRecording();
+                  setSettingsTab('audio');
+                }}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  effectiveTab === 'audio'
+                    ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-600/30'
+                    : 'text-gray-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
+              >
+                <Headphones className="w-3.5 h-3.5" />
+                <span>Звук и микрофон</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  cancelMuteRecording();
+                  cancelDeafenRecording();
+                  setSettingsTab('hotkeys');
+                }}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  effectiveTab === 'hotkeys'
+                    ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-600/30'
+                    : 'text-gray-400 hover:text-white hover:bg-white/[0.06]'
+                }`}
+              >
+                <Keyboard className="w-3.5 h-3.5" />
+                <span>Горячие клавиши</span>
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="modal-content-scroll p-4 sm:p-5">
+          {effectiveTab === 'audio' && (
+            <div key="audio-tab" className="animate-tab-fade space-y-4">
+              {deviceState ? (
+                <AudioDeviceSettings deviceState={deviceState} />
+              ) : (
+                <div className="py-8 text-center text-gray-400 text-xs flex flex-col items-center justify-center gap-2">
+                  <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                  <span>Инициализация аудиоустройств...</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!isSmartphone && effectiveTab === 'hotkeys' && (
+            <div key="hotkeys-tab" className="animate-tab-fade space-y-4">
               {/* Conflict Notification Banner */}
               {hotkeyConflictNotice && (
                 <div className="p-3 bg-blue-500/15 border border-blue-500/30 rounded-xl text-blue-200 text-xs flex items-start justify-between gap-2.5 animate-fadeIn">
@@ -1512,7 +1662,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     <button
                       type="button"
                       onClick={() => setHotkeyConflictNotice(null)}
-                      className="p-1 text-blue-300 hover:text-white rounded hover:bg-white/10 transition-colors flex items-center justify-center"
+                      className="p-1 text-blue-300 hover:text-white rounded hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer"
                       aria-label="Закрыть"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1530,7 +1680,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   </span>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-white/5 border border-white/10 rounded-xl">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-white/[0.04] border border-white/10 rounded-xl">
                   <div>
                     <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
                       Текущая клавиша:
@@ -1543,6 +1693,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
 
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => {
                         cancelDeafenRecording();
                         if (isMuteRecording) {
@@ -1551,7 +1702,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                           startMuteRecording();
                         }
                       }}
-                      className={`px-3 py-1.5 rounded-lg font-medium text-xs transition-all flex-1 sm:flex-none ${
+                      className={`px-3 py-1.5 rounded-lg font-medium text-xs transition-all flex-1 sm:flex-none cursor-pointer ${
                         isMuteRecording
                           ? 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
                           : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-600/30'
@@ -1561,8 +1712,9 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     </button>
                     <Tooltip content="Сбросить хоткей" description="Сбросить микрофон на клавишу Ё / `" position="top">
                       <button
+                        type="button"
                         onClick={resetMuteHotkey}
-                        className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg text-xs transition-all"
+                        className="px-2.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white rounded-lg text-xs transition-all cursor-pointer"
                       >
                         Сброс (Ё)
                       </button>
@@ -1579,10 +1731,10 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                         updateMuteHotkey(opt);
                         cancelMuteRecording();
                       }}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all truncate text-center ${
+                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all truncate text-center cursor-pointer ${
                         muteHotkey.type === 'mouse' && muteHotkey.code === opt.code
                           ? 'bg-blue-600/30 border-blue-500 text-blue-300 font-semibold shadow-sm'
-                          : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
+                          : 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] text-gray-300'
                       }`}
                     >
                       {opt.label}
@@ -1591,7 +1743,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                 </div>
 
                 {isMuteRecording && (
-                  <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs animate-pulse text-center leading-relaxed">
+                  <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs animate-fade-in text-center leading-relaxed">
                     Нажмите <strong>любую клавишу</strong> на клавиатуре или <strong>кнопку мыши</strong> для микрофона...
                   </div>
                 )}
@@ -1609,7 +1761,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   Мгновенно заглушает ваш микрофон и весь входящий звук от участников в комнате.
                 </p>
 
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-white/5 border border-white/10 rounded-xl">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-white/[0.04] border border-white/10 rounded-xl">
                   <div>
                     <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
                       Текущая клавиша:
@@ -1622,6 +1774,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
 
                   <div className="flex gap-2">
                     <button
+                      type="button"
                       onClick={() => {
                         cancelMuteRecording();
                         if (isDeafenRecording) {
@@ -1630,7 +1783,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                           startDeafenRecording();
                         }
                       }}
-                      className={`px-3 py-1.5 rounded-lg font-medium text-xs transition-all flex-1 sm:flex-none ${
+                      className={`px-3 py-1.5 rounded-lg font-medium text-xs transition-all flex-1 sm:flex-none cursor-pointer ${
                         isDeafenRecording
                           ? 'bg-amber-600 hover:bg-amber-500 text-white animate-pulse'
                           : 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30'
@@ -1640,8 +1793,9 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     </button>
                     <Tooltip content="Сбросить хоткей" description="Сбросить звук на клавишу \" position="top">
                       <button
+                        type="button"
                         onClick={resetDeafenHotkey}
-                        className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-gray-300 hover:text-white rounded-lg text-xs transition-all"
+                        className="px-2.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white rounded-lg text-xs transition-all cursor-pointer"
                       >
                         Сброс (\)
                       </button>
@@ -1658,10 +1812,10 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                         updateDeafenHotkey(opt);
                         cancelDeafenRecording();
                       }}
-                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all truncate text-center ${
+                      className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all truncate text-center cursor-pointer ${
                         deafenHotkey.type === 'mouse' && deafenHotkey.code === opt.code
                           ? 'bg-rose-600/30 border-rose-500 text-rose-300 font-semibold shadow-sm'
-                          : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
+                          : 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] text-gray-300'
                       }`}
                     >
                       {opt.label}
@@ -1670,7 +1824,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                 </div>
 
                 {isDeafenRecording && (
-                  <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs animate-pulse text-center leading-relaxed">
+                  <div className="p-2 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-xs animate-fade-in text-center leading-relaxed">
                     Нажмите <strong>любую клавишу</strong> на клавиатуре или <strong>кнопку мыши</strong> для полного отключения...
                   </div>
                 )}
@@ -1685,8 +1839,9 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   </div>
                   {isPipSupported && (
                     <button
+                      type="button"
                       onClick={togglePip}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                      className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer ${
                         pipWindow
                           ? 'bg-red-600 hover:bg-red-500 text-white'
                           : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md shadow-indigo-600/30'
@@ -1726,7 +1881,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   </p>
                 </div>
               ) : (
-                <div className="p-2.5 bg-white/5 border border-white/10 rounded-xl text-gray-300 text-xs space-y-1">
+                <div className="p-2.5 bg-white/[0.04] border border-white/10 rounded-xl text-gray-300 text-xs space-y-1">
                   <p className="font-semibold text-white flex items-center gap-1.5 text-xs">
                     <Shield className="w-4 h-4 text-blue-400 flex-shrink-0" />
                     <span>Фоновый режим:</span>
@@ -1737,19 +1892,22 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                 </div>
               )}
             </div>
+          )}
+        </div>
 
-            <div className="flex justify-end p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-black/20 rounded-b-2xl">
-              <button
-                onClick={() => {
-                  cancelMuteRecording();
-                  cancelDeafenRecording();
-                  setShowHotkeyModal(false);
-                }}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95"
-              >
-                Готово
-              </button>
-            </div>
+        <div className="flex justify-end p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-slate-950/50 rounded-b-2xl">
+          <button
+            type="button"
+            onClick={() => {
+              cancelMuteRecording();
+              cancelDeafenRecording();
+              setShowSettingsModal(false);
+            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95 cursor-pointer"
+          >
+            Готово
+          </button>
+        </div>
       </Modal>
 
       {/* Picture-in-Picture Overlay Portal */}

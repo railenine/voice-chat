@@ -7,8 +7,9 @@
  */
 
 import http from 'http';
+import { WebSocket } from 'ws';
 
-const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
+const BASE_URL = process.env.TEST_URL || 'http://127.0.0.1:3000';
 
 async function testEndpoint(path, expectedStatus = 200) {
   return new Promise((resolve, reject) => {
@@ -98,6 +99,32 @@ async function runTests() {
     await testEndpoint('/some-random-route');
     console.log('   ✓ SPA fallback works');
     passed++;
+
+    // Test WebSocket signaling connection
+    console.log('\nTesting WebSocket signaling connection...');
+    await new Promise((resolve, reject) => {
+      const wsUrl = BASE_URL.replace(/^http/, 'ws') + '/peerjs/ws';
+      const ws = new WebSocket(wsUrl);
+      const timer = setTimeout(() => {
+        ws.terminate();
+        reject(new Error('WebSocket connection timeout'));
+      }, 3000);
+
+      ws.on('open', () => {
+        clearTimeout(timer);
+        console.log('   ✓ WebSocket connected to signaling server');
+        passed++;
+        ws.close();
+        resolve();
+      });
+
+      ws.on('error', (err) => {
+        clearTimeout(timer);
+        console.error('   ✗ WebSocket error:', err.message);
+        failed++;
+        reject(err);
+      });
+    });
     
   } catch (error) {
     failed++;

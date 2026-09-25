@@ -93,13 +93,13 @@ export const UpdateModal: React.FC<UpdateModalProps> = memo(({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md ${
+      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md ${
         isClosing ? 'animate-backdrop-out pointer-events-none' : 'animate-backdrop-in'
       }`}
       onClick={renderedStatus === 'downloading' ? undefined : onClose}
     >
       <div
-        className={`bg-slate-900/95 border border-white/20 rounded-2xl max-w-md w-full shadow-2xl p-5 sm:p-6 text-white select-none modal-wrapper ${
+        className={`bg-slate-950/90 backdrop-blur-2xl border border-white/15 rounded-2xl max-w-md w-full shadow-2xl shadow-black/80 p-5 sm:p-6 text-white select-none modal-wrapper ${
           isClosing ? 'animate-modal-out' : 'animate-modal-in'
         }`}
         onClick={(e) => e.stopPropagation()}
@@ -257,7 +257,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = memo(({
                 </div>
 
                 {updateInfo?.notes && (
-                  <div className="p-3 bg-white/5 border border-white/10 rounded-xl leading-relaxed max-h-36 overflow-y-auto custom-scrollbar">
+                  <div className="p-3 bg-white/[0.04] border border-white/10 rounded-xl leading-relaxed max-h-36 overflow-y-auto custom-scrollbar">
                     <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
                       Что нового:
                     </div>

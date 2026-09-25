@@ -50,7 +50,7 @@ export const Modal: React.FC<ModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm ${
+      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md ${
         isClosing ? 'animate-backdrop-out pointer-events-none' : 'animate-backdrop-in'
       }`}
       onClick={closeOnOverlayClick ? onClose : undefined}
@@ -58,7 +58,7 @@ export const Modal: React.FC<ModalProps> = ({
       role="dialog"
     >
       <div
-        className={`bg-slate-900/95 border border-white/20 rounded-2xl max-w-md w-full shadow-2xl text-white modal-wrapper ${
+        className={`bg-slate-950/90 backdrop-blur-2xl border border-white/15 rounded-2xl max-w-md w-full shadow-2xl shadow-black/80 text-white modal-wrapper ${
           isClosing ? 'animate-modal-out' : 'animate-modal-in'
         } ${className}`}
         onClick={(e) => e.stopPropagation()}

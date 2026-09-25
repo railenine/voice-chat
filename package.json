@@ -1,12 +1,13 @@
 {
   "name": "sandbox-workspace",
-  "version": "0.0.50",
+  "version": "0.0.51",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
+    "test": "node --test scripts/unit-tests.js",
     "start": "node server/index.js",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",

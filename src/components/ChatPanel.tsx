@@ -79,10 +79,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
   };
 
   return (
-    <div className={`flex flex-col h-full bg-slate-950/40 backdrop-blur-md rounded-2xl border border-white/10 shadow-2xl overflow-hidden ${className}`}>
+    <div className={`flex flex-col h-full bg-slate-950/45 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl shadow-black/40 overflow-hidden ${className}`}>
       {/* Header (desktop only - mobile uses unified top bar) */}
       {showHeader && (
-        <div className="hidden lg:flex p-3.5 px-4 sm:px-5 border-b border-white/10 items-center justify-between bg-white/[0.03] backdrop-blur-sm flex-shrink-0">
+        <div className="hidden lg:flex p-3.5 px-4 sm:px-5 border-b border-white/10 items-center justify-between bg-slate-950/60 backdrop-blur-xl flex-shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
               <MessageSquare className="w-4 h-4" />
@@ -143,7 +143,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
                   className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm break-words whitespace-pre-wrap leading-relaxed shadow-md ${
                     isMe
                       ? 'bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-tr-sm border border-blue-400/30'
-                      : 'bg-white/10 hover:bg-white/[0.13] text-gray-100 rounded-tl-sm border border-white/10'
+                      : 'bg-white/[0.06] hover:bg-white/[0.09] text-gray-100 rounded-tl-sm border border-white/[0.08]'
                   }`}
                 >
                   {msg.text}
@@ -158,7 +158,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       {/* Input Bar */}
       <form
         onSubmit={handleSubmit}
-        className="p-2.5 sm:p-3 bg-black/40 border-t border-white/10 flex items-center gap-2 flex-shrink-0"
+        className="p-2.5 sm:p-3 bg-slate-950/60 backdrop-blur-xl border-t border-white/10 flex items-center gap-2 flex-shrink-0"
       >
         <input
           type="text"
@@ -167,7 +167,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
           onKeyDown={handleKeyDown}
           maxLength={1000}
           placeholder={`Сообщение в #${roomId}... (Enter для отправки)`}
-          className="flex-1 h-11 bg-white/5 hover:bg-white/[0.08] focus:bg-white/10 border border-white/10 focus:border-blue-500/50 rounded-xl px-3.5 text-base sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all"
+          className="flex-1 h-11 bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl px-3.5 text-base sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all"
         />
         <Tooltip
           content="Отправить сообщение"

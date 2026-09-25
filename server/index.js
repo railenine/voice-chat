@@ -18,7 +18,7 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-const APP_VERSION = '0.0.50';
+const APP_VERSION = '0.0.51';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -32,10 +32,11 @@ app.get(['/health', '/peerjs/health'], (req, res) => {
   });
 });
 
-app.get('/peerjs/info', (req, res) => {
+app.get(['/api/info', '/peerjs/info'], (req, res) => {
   res.json({
     name: 'VoiceChat Server',
     version: APP_VERSION,
+    peerServer: '/peerjs',
     signaling: 'websocket',
     path: '/peerjs/ws',
     status: 'running'
@@ -561,6 +562,16 @@ if (fs.existsSync(distPath)) {
 
 // Start server
 const PORT = process.env.PORT || 3000;
+
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`[Server] Port ${PORT} is already in use (EADDRINUSE). Please ensure no other instance is running.`);
+  } else {
+    console.error('[Server] Fatal server error:', err);
+  }
+  process.exit(1);
+});
+
 server.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗

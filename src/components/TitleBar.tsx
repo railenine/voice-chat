@@ -101,7 +101,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates 
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
       onDoubleClick={() => handleToggleMaximize()}
-      className="h-[34px] w-full bg-slate-950/95 backdrop-blur-xl border-b border-white/[0.08] flex items-center justify-between select-none z-50 flex-shrink-0 text-xs font-sans cursor-default"
+      className="h-[34px] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between select-none z-50 flex-shrink-0 text-xs font-sans cursor-default"
     >
       {/* Left: App Logo, Name & Room Badge */}
       <div
@@ -149,50 +149,53 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates 
       {/* Right: Window Controls */}
       <div className="flex items-center h-full flex-shrink-0">
         {/* Minimize Button */}
-        <button
-          type="button"
-          onClick={handleMinimize}
-          title="Свернуть"
-          className="h-full w-11 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors focus:outline-none"
-        >
-          <svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
-            <rect width="10" height="1" />
-          </svg>
-        </button>
+        <Tooltip content="Свернуть" position="bottom">
+          <button
+            type="button"
+            onClick={handleMinimize}
+            className="h-full w-11 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors focus:outline-none"
+          >
+            <svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
+              <rect width="10" height="1" />
+            </svg>
+          </button>
+        </Tooltip>
 
         {/* Maximize / Restore Button */}
-        <button
-          type="button"
-          onClick={(e) => handleToggleMaximize(e)}
-          title={isMaximized ? 'Восстановить' : 'Развернуть'}
-          className="h-full w-11 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors focus:outline-none"
-        >
-          {isMaximized ? (
-            // Restore icon (two overlapping squares)
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-              <path d="M2.5 1.5H8.5V7.5" />
-              <rect x="1.5" y="2.5" width="6" height="6" />
-            </svg>
-          ) : (
-            // Maximize icon (single square)
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
-              <rect x="0.5" y="0.5" width="9" height="9" />
-            </svg>
-          )}
-        </button>
+        <Tooltip content={isMaximized ? 'Восстановить' : 'Развернуть'} position="bottom">
+          <button
+            type="button"
+            onClick={(e) => handleToggleMaximize(e)}
+            className="h-full w-11 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors focus:outline-none"
+          >
+            {isMaximized ? (
+              // Restore icon (two overlapping squares)
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+                <path d="M2.5 1.5H8.5V7.5" />
+                <rect x="1.5" y="2.5" width="6" height="6" />
+              </svg>
+            ) : (
+              // Maximize icon (single square)
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1">
+                <rect x="0.5" y="0.5" width="9" height="9" />
+              </svg>
+            )}
+          </button>
+        </Tooltip>
 
         {/* Close Button */}
-        <button
-          type="button"
-          onClick={handleClose}
-          title="Закрыть"
-          className="h-full w-12 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 active:bg-red-700 transition-colors focus:outline-none"
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1.2">
-            <line x1="1" y1="1" x2="9" y2="9" />
-            <line x1="9" y1="1" x2="1" y2="9" />
-          </svg>
-        </button>
+        <Tooltip content="Закрыть" position="bottom">
+          <button
+            type="button"
+            onClick={handleClose}
+            className="h-full w-12 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 active:bg-red-700 transition-colors focus:outline-none"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1.2">
+              <line x1="1" y1="1" x2="9" y2="9" />
+              <line x1="9" y1="1" x2="1" y2="9" />
+            </svg>
+          </button>
+        </Tooltip>
       </div>
     </div>
   );

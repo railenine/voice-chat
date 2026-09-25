@@ -40,7 +40,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
       <JellyBackground />
 
       {/* Content */}
-      <div className="content-wrapper h-full w-full flex-1 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+      <div className="content-wrapper h-full w-full flex-1 flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in">
         <div className="max-w-md w-full">
           {/* Logo / Title */}
           <div className="text-center mb-4 sm:mb-6 compact-h-header">
@@ -62,7 +62,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
           </div>
 
           {/* Nickname Card */}
-          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 mb-3 sm:mb-4 border border-white/10 compact-h-card animate-bounce-in">
+          <div className="bg-slate-950/45 backdrop-blur-xl rounded-2xl p-4 sm:p-5 mb-3 sm:mb-4 border border-white/10 shadow-2xl shadow-black/40 compact-h-card animate-bounce-in">
             <div className="text-center">
               <p className="text-gray-400 text-xs sm:text-sm mb-1.5">Ваш никнейм</p>
               <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
@@ -78,7 +78,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                   }}
                   placeholder="Введите никнейм"
                   maxLength={24}
-                  className="w-full py-2 px-3 compact-h-input bg-white/10 border border-white/20 rounded-xl text-center text-white font-bold text-base sm:text-lg placeholder:text-gray-400 focus:outline-none focus:border-blue-400 transition-colors"
+                  className="w-full py-2 px-3 compact-h-input bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl text-center text-white font-bold text-base sm:text-lg placeholder:text-gray-400 focus:outline-none transition-all"
                 />
                   <Tooltip
                     content="Случайный никнейм"
@@ -94,7 +94,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                           sessionStorage.setItem('voicechat-nickname', newNick);
                         } catch {}
                       }}
-                      className="p-2 sm:p-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl transition-all border border-white/10 flex-shrink-0 flex items-center justify-center"
+                      className="p-2 sm:p-2.5 bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white rounded-xl transition-all border border-white/10 flex-shrink-0 flex items-center justify-center"
                     >
                       <Dices className="w-4 h-4 text-blue-400" />
                     </button>
@@ -105,7 +105,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
 
           {/* Audio Devices Collapsible Card */}
           {deviceState && (
-            <div className="bg-white/5 backdrop-blur-lg rounded-2xl border border-white/10 compact-h-card p-3.5 sm:p-4 mb-3 sm:mb-4 transition-all animate-bounce-in">
+            <div className="bg-slate-950/45 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl shadow-black/40 compact-h-card p-3.5 sm:p-4 mb-3 sm:mb-4 transition-all animate-bounce-in">
               <button
                 type="button"
                 onClick={() => setShowAudioSettings(!showAudioSettings)}
@@ -139,14 +139,14 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
           )}
 
           {/* Mode Selection */}
-          <div className="bg-white/5 backdrop-blur-lg rounded-2xl p-4 sm:p-5 border border-white/10 compact-h-card animate-slide-up">
+          <div className="bg-slate-950/45 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border border-white/10 shadow-2xl shadow-black/40 compact-h-card animate-slide-up">
             <div className="flex gap-2 mb-3 sm:mb-4">
               <button
                 onClick={() => setMode('create')}
                 className={`flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-medium transition-all text-xs sm:text-sm ${
                   mode === 'create'
                     ? 'bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg shadow-blue-900/50'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white border border-white/[0.06]'
                 }`}
               >
                 Создать
@@ -156,7 +156,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                 className={`flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-medium transition-all text-xs sm:text-sm ${
                   mode === 'join'
                     ? 'bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg shadow-blue-900/50'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white border border-white/[0.06]'
                 }`}
               >
                 Войти
@@ -164,10 +164,15 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
             </div>
 
             {mode === 'create' ? (
-              <div className="text-center">
-                <p className="text-gray-300 mb-3 text-xs sm:text-sm">
-                  Создайте новую комнату и поделитесь ID с друзьями
-                </p>
+              <div key="create" className="text-center animate-tab-fade mode-card-content flex flex-col justify-between">
+                <div className="flex-1 flex flex-col justify-center py-1 sm:py-2">
+                  <p className="text-gray-300 text-xs sm:text-sm">
+                    Создайте новую комнату и поделитесь ID с друзьями
+                  </p>
+                  <p className="text-gray-500 text-[11px] sm:text-xs mt-1">
+                    Комната создается мгновенно с P2P шифрованием
+                  </p>
+                </div>
                 <button
                   onClick={onCreateRoom}
                   className="w-full py-2.5 sm:py-3.5 px-6 compact-h-btn bg-gradient-to-r from-blue-700 to-blue-900 text-white font-bold rounded-xl hover:from-blue-800 hover:to-blue-950 transition-all shadow-lg shadow-blue-900/50 hover:shadow-blue-900/70 active:scale-95 text-xs sm:text-sm flex items-center justify-center gap-2"
@@ -177,28 +182,30 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                 </button>
               </div>
             ) : (
-              <div>
-                <p className="text-gray-300 mb-2.5 text-center text-xs sm:text-sm">
-                  Введите ID комнаты для присоединения
-                </p>
-                <input
-                  type="text"
-                  value={joinRoomId}
-                  onChange={(e) => setJoinRoomId(extractRoomId(e.target.value))}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && joinRoomId.length >= 3) {
-                      onJoinRoom();
-                    }
-                  }}
-                  onPaste={(e) => {
-                    e.preventDefault();
-                    const text = e.clipboardData.getData('text');
-                    setJoinRoomId(extractRoomId(text));
-                  }}
-                  placeholder="ID КОМНАТЫ ИЛИ ССЫЛКА"
-                  className="w-full py-2.5 px-3 sm:px-4 compact-h-input bg-white/10 border border-white/20 rounded-xl text-white text-center text-base font-mono tracking-wider sm:tracking-widest placeholder:text-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 mb-3 transition-colors"
-                  maxLength={128}
-                />
+              <div key="join" className="animate-tab-fade mode-card-content flex flex-col justify-between">
+                <div className="flex-1 flex flex-col justify-center gap-1.5 sm:gap-2">
+                  <p className="text-gray-300 text-center text-xs sm:text-sm">
+                    Введите ID комнаты для присоединения
+                  </p>
+                  <input
+                    type="text"
+                    value={joinRoomId}
+                    onChange={(e) => setJoinRoomId(extractRoomId(e.target.value))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && joinRoomId.length >= 3) {
+                        onJoinRoom();
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault();
+                      const text = e.clipboardData.getData('text');
+                      setJoinRoomId(extractRoomId(text));
+                    }}
+                    placeholder="ID КОМНАТЫ ИЛИ ССЫЛКА"
+                    className="w-full py-2 sm:py-2.5 px-3 sm:px-4 compact-h-input bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl text-white text-center text-base font-mono tracking-wider sm:tracking-widest placeholder:text-gray-400 focus:outline-none transition-all"
+                    maxLength={128}
+                  />
+                </div>
                 <button
                   onClick={onJoinRoom}
                   disabled={joinRoomId.length < 3}
