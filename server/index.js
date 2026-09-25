@@ -18,7 +18,7 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-const APP_VERSION = '0.0.51';
+const APP_VERSION = '0.0.52';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -26,7 +26,7 @@ app.get(['/health', '/peerjs/health'], (req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    service: 'voicechat-server',
+    service: 'rvxis-server',
     version: APP_VERSION,
     minClientVersion: MIN_CLIENT_VERSION
   });
@@ -34,7 +34,7 @@ app.get(['/health', '/peerjs/health'], (req, res) => {
 
 app.get(['/api/info', '/peerjs/info'], (req, res) => {
   res.json({
-    name: 'VoiceChat Server',
+    name: 'RVxis Server',
     version: APP_VERSION,
     peerServer: '/peerjs',
     signaling: 'websocket',
@@ -67,7 +67,7 @@ app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/
   try {
     const ghUrl = 'https://github.com/railenine/voice-chat/releases/latest/download/latest.json';
     const response = await fetch(ghUrl, {
-      headers: { 'User-Agent': 'VoiceChat-Server-Updater' }
+      headers: { 'User-Agent': 'RVxis-Server-Updater' }
     });
     if (response.ok) {
       const data = await response.json();
@@ -86,12 +86,12 @@ app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/
   // Default fallback manifest
   res.json({
     version: APP_VERSION,
-    notes: `VoiceChat v${APP_VERSION} - P2P WebRTC Voice Chat`,
+    notes: `RVxis v${APP_VERSION} - P2P WebRTC Voice Chat`,
     pub_date: new Date().toISOString(),
     portable_url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/voice-chat.exe`,
     platforms: {
       'windows-x86_64': {
-        url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/VoiceChat_${APP_VERSION}_x64-setup.exe`
+        url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/RVxis_${APP_VERSION}_x64-setup.exe`
       }
     }
   });
@@ -305,13 +305,16 @@ wss.on('connection', (ws) => {
         });
       }
 
-      // Add client to room
+      // Respect client's initial mute/deafen state (user may have toggled before WS connected)
+      const initialMuted = Boolean(msg.isMuted);
+      const initialDeafened = Boolean(msg.isDeafened);
+
       room.set(peerId, {
         ws,
         peerId,
         nickname: nickname || 'Аноним',
-        isMuted: false,
-        isDeafened: false,
+        isMuted: initialMuted,
+        isDeafened: initialDeafened,
         isSpeaking: false,
       });
 
@@ -331,8 +334,8 @@ wss.on('connection', (ws) => {
         peer: {
           peerId,
           nickname: nickname || 'Аноним',
-          isMuted: false,
-          isDeafened: false,
+          isMuted: initialMuted,
+          isDeafened: initialDeafened,
           isSpeaking: false,
         },
         iceServers: CACHED_ICE_SERVERS,
@@ -576,7 +579,7 @@ server.listen(PORT, () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
-║   🎤 VoiceChat Server 2.0 (Pure WebRTC + WS)             ║
+║   🎤 RVxis Server 2.0 (Pure WebRTC + WS)                  ║
 ║                                                           ║
 ║   📡 WebSocket Signaling: ws://localhost:${PORT}/peerjs/ws   ║
 ║   🌐 Web App:             http://localhost:${PORT}           ║

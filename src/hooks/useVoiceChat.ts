@@ -50,7 +50,7 @@ function optimizeAudioSdp(sdp: string): string {
   const pt = match[1];
 
   const fmtpRegex = new RegExp(`(a=fmtp:${pt}\\s+)([^\\r\\n]+)`, 'i');
-  const customParams = 'maxaveragebitrate=32000;stereo=0;sprop-stereo=0;useinbandfec=1;cbr=0';
+  const customParams = 'maxaveragebitrate=32000;stereo=0;sprop-stereo=0;useinbandfec=1;cbr=0;usedtx=1';
 
   if (fmtpRegex.test(sdp)) {
     return sdp.replace(fmtpRegex, (_m, prefix, params) => {
@@ -60,6 +60,7 @@ function optimizeAudioSdp(sdp: string): string {
         .replace(/sprop-stereo=[01];?/gi, '')
         .replace(/useinbandfec=[01];?/gi, '')
         .replace(/cbr=[01];?/gi, '')
+        .replace(/usedtx=[01];?/gi, '')
         .replace(/;\s*$/, '')
         .trim();
       const sep = clean.length > 0 && !clean.endsWith(';') ? ';' : '';
@@ -97,6 +98,8 @@ export function useVoiceChat({
   const [myPeerId, setMyPeerId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<string>('Подключение...');
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
+  const reconnectAttemptsRef = useRef(0);
   const [needsAudioUnlock, setNeedsAudioUnlock] = useState(false);
   const [isNoiseSuppression, setIsNoiseSuppression] = useState<boolean>(() => {
     try {
@@ -118,6 +121,8 @@ export function useVoiceChat({
   const micPreFilterNodeRef = useRef<BiquadFilterNode | null>(null);
   const rnnoiseNodeRef = useRef<RnnoiseWorkletNode | null>(null);
   const micPostFilterNodeRef = useRef<BiquadFilterNode | null>(null);
+  const micHighCutNodeRef = useRef<BiquadFilterNode | null>(null);
+  const micGateGainNodeRef = useRef<GainNode | null>(null);
   const mediaStreamDestRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const micMergerNodeRef = useRef<ChannelMergerNode | null>(null);
   const isNoiseSuppressionRef = useRef(isNoiseSuppression);
@@ -145,6 +150,10 @@ export function useVoiceChat({
   const wasConnectedRef = useRef(false);
   const isIntentionalDisconnectRef = useRef(false);
   const reconnectTimerRef = useRef<any>(null);
+  const reconnectSettleTimerRef = useRef<any>(null);
+  const isConnectedRef = useRef(false);
+  const initRef = useRef<() => void>(() => {});
+  const connectWsRef = useRef<() => void>(() => {});
   const iceServersRef = useRef<RTCIceServer[]>([
     { urls: 'stun:rvxis.site:3478' },
     {
@@ -176,6 +185,21 @@ export function useVoiceChat({
   const remoteHangoverRef = useRef<Map<string, number>>(new Map());
   const remoteAnalysersRef = useRef<Map<string, AnalyserNode>>(new Map());
   const wakeLockRef = useRef<any>(null);
+
+  const markConnected = useCallback(() => {
+    if (reconnectSettleTimerRef.current) {
+      clearTimeout(reconnectSettleTimerRef.current);
+      reconnectSettleTimerRef.current = null;
+    }
+    reconnectAttemptsRef.current = 0;
+    setReconnectAttempts(0);
+    setError(null);
+    isConnectedRef.current = true;
+    setIsConnected(true);
+    setConnectionStatus('В комнате ✓');
+  }, []);
+  const markConnectedRef = useRef(markConnected);
+  markConnectedRef.current = markConnected;
 
   const updatePeersState = useCallback(() => {
     setPeers(Array.from(peersInfoRef.current.values()));
@@ -339,7 +363,11 @@ export function useVoiceChat({
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass) {
-        audioContextRef.current = new AudioContextClass();
+        try {
+          audioContextRef.current = new AudioContextClass({ latencyHint: 'interactive', sampleRate: 48000 });
+        } catch {
+          audioContextRef.current = new AudioContextClass();
+        }
         const sinkId = audioOutputDeviceIdRef.current;
         if (sinkId && typeof (audioContextRef.current as any).setSinkId === 'function') {
           (audioContextRef.current as any).setSinkId(sinkId).catch(() => {});
@@ -478,7 +506,7 @@ export function useVoiceChat({
 
     // Track-level mute (essential for instant silencing & iOS Safari)
     stream.getAudioTracks().forEach((track) => {
-      track.enabled = !isMuted;
+      track.enabled = !isMuted && !isDeafenedRef.current;
     });
 
     // Setup Web Audio GainNode for volume control and boost (0% to 200%)
@@ -605,6 +633,11 @@ export function useVoiceChat({
     };
 
     playAudio();
+
+    if (!isConnectedRef.current) {
+      console.log(`[Audio] Received audio track from peer ${peerId}, completing reconnection`);
+      markConnectedRef.current();
+    }
 
     stream.getAudioTracks().forEach((track) => {
       track.onunmute = () => {
@@ -791,6 +824,10 @@ export function useVoiceChat({
         if (discTimer) {
           clearTimeout(discTimer);
           disconnectedTimersRef.current.delete(remotePeerId);
+        }
+        if (!isConnectedRef.current) {
+          console.log(`[WebRTC] Peer ${remotePeerId} reached connected state, completing reconnection`);
+          markConnectedRef.current();
         }
         return;
       }
@@ -1070,6 +1107,12 @@ export function useVoiceChat({
     if (micPostFilterNodeRef.current) {
       try { micPostFilterNodeRef.current.disconnect(); } catch (e) {}
     }
+    if (micHighCutNodeRef.current) {
+      try { micHighCutNodeRef.current.disconnect(); } catch (e) {}
+    }
+    if (micGateGainNodeRef.current) {
+      try { micGateGainNodeRef.current.disconnect(); } catch (e) {}
+    }
     if (micMergerNodeRef.current) {
       try { micMergerNodeRef.current.disconnect(); } catch (e) {}
     }
@@ -1083,40 +1126,66 @@ export function useVoiceChat({
     const micMerger = micMergerNodeRef.current;
 
     if (isNoiseSuppressionRef.current && rnnoiseNode) {
-      // 1. Pre-filter: High-Pass at 80Hz (Q: 0.7) to eliminate desk rumble, wind/breath, and 50/60Hz mains hum
+      // 1. Pre-filter: High-Pass at 90Hz (Q: 0.707) to eliminate desk rumble, wind/breath, and 50/60Hz mains hum
       if (!micPreFilterNodeRef.current) {
         const preFilter = audioCtx.createBiquadFilter();
         preFilter.type = 'highpass';
-        preFilter.frequency.value = 80;
-        preFilter.Q.value = 0.7;
+        preFilter.frequency.value = 90;
+        preFilter.Q.value = 0.707;
         micPreFilterNodeRef.current = preFilter;
       }
       const preFilter = micPreFilterNodeRef.current;
 
-      // 2. Post-filter: High-Shelf at 5500Hz (+2.0dB) to restore presence and vocal brilliance after RNNoise Bark-scale filtering
+      // 2. Post-filter: Peaking EQ at 3200Hz (+0.8dB, Q: 1.0) for speech clarity without boosting white noise
       if (!micPostFilterNodeRef.current) {
         const postFilter = audioCtx.createBiquadFilter();
-        postFilter.type = 'highshelf';
-        postFilter.frequency.value = 5500;
-        postFilter.gain.value = 2.0;
+        postFilter.type = 'peaking';
+        postFilter.frequency.value = 3200;
+        postFilter.gain.value = 0.8;
+        postFilter.Q.value = 1.0;
         micPostFilterNodeRef.current = postFilter;
       }
       const postFilter = micPostFilterNodeRef.current;
 
-      // Chain: micSource -> preFilter -> rnnoiseNode -> postFilter -> micMerger -> mediaStreamDest
+      // 3. High-cut filter at 12000Hz (Q: 0.707) to eliminate ultrasonic hiss, coil whine, and mechanical switch clicks
+      if (!micHighCutNodeRef.current) {
+        const highCut = audioCtx.createBiquadFilter();
+        highCut.type = 'lowpass';
+        highCut.frequency.value = 12000;
+        highCut.Q.value = 0.707;
+        micHighCutNodeRef.current = highCut;
+      }
+      const highCut = micHighCutNodeRef.current;
+
+      // 4. Downward Expander / Adaptive Noise Gate
+      if (!micGateGainNodeRef.current) {
+        const gate = audioCtx.createGain();
+        gate.gain.value = 1.0;
+        micGateGainNodeRef.current = gate;
+      }
+      const gate = micGateGainNodeRef.current;
+      gate.gain.setValueAtTime(1.0, audioCtx.currentTime);
+
+      // Chain: micSource -> preFilter -> rnnoiseNode -> postFilter -> highCut -> gate -> micMerger -> mediaStreamDest
       micSource.connect(preFilter);
       preFilter.connect(rnnoiseNode);
       rnnoiseNode.connect(postFilter);
-      postFilter.connect(micMerger, 0, 0);
-      postFilter.connect(micMerger, 0, 1);
+      postFilter.connect(highCut);
+      highCut.connect(gate);
+      gate.connect(micMerger, 0, 0);
+      gate.connect(micMerger, 0, 1);
       micMerger.connect(mediaStreamDest);
 
       if (analyser) {
-        postFilter.connect(analyser);
+        // Analyser listens to audio BEFORE the gate so VAD accurately detects speech onset even when gate is closed
+        highCut.connect(analyser);
       }
-      console.log('[RNNoise] Enhanced filter chain active (High-Pass 80Hz + RNNoise + Post-EQ)');
+      console.log('[RNNoise] Enhanced studio filter chain active (HP 90Hz + RNNoise + Clarity EQ + HighCut 12kHz + Adaptive Gate)');
     } else {
       // Noise suppression bypassed: direct pass-through
+      if (micGateGainNodeRef.current) {
+        micGateGainNodeRef.current.gain.setValueAtTime(1.0, audioCtx.currentTime);
+      }
       micSource.connect(micMerger, 0, 0);
       micSource.connect(micMerger, 0, 1);
       micMerger.connect(mediaStreamDest);
@@ -1226,6 +1295,12 @@ export function useVoiceChat({
       gainNodesRef.current.forEach((gn) => {
         gn.gain.value = 0;
       });
+      // Track-level deafen (essential for iOS Safari and instant silencing)
+      remoteStreamsRef.current.forEach((stream) => {
+        stream.getAudioTracks().forEach((track) => {
+          track.enabled = false;
+        });
+      });
 
       sendWsMessage({ type: 'update-deafen', isDeafened: true });
       sendWsMessage({ type: 'update-mute', isMuted: true });
@@ -1257,6 +1332,13 @@ export function useVoiceChat({
         const pVol = peerVolumesRef.current.get(peerId) ?? 100;
         gn.gain.value = pVol / 100;
       });
+      // Re-enable remote stream tracks (respecting per-peer volume)
+      remoteStreamsRef.current.forEach((stream, peerId) => {
+        const pVol = peerVolumesRef.current.get(peerId) ?? 100;
+        stream.getAudioTracks().forEach((track) => {
+          track.enabled = pVol > 0;
+        });
+      });
 
       sendWsMessage({ type: 'update-deafen', isDeafened: false });
       sendWsMessage({ type: 'update-mute', isMuted: false });
@@ -1271,7 +1353,7 @@ export function useVoiceChat({
     try {
       if ('MediaMetadata' in window) {
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: `VoiceChat — Комната ${roomId}`,
+          title: `RVxis — Комната ${roomId}`,
           artist: nickname,
           album: isMuted ? 'Микрофон выключен' : 'Микрофон включен',
         });
@@ -1355,12 +1437,12 @@ export function useVoiceChat({
             ? {
                 deviceId: { exact: audioInputDeviceId },
                 echoCancellation: true,
-                noiseSuppression: false,
+                noiseSuppression: true,
                 autoGainControl: true,
               }
             : {
                 echoCancellation: true,
-                noiseSuppression: false,
+                noiseSuppression: true,
                 autoGainControl: true,
               },
         };
@@ -1372,7 +1454,7 @@ export function useVoiceChat({
           newRawStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
-              noiseSuppression: false,
+              noiseSuppression: true,
               autoGainControl: true,
             },
           });
@@ -1449,6 +1531,7 @@ export function useVoiceChat({
     setMyPeerId(myPeerId);
 
     const init = async () => {
+      initRef.current = init;
       try {
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           throw new Error('Ваш браузер не поддерживает доступ к микрофону или страница открыта не по HTTPS.');
@@ -1472,7 +1555,7 @@ export function useVoiceChat({
         let rawStream: MediaStream;
         const micConstraints: MediaTrackConstraints = {
           echoCancellation: true,
-          noiseSuppression: false, // Using RNNoise for neural noise suppression
+          noiseSuppression: true, // Native acoustic noise suppression combined with RNNoise neural filter
           autoGainControl: true,
         };
         if (audioInputDeviceId) {
@@ -1491,7 +1574,7 @@ export function useVoiceChat({
         if (!rawAudioTrack) {
           throw new Error('Микрофон не вернул аудиодорожку.');
         }
-        rawAudioTrack.enabled = true;
+        rawAudioTrack.enabled = !isMutedRef.current;
         rawMicStreamRef.current = rawStream;
 
         // Setup Web Audio API and RNNoise Worklet
@@ -1533,6 +1616,10 @@ export function useVoiceChat({
 
             // Outbound stream for WebRTC
             streamRef.current = mediaStreamDest.stream;
+            // Apply pending mute state (user may have toggled mute before stream was created)
+            streamRef.current.getAudioTracks().forEach((track) => {
+              track.enabled = !isMutedRef.current;
+            });
 
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
             const remoteDataArray = new Uint8Array(128);
@@ -1546,10 +1633,16 @@ export function useVoiceChat({
                 audioContextRef.current.resume().catch(() => {});
               }
 
-              // 1. Local mic VAD (visual indicator only, never mutes audio stream)
+              // 1. Local mic VAD and intelligent soft noise gate
               if (analyserRef.current && streamRef.current) {
                 const track = streamRef.current.getAudioTracks()[0];
+                const gateGain = micGateGainNodeRef.current;
+                const audioCtx = audioContextRef.current;
+
                 if (!track || !track.enabled) {
+                  if (gateGain && audioCtx && isNoiseSuppressionRef.current) {
+                    gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.01);
+                  }
                   if (isSpeakingRef.current) {
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
@@ -1565,9 +1658,15 @@ export function useVoiceChat({
                   }
                   const vocalAverage = sum / (vocalBins - 1);
 
-                  // Sensitivity threshold: 6 out of 255 in speech range
-                  if (vocalAverage > 6) {
+                  // Sensitivity threshold: 5.0 out of 255 in speech range
+                  if (vocalAverage > 5.0) {
                     speechHangoverRef.current = now + 400;
+
+                    // Open noise gate with fast attack (10ms)
+                    if (gateGain && audioCtx && isNoiseSuppressionRef.current) {
+                      gateGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.01);
+                    }
+
                     if (!isSpeakingRef.current) {
                       isSpeakingRef.current = true;
                       setIsSpeaking(true);
@@ -1579,9 +1678,19 @@ export function useVoiceChat({
                       lastBroadcastSpeakingRef.current = now;
                     }
                   } else if (isSpeakingRef.current && now > speechHangoverRef.current) {
+                    // Close noise gate with smooth exponential release (50ms, no clicks or pops)
+                    if (gateGain && audioCtx && isNoiseSuppressionRef.current) {
+                      gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+                    }
                     isSpeakingRef.current = false;
                     setIsSpeaking(false);
                     sendWsMessageRef.current({ type: 'speaking', isSpeaking: false });
+                  } else if (!isSpeakingRef.current && now > speechHangoverRef.current && gateGain && audioCtx && isNoiseSuppressionRef.current) {
+                    // Keep noise gate closed during silence to eliminate fan and background noise
+                    gateGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+                  } else if (gateGain && audioCtx && !isNoiseSuppressionRef.current) {
+                    // Direct pass-through if user disabled noise suppression
+                    gateGain.gain.setTargetAtTime(1.0, audioCtx.currentTime, 0.01);
                   }
                 }
               }
@@ -1655,6 +1764,7 @@ export function useVoiceChat({
 
         // Connect to WebSocket signaling server with auto-reconnect and join/leave sounds
         const connectWs = () => {
+          connectWsRef.current = connectWs;
           if (isIntentionalDisconnectRef.current) return;
 
           setConnectionStatus(wasConnectedRef.current ? 'Переподключение...' : 'Подключение к серверу...');
@@ -1664,6 +1774,9 @@ export function useVoiceChat({
           try {
             if (wsRef.current) {
               try {
+                wsRef.current.onopen = null;
+                wsRef.current.onmessage = null;
+                wsRef.current.onerror = null;
                 wsRef.current.onclose = null;
                 wsRef.current.close();
               } catch (e) {}
@@ -1674,16 +1787,26 @@ export function useVoiceChat({
 
             ws.onopen = () => {
               console.log('[WS] Connected successfully');
-              setIsConnected(true);
-              setConnectionStatus('В комнате ✓');
+              setError(null);
+              setConnectionStatus(wasConnectedRef.current ? 'Переподключение...' : 'Вход в комнату...');
 
-              // Join room message
+              // Join room message (include current mute/deafen state)
               ws.send(JSON.stringify({
                 type: 'join',
                 roomId,
                 peerId: myPeerIdRef.current,
                 nickname: currentNicknameRef.current,
+                isMuted: isMutedRef.current,
+                isDeafened: isDeafenedRef.current,
               }));
+
+              // Sync mute/deafen if user toggled before WS was open
+              if (isMutedRef.current) {
+                ws.send(JSON.stringify({ type: 'update-mute', isMuted: true }));
+              }
+              if (isDeafenedRef.current) {
+                ws.send(JSON.stringify({ type: 'update-deafen', isDeafened: true }));
+              }
             };
 
             ws.onmessage = (event) => {
@@ -1709,16 +1832,17 @@ export function useVoiceChat({
                 if (Array.isArray(msg.messages)) {
                   setMessages(msg.messages);
                 }
-                if (Array.isArray(msg.peers)) {
+                const peerList = Array.isArray(msg.peers) ? msg.peers : [];
+                if (peerList.length > 0) {
                   const newVols: Record<string, number> = {};
-                  msg.peers.forEach((p: PeerInfo) => {
+                  peerList.forEach((p: PeerInfo) => {
                     peersInfoRef.current.set(p.peerId, p);
                     const savedVol = getSavedVolume(p.nickname);
                     peerVolumesRef.current.set(p.peerId, savedVol);
                     newVols[p.peerId] = savedVol;
                     // Create or recover PeerConnection for existing peer
                     const existingPc = peerConnectionsRef.current.get(p.peerId);
-                    if (existingPc && (existingPc.connectionState === 'failed' || existingPc.connectionState === 'disconnected')) {
+                    if (existingPc && existingPc.connectionState !== 'connected' && existingPc.connectionState !== 'new') {
                       console.log(`[WebRTC] Peer ${p.peerId} was in ${existingPc.connectionState}, rebuilding on room-state`);
                       rebuildPeerRef.current(p.peerId, true);
                     } else {
@@ -1727,6 +1851,17 @@ export function useVoiceChat({
                   });
                   setPeerVolumes((prev) => ({ ...prev, ...newVols }));
                   updatePeersStateRef.current();
+
+                  // There are peers: waiting for WebRTC audio connection to establish
+                  setConnectionStatus('Восстановление звука...');
+                  if (reconnectSettleTimerRef.current) clearTimeout(reconnectSettleTimerRef.current);
+                  reconnectSettleTimerRef.current = setTimeout(() => {
+                    console.log('[WebRTC] Reconnect settle timer expired, marking connection ready');
+                    markConnectedRef.current();
+                  }, 3500);
+                } else {
+                  // User is alone in the room, no WebRTC connections to wait for!
+                  markConnectedRef.current();
                 }
               }
 
@@ -1754,7 +1889,7 @@ export function useVoiceChat({
                 setPeerVolumes((prev) => ({ ...prev, [msg.peer.peerId]: savedVol }));
 
                 const existingPc = peerConnectionsRef.current.get(msg.peer.peerId);
-                if (existingPc && (existingPc.connectionState === 'failed' || existingPc.connectionState === 'disconnected')) {
+                if (existingPc && existingPc.connectionState !== 'connected' && existingPc.connectionState !== 'new') {
                   console.log(`[WebRTC] Peer ${msg.peer.peerId} was in ${existingPc.connectionState}, rebuilding on user-joined`);
                   rebuildPeerRef.current(msg.peer.peerId, true);
                 } else {
@@ -1831,30 +1966,65 @@ export function useVoiceChat({
               else if (type === 'chat-message' && msg.message) {
                 setMessages((prev) => [...prev, msg.message]);
               }
+
+              // Server-sent error message
+              else if (type === 'error' && msg.message) {
+                console.warn('[WS] Server error:', msg.message);
+                setError(`Ошибка сервера: ${msg.message}`);
+              }
             };
 
             ws.onclose = () => {
               console.warn('[WS] WebSocket disconnected');
+              isConnectedRef.current = false;
               setIsConnected(false);
+              if (reconnectSettleTimerRef.current) {
+                clearTimeout(reconnectSettleTimerRef.current);
+                reconnectSettleTimerRef.current = null;
+              }
               if (wasConnectedRef.current) {
                 wasConnectedRef.current = false;
                 playLeaveSound();
               }
               if (!isIntentionalDisconnectRef.current) {
-                setConnectionStatus('Переподключение...');
+                // Clean up all stale peer connections immediately so they get
+                // properly recreated when the WebSocket reconnects. Without this,
+                // old PCs may still appear 'connected' even though the network path
+                // is dead, and room-state would skip rebuilding them.
+                const allPeerIds = Array.from(peerConnectionsRef.current.keys());
+                for (const peerId of allPeerIds) {
+                  console.log(`[WebRTC] Cleaning up stale peer ${peerId} after WS disconnect`);
+                  cleanupPeerRef.current(peerId);
+                }
+
+                reconnectAttemptsRef.current += 1;
+                const attempts = reconnectAttemptsRef.current;
+                setReconnectAttempts(attempts);
+
+                if (attempts >= 5) {
+                  setError('Не удалось подключиться к серверу сигнализации. Проверьте интернет или повторите попытку.');
+                  setConnectionStatus('Не удалось подключиться');
+                } else {
+                  setConnectionStatus(attempts > 1 ? `Переподключение (${attempts})...` : 'Переподключение...');
+                }
+
+                const delay = Math.min(2000 + (attempts - 1) * 750, 5000);
                 if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
                 reconnectTimerRef.current = setTimeout(() => {
                   if (!isIntentionalDisconnectRef.current) {
-                    console.log('[WS] Reconnecting WebSocket...');
+                    console.log(`[WS] Reconnecting WebSocket (attempt ${attempts})...`);
                     connectWs();
                   }
-                }, 2000);
+                }, delay);
               }
             };
 
             ws.onerror = (err) => {
               console.error('[WS] WebSocket error:', err);
-              setError('Ошибка подключения к серверу сигнализации.');
+              // Only surface error immediately if we don't already have an active retry cycle going
+              if (reconnectAttemptsRef.current === 0 || reconnectAttemptsRef.current >= 4) {
+                setError('Ошибка подключения к серверу сигнализации.');
+              }
             };
           } catch (wsErr) {
             console.warn('[WS] Failed to connect:', wsErr);
@@ -1897,6 +2067,10 @@ export function useVoiceChat({
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
         reconnectTimerRef.current = null;
+      }
+      if (reconnectSettleTimerRef.current) {
+        clearTimeout(reconnectSettleTimerRef.current);
+        reconnectSettleTimerRef.current = null;
       }
 
       window.removeEventListener('click', onUnlock);
@@ -1988,6 +2162,14 @@ export function useVoiceChat({
         try { micPostFilterNodeRef.current.disconnect(); } catch (e) {}
         micPostFilterNodeRef.current = null;
       }
+      if (micHighCutNodeRef.current) {
+        try { micHighCutNodeRef.current.disconnect(); } catch (e) {}
+        micHighCutNodeRef.current = null;
+      }
+      if (micGateGainNodeRef.current) {
+        try { micGateGainNodeRef.current.disconnect(); } catch (e) {}
+        micGateGainNodeRef.current = null;
+      }
       remoteStreamsRef.current.clear();
 
       // Stop local microphone stream
@@ -2021,6 +2203,31 @@ export function useVoiceChat({
     };
   }, [roomId]);
 
+  const retryConnection = useCallback(() => {
+    setError(null);
+    reconnectAttemptsRef.current = 0;
+    setReconnectAttempts(0);
+    setConnectionStatus('Подключение к серверу...');
+
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    if (reconnectSettleTimerRef.current) {
+      clearTimeout(reconnectSettleTimerRef.current);
+      reconnectSettleTimerRef.current = null;
+    }
+
+    if (!rawMicStreamRef.current) {
+      console.log('[VoiceChat] Retrying full audio and room initialization...');
+      initDoneRef.current = false;
+      initRef.current();
+    } else {
+      console.log('[VoiceChat] Retrying WebSocket connection...');
+      connectWsRef.current();
+    }
+  }, []);
+
   return {
     isConnected,
     isMuted,
@@ -2029,6 +2236,8 @@ export function useVoiceChat({
     peers,
     error,
     connectionStatus,
+    reconnectAttempts,
+    retryConnection,
     needsAudioUnlock,
     unlockAudio,
     toggleMute,

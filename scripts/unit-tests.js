@@ -144,3 +144,138 @@ test('Hotkey utils: mouse buttons are distinct and non-conflicting by default', 
   assert.strictEqual(isSameHotkey(m3, m4), false);
   assert.strictEqual(isSameHotkey(m3, { ...m3 }), true);
 });
+
+// -------------------------------------------------------------
+// 3. Test Reconnection & Connection State Resolution Logic
+// -------------------------------------------------------------
+
+function calculateReconnectDelay(attempts) {
+  return Math.min(2000 + (attempts - 1) * 750, 5000);
+}
+
+function resolveConnectionState({
+  isConnected,
+  error,
+  reconnectAttempts,
+  showConnectedToast,
+}) {
+  const showBanner = !isConnected || Boolean(error) || showConnectedToast;
+  let bannerType = null;
+
+  if (showBanner) {
+    if (error) {
+      bannerType = 'error';
+    } else if (showConnectedToast && isConnected) {
+      bannerType = 'connected-success';
+    } else {
+      bannerType = 'reconnecting';
+    }
+  }
+
+  const isFailedThreshold = reconnectAttempts >= 5;
+
+  return {
+    showBanner,
+    bannerType,
+    isFailedThreshold,
+  };
+}
+
+test('Reconnection backoff: calculates linear backoff with 5000ms cap', () => {
+  assert.strictEqual(calculateReconnectDelay(1), 2000);
+  assert.strictEqual(calculateReconnectDelay(2), 2750);
+  assert.strictEqual(calculateReconnectDelay(3), 3500);
+  assert.strictEqual(calculateReconnectDelay(4), 4250);
+  assert.strictEqual(calculateReconnectDelay(5), 5000);
+  assert.strictEqual(calculateReconnectDelay(10), 5000);
+});
+
+test('Connection state: shows reconnecting banner during disconnect', () => {
+  const state = resolveConnectionState({
+    isConnected: false,
+    error: null,
+    reconnectAttempts: 1,
+    showConnectedToast: false,
+  });
+  assert.strictEqual(state.showBanner, true);
+  assert.strictEqual(state.bannerType, 'reconnecting');
+  assert.strictEqual(state.isFailedThreshold, false);
+});
+
+test('Connection state: switches to error state after 5 failed reconnect attempts', () => {
+  const state = resolveConnectionState({
+    isConnected: false,
+    error: 'Не удалось подключиться к серверу сигнализации',
+    reconnectAttempts: 5,
+    showConnectedToast: false,
+  });
+  assert.strictEqual(state.showBanner, true);
+  assert.strictEqual(state.bannerType, 'error');
+  assert.strictEqual(state.isFailedThreshold, true);
+});
+
+test('Connection state: shows connected-success toast when connection is restored', () => {
+  const state = resolveConnectionState({
+    isConnected: true,
+    error: null,
+    reconnectAttempts: 0,
+    showConnectedToast: true,
+  });
+  assert.strictEqual(state.showBanner, true);
+  assert.strictEqual(state.bannerType, 'connected-success');
+});
+
+test('Connection state: hides banner once connected and toast expires', () => {
+  const state = resolveConnectionState({
+    isConnected: true,
+    error: null,
+    reconnectAttempts: 0,
+    showConnectedToast: false,
+  });
+  assert.strictEqual(state.showBanner, false);
+  assert.strictEqual(state.bannerType, null);
+});
+
+// -------------------------------------------------------------
+// 4. Test WebRTC Opus SDP Optimization & Noise Suppression Config
+// -------------------------------------------------------------
+
+function optimizeAudioSdp(sdp) {
+  const match = sdp.match(/a=rtpmap:(\d+)\s+opus\/48000/i);
+  if (!match) return sdp;
+  const pt = match[1];
+
+  const fmtpRegex = new RegExp(`(a=fmtp:${pt}\\s+)([^\\r\\n]+)`, 'i');
+  const customParams = 'maxaveragebitrate=32000;stereo=0;sprop-stereo=0;useinbandfec=1;cbr=0;usedtx=1';
+
+  if (fmtpRegex.test(sdp)) {
+    return sdp.replace(fmtpRegex, (_m, prefix, params) => {
+      const clean = params
+        .replace(/maxaveragebitrate=\d+;?/gi, '')
+        .replace(/stereo=[01];?/gi, '')
+        .replace(/sprop-stereo=[01];?/gi, '')
+        .replace(/useinbandfec=[01];?/gi, '')
+        .replace(/cbr=[01];?/gi, '')
+        .replace(/usedtx=[01];?/gi, '')
+        .replace(/;\s*$/, '')
+        .trim();
+      const sep = clean.length > 0 && !clean.endsWith(';') ? ';' : '';
+      return `${prefix}${clean}${sep}${customParams}`;
+    });
+  } else {
+    return sdp.replace(
+      new RegExp(`(a=rtpmap:${pt}\\s+opus\\/48000[^\\r\\n]*)`, 'i'),
+      `$1\r\na=fmtp:${pt} ${customParams}`
+    );
+  }
+}
+
+test('Audio SDP Optimization: injects usedtx=1 and 32kbps mono for background noise elimination', () => {
+  const mockSdp = `v=0\r\no=- 12345 2 IN IP4 127.0.0.1\r\nm=audio 9 UDP/TLS/RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\na=fmtp:111 minptime=10;useinbandfec=1\r\n`;
+  const optimized = optimizeAudioSdp(mockSdp);
+  assert.ok(optimized.includes('usedtx=1'), 'SDP must include usedtx=1 for DTX discontinuous transmission');
+  assert.ok(optimized.includes('maxaveragebitrate=32000'), 'SDP must include maxaveragebitrate=32000');
+  assert.ok(optimized.includes('stereo=0'), 'SDP must enforce mono transmission');
+});
+
+

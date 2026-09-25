@@ -113,7 +113,7 @@ export function useAppUpdater() {
                 setUpdateInfo({
                   version: serverVersion,
                   currentVersion: APP_VERSION,
-                  notes: `Доступна новая версия VoiceChat v${serverVersion} с исправлениями звука и стабильности.`,
+                  notes: `Доступна новая версия RVxis v${serverVersion} с исправлениями звука и стабильности.`,
                   portableUrl: `https://github.com/railenine/voice-chat/releases/download/v${serverVersion}/voice-chat.exe`,
                 });
                 setStatus('available');
@@ -150,7 +150,7 @@ export function useAppUpdater() {
             setUpdateInfo({
               version: serverVersion,
               currentVersion: APP_VERSION,
-              notes: 'Доступна новая версия VoiceChat с улучшениями звука, производительности и интерфейса.',
+              notes: 'Доступна новая версия RVxis с улучшениями звука, производительности и интерфейса.',
             });
             setStatus('available');
             setIsModalOpen(true);

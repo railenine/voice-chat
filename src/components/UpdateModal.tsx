@@ -249,7 +249,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = memo(({
                   <Sparkles className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
                   <p className="leading-relaxed text-gray-200 text-xs">
                     {!isDesktop
-                      ? 'На сервере доступна новая версия VoiceChat. Нажмите кнопку ниже, чтобы перезагрузить страницу и применить обновление.'
+                      ? 'На сервере доступна новая версия RVxis. Нажмите кнопку ниже, чтобы перезагрузить страницу и применить обновление.'
                       : isPortable
                       ? 'Вышла новая версия приложения. Текущий файл будет заменён на актуальный прямо на месте без повторной установки.'
                       : 'Вышла новая версия приложения. Обновление будет загружено и установлено автоматически в один клик.'}
@@ -309,7 +309,7 @@ export const UpdateModal: React.FC<UpdateModalProps> = memo(({
                 <div>
                   <p className="text-gray-100 text-xs font-semibold">У вас установлена последняя версия</p>
                   <p className="text-gray-400 text-[11px] mt-0.5 max-w-xs">
-                    Вы используете актуальную сборку VoiceChat. Все компоненты и аудиодвижок обновлены.
+                    Вы используете актуальную сборку RVxis. Все компоненты и аудиодвижок обновлены.
                   </p>
                 </div>
               </div>

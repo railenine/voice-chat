@@ -35,6 +35,7 @@ import {
   Info,
   Volume1,
   Settings,
+  RefreshCw,
 } from 'lucide-react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { AudioDeviceSettings } from './AudioDeviceSettings';
@@ -67,6 +68,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
     peers,
     error,
     connectionStatus,
+    reconnectAttempts,
+    retryConnection,
     needsAudioUnlock,
     unlockAudio,
     toggleMute,
@@ -166,6 +169,115 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
   const effectiveTab = isSmartphone ? 'audio' : settingsTab;
   const [pipWindow, setPipWindow] = useState<Window | null>(null);
 
+  const [showConnectedToast, setShowConnectedToast] = useState(false);
+  const prevConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    // When transitioning from false to true (reconnected or joined)
+    if (!prevConnectedRef.current && isConnected) {
+      setShowConnectedToast(true);
+      const timer = setTimeout(() => {
+        setShowConnectedToast(false);
+      }, 1200);
+      return () => clearTimeout(timer);
+    }
+    prevConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  const showBanner = !isConnected || Boolean(error) || showConnectedToast;
+  const [isRetrying, setIsRetrying] = useState(false);
+
+  const handleRetry = useCallback(() => {
+    setIsRetrying(true);
+    retryConnection();
+    setTimeout(() => {
+      setIsRetrying(false);
+    }, 1200);
+  }, [retryConnection]);
+
+  // Retain banner state during smooth collapse animation so content does not flash-disappear
+  const lastBannerStateRef = useRef({
+    error,
+    showConnectedToast,
+    connectionStatus,
+    reconnectAttempts,
+    isConnected,
+  });
+
+  if (showBanner) {
+    lastBannerStateRef.current = {
+      error,
+      showConnectedToast,
+      connectionStatus,
+      reconnectAttempts,
+      isConnected,
+    };
+  }
+
+  const currentBannerState = showBanner
+    ? { error, showConnectedToast, connectionStatus, reconnectAttempts, isConnected }
+    : lastBannerStateRef.current;
+
+  const renderConnectionBanner = (isMobile = false) => {
+    return (
+      <div
+        className={`banner-expand-wrapper ${showBanner ? 'expanded' : ''} ${
+          isMobile ? 'lg:hidden' : 'border-b border-white/10 bg-white/[0.02]'
+        } flex-shrink-0 select-none`}
+      >
+        <div className={`banner-expand-inner ${isMobile ? 'px-2 pt-2 sm:px-4 sm:pt-3' : 'p-3'}`}>
+          {currentBannerState.error ? (
+            <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-200 text-xs shadow-lg shadow-rose-950/40 backdrop-blur-xl transition-all">
+              <div className="flex items-start gap-2.5">
+                <div className="w-6 h-6 rounded-lg bg-rose-500/20 border border-rose-500/40 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-rose-300 text-xs mb-0.5">Ошибка подключения</div>
+                  <p className="text-[11px] text-rose-200/90 leading-relaxed break-words">
+                    {currentBannerState.error}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2 mt-2 border-t border-rose-500/20">
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  disabled={isRetrying}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 border border-rose-500/40 text-rose-200 text-xs font-medium transition-all cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
+                  <span>{isRetrying ? 'Подключение...' : 'Повторить попытку'}</span>
+                </button>
+              </div>
+            </div>
+          ) : currentBannerState.showConnectedToast && currentBannerState.isConnected ? (
+            <div className="flex items-center gap-2.5 p-2.5 bg-emerald-500/10 border border-emerald-500/25 rounded-xl text-emerald-300 text-xs shadow-lg shadow-emerald-950/20 backdrop-blur-xl transition-all">
+              <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center flex-shrink-0">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+              </div>
+              <span className="font-medium">Подключено ✓</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2.5 p-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-300 text-xs shadow-lg shadow-yellow-950/20 backdrop-blur-xl transition-all">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-5 h-5 rounded-full bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center flex-shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+                </div>
+                <span className="truncate font-medium">{currentBannerState.connectionStatus}</span>
+              </div>
+              {currentBannerState.reconnectAttempts > 0 && (
+                <span className="text-[10px] text-yellow-400/80 font-mono flex-shrink-0 px-1.5 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20">
+                  попытка {currentBannerState.reconnectAttempts}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const isPipSupported = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
 
   const togglePip = useCallback(async () => {
@@ -200,7 +312,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         }
       });
 
-      win.document.title = `VoiceChat — Оверлей`;
+      win.document.title = `RVxis — Оверлей`;
       win.document.body.className = 'bg-slate-900 text-white flex flex-col items-center justify-center m-0 p-3 h-screen select-none font-sans overflow-hidden';
 
       win.addEventListener('pagehide', () => {
@@ -808,7 +920,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             </div>
 
             <div className="min-w-0 flex items-center gap-2 flex-shrink-0">
-              <span className="text-sm font-bold text-white tracking-tight flex-shrink-0">VoiceChat</span>
+              <span className="text-sm font-bold text-white tracking-tight flex-shrink-0">RVxis</span>
               <Tooltip content={copied ? "Скопировано!" : "Скопировать ссылку"} description="Скопировать ссылку на комнату в буфер" position="bottom">
                 <button
                   type="button"
@@ -858,6 +970,11 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             </Tooltip>
           </div>
         </header>
+ 
+        {/* Mobile Connection / Error Banner (< 1024px) */}
+        <div className="lg:hidden flex-shrink-0">
+          {renderConnectionBanner(true)}
+        </div>
 
         {/* Clubhouse-Style Mobile Participants Card (< 1024px) */}
         <div className="lg:hidden px-2 pt-2 sm:px-4 sm:pt-4 flex-shrink-0 z-10">
@@ -1088,7 +1205,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   </svg>
                 </div>
                 <div className="min-w-0">
-                  <h1 className="text-white font-bold text-sm truncate">VoiceChat</h1>
+                  <h1 className="text-white font-bold text-sm truncate">RVxis</h1>
                   <p className="text-gray-400 text-xs font-mono truncate">#{roomId}</p>
                 </div>
               </div>
@@ -1117,22 +1234,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                 </Tooltip>
               </div>
             </div>
-
-            {/* Connection / Error Banner in Sidebar */}
-            {(!isConnected || error) && (
-              <div className="p-3 border-b border-white/10 bg-white/[0.02]">
-                {error ? (
-                  <div className="p-2 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-xs">
-                    {error}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg text-yellow-300 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
-                    <span>{connectionStatus}</span>
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Scrollable Participants Section */}
             <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
@@ -1243,55 +1344,79 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                 </Tooltip>
               </div>
 
-              {/* Status Wave & Hotkey note */}
-              <div className="flex items-center justify-between text-[11px] text-gray-400 px-0.5">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  {!isMuted && isConnected && (
-                    <div className="flex items-center gap-0.5 h-3 flex-shrink-0">
-                      {[...Array(4)].map((_, i) => (
-                        <div
-                          key={i}
-                          className={`w-0.5 rounded-full transition-all duration-150 ${
-                            isSpeaking ? 'bg-green-400 sound-wave-bar' : 'bg-blue-500/40'
-                          }`}
-                          style={{ height: isSpeaking ? undefined : '3px' }}
-                        />
-                      ))}
+              {/* Status Wave & Connection Status (Desktop) */}
+              <div className="flex items-center justify-between text-[11px] text-gray-400 px-0.5 min-h-[22px]">
+                {error ? (
+                  <div className="flex items-center justify-between w-full min-w-0 gap-1.5 animate-fade-in">
+                    <div className="flex items-center gap-1.5 min-w-0 text-rose-400">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse flex-shrink-0" />
+                      <span className="truncate font-medium" title={error}>
+                        {error}
+                      </span>
                     </div>
-                  )}
-                  <span className={`truncate ${isDeafened ? 'text-red-400 font-medium' : isMuted ? 'text-red-400' : isSpeaking ? 'text-green-400' : 'text-blue-400'}`}>
-                    {isDeafened ? 'Заглушен (всё)' : isMuted ? 'Заглушен' : isSpeaking ? 'Говорит...' : 'В эфире'}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <Tooltip content="Хоткей микрофона" description={`Текущая клавиша: [${muteHotkey.label}]`} position="top">
                     <button
                       type="button"
-                      onClick={() => {
-                        setSettingsTab('hotkeys');
-                        setShowSettingsModal(true);
-                      }}
-                      className="font-mono text-[10px] bg-white/[0.05] hover:bg-white/[0.10] px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1 cursor-pointer"
+                      onClick={handleRetry}
+                      disabled={isRetrying}
+                      className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[10px] font-medium transition-all cursor-pointer flex-shrink-0 active:scale-95 disabled:opacity-50"
                     >
-                      <Mic className="w-3 h-3 text-blue-400" />
-                      <span>[{muteHotkey.label}]</span>
+                      <RefreshCw className={`w-2.5 h-2.5 ${isRetrying ? 'animate-spin' : ''}`} />
+                      <span>{isRetrying ? '...' : 'Повторить'}</span>
                     </button>
-                  </Tooltip>
-                  <Tooltip content="Хоткей звука" description={`Текущая клавиша: [${deafenHotkey.label}]`} position="top">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSettingsTab('hotkeys');
-                        setShowSettingsModal(true);
-                      }}
-                      className="font-mono text-[10px] bg-white/[0.05] hover:bg-white/[0.10] px-1.5 py-0.5 rounded text-gray-300 hover:text-white transition-colors border border-white/10 flex items-center gap-1 cursor-pointer"
+                  </div>
+                ) : !isConnected ? (
+                  <div className="flex items-center justify-between w-full min-w-0 gap-1.5 text-yellow-300 animate-fade-in">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
+                      <span className="truncate font-medium">{connectionStatus}</span>
+                    </div>
+                    {reconnectAttempts > 0 && (
+                      <span className="text-[10px] text-yellow-400/80 font-mono flex-shrink-0 px-1.5 py-0.2 rounded bg-yellow-500/10 border border-yellow-500/20">
+                        попытка {reconnectAttempts}
+                      </span>
+                    )}
+                  </div>
+                ) : showConnectedToast && !isSpeaking ? (
+                  <div className="flex items-center gap-1.5 text-emerald-400 animate-fade-in min-w-0">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+                    <span className="font-medium text-emerald-300">Подключено ✓</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {!isMuted && isConnected && (
+                      <div className="flex items-center gap-0.5 h-3 flex-shrink-0">
+                        {[...Array(4)].map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-0.5 rounded-full transition-all duration-150 ${
+                              isSpeaking ? 'bg-green-400 sound-wave-bar' : 'bg-blue-500/40'
+                            }`}
+                            style={{ height: isSpeaking ? undefined : '3px' }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <span
+                      className={`truncate ${
+                        isDeafened
+                          ? 'text-red-400 font-medium'
+                          : isMuted
+                          ? 'text-red-400'
+                          : isSpeaking
+                          ? 'text-green-400'
+                          : 'text-blue-400'
+                      }`}
                     >
-                      <VolumeX className="w-3 h-3 text-red-400" />
-                      <span>[{deafenHotkey.label}]</span>
-                    </button>
-                  </Tooltip>
-                </div>
+                      {isDeafened
+                        ? 'Заглушен (всё)'
+                        : isMuted
+                        ? 'Заглушен'
+                        : isSpeaking
+                        ? 'Говорит...'
+                        : 'В эфире'}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </aside>
@@ -1914,9 +2039,23 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
       {pipWindow &&
         createPortal(
           <div className="w-full h-full flex flex-col items-center justify-center p-3 bg-slate-900 select-none text-white">
-            <div className="text-[11px] font-semibold text-gray-400 mb-2 truncate max-w-full">
-              VoiceChat • {roomId}
+            <div className="text-[11px] font-semibold text-gray-400 mb-1.5 truncate max-w-full">
+              RVxis • {roomId}
             </div>
+            {showBanner && (
+              <div className="mb-2 px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1.5 max-w-full truncate bg-black/50 border border-white/10">
+                {error ? (
+                  <span className="text-rose-400 truncate">Ошибка связи</span>
+                ) : showConnectedToast && isConnected ? (
+                  <span className="text-emerald-400">Подключено ✓</span>
+                ) : (
+                  <div className="flex items-center gap-1 text-yellow-300 truncate">
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse flex-shrink-0"></span>
+                    <span className="truncate">{connectionStatus}</span>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-3">
               <button
                 onClick={toggleMute}

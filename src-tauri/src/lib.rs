@@ -144,6 +144,7 @@ fn is_portable_mode() -> bool {
     if let Ok(exe_path) = std::env::current_exe() {
         let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new(""));
         let has_uninstaller = exe_dir.join("Uninstall VoiceChat.exe").exists()
+            || exe_dir.join("Uninstall RVxis.exe").exists()
             || exe_dir.join("unins000.exe").exists();
         let path_str = exe_path.to_string_lossy().to_lowercase();
         let in_programs = path_str.contains("appdata\\local\\programs")
@@ -263,14 +264,14 @@ pub fn run() {
             }
 
             // Build system tray menu
-            let show_i = MenuItem::with_id(app, "show", "Показать VoiceChat", true, None::<&str>)?;
+            let show_i = MenuItem::with_id(app, "show", "Показать RVxis", true, None::<&str>)?;
             let hide_i = MenuItem::with_id(app, "hide", "Свернуть в трей", true, None::<&str>)?;
             let quit_i = MenuItem::with_id(app, "quit", "Выйти", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
 
             let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
-                .tooltip("VoiceChat - Голосовой чат");
+                .tooltip("RVxis - Голосовой чат");
 
             if let Some(icon) = app.default_window_icon() {
                 tray_builder = tray_builder.icon(icon.clone());

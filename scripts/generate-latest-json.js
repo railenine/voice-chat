@@ -128,7 +128,7 @@ function main() {
   }
 
   // 4. Extract Release Notes from CHANGELOG.md if available
-  let notes = `VoiceChat v${version}`;
+  let notes = `RVxis v${version}`;
   const changelogPath = path.join(rootDir, 'CHANGELOG.md');
   const releaseNotesPath = path.join(rootDir, 'RELEASE_NOTES.md');
   let generatedNotes = false;
@@ -150,13 +150,13 @@ function main() {
         .filter((l) => l.startsWith('-') || l.startsWith('*'))
         .map((l) => l.replace(/^[-*]\s*/, '').replace(/\*\*/g, ''));
       if (lines.length > 0) {
-        notes = `VoiceChat v${version} - ${lines.slice(0, 3).join('; ')}`;
+        notes = `RVxis v${version} - ${lines.slice(0, 3).join('; ')}`;
       }
     }
   }
 
   if (!generatedNotes) {
-    fs.writeFileSync(releaseNotesPath, `VoiceChat v${version}\n`, 'utf8');
+    fs.writeFileSync(releaseNotesPath, `RVxis v${version}\n`, 'utf8');
     console.log(`[Updater] Generated fallback RELEASE_NOTES.md.`);
   }
 

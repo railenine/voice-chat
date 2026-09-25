@@ -59,8 +59,8 @@ async function runTests() {
       failed++;
     }
     
-    if (healthData.service === 'voicechat-server') {
-      console.log('   ✓ Service name is correct');
+    if (healthData.service === 'rvxis-server' || healthData.service === 'voicechat-server') {
+      console.log('   ✓ Service name is correct (' + healthData.service + ')');
       passed++;
     } else {
       console.error('   ✗ Service name is incorrect');
@@ -72,8 +72,8 @@ async function runTests() {
     const infoResult = await testEndpoint('/api/info');
     const infoData = JSON.parse(infoResult.data);
     
-    if (infoData.name === 'VoiceChat Server') {
-      console.log('   ✓ API name is correct');
+    if (infoData.name === 'RVxis Server' || infoData.name === 'VoiceChat Server') {
+      console.log('   ✓ API name is correct (' + infoData.name + ')');
       passed++;
     } else {
       console.error('   ✗ API name is incorrect');
@@ -121,6 +121,51 @@ async function runTests() {
       ws.on('error', (err) => {
         clearTimeout(timer);
         console.error('   ✗ WebSocket error:', err.message);
+        failed++;
+        reject(err);
+      });
+    });
+
+    // Test WebSocket room join with initial mute & deafen state
+    console.log('\nTesting room join with initial mute & deafen state...');
+    await new Promise((resolve, reject) => {
+      const wsUrl = BASE_URL.replace(/^http/, 'ws') + '/peerjs/ws';
+      const ws = new WebSocket(wsUrl);
+      const timer = setTimeout(() => {
+        ws.terminate();
+        reject(new Error('Join test timeout'));
+      }, 3000);
+
+      ws.on('open', () => {
+        ws.send(JSON.stringify({
+          type: 'join',
+          roomId: 'test-room-123',
+          peerId: 'peer-test-1',
+          nickname: 'Tester',
+          isMuted: true,
+          isDeafened: true,
+        }));
+      });
+
+      ws.on('message', (data) => {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.type === 'room-state') {
+            clearTimeout(timer);
+            console.log('   ✓ Room state received after join with initial mute/deafen');
+            passed++;
+            ws.close();
+            resolve();
+          }
+        } catch (e) {
+          clearTimeout(timer);
+          reject(e);
+        }
+      });
+
+      ws.on('error', (err) => {
+        clearTimeout(timer);
+        console.error('   ✗ WebSocket join error:', err.message);
         failed++;
         reject(err);
       });

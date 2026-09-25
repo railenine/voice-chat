@@ -111,7 +111,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates 
         <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-blue-700 via-blue-500 to-sky-400 flex items-center justify-center shadow-sm shadow-blue-500/40 flex-shrink-0">
           <Mic className="w-2.5 h-2.5 text-white" />
         </div>
-        <span className="font-semibold text-white/90 text-xs tracking-tight">VoiceChat</span>
+        <span className="font-semibold text-white/90 text-xs tracking-tight">RVxis</span>
         {roomId ? (
           <span className="bg-blue-500/15 text-blue-300 border border-blue-500/30 px-1.5 py-0.2 rounded font-mono text-[10px] tracking-wider">
             #{roomId}
@@ -142,7 +142,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates 
           data-tauri-drag-region
           className="text-[11px] text-gray-400/80 font-medium truncate"
         >
-          {roomId ? `VoiceChat — Комната #${roomId}` : 'VoiceChat — Голосовой чат'}
+          {roomId ? `RVxis — Комната #${roomId}` : 'RVxis — Голосовой чат'}
         </span>
       </div>
 

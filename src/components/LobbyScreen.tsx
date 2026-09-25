@@ -52,7 +52,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
               </div>
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white mb-0.5 compact-h-title transition-all">
-                  VoiceChat
+                  RVxis
                 </h1>
                 <p className="text-gray-400 text-xs sm:text-sm compact-h-hide">
                   Голосовой чат в браузере
@@ -235,7 +235,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                   onClick={onCheckUpdates}
                   className="text-[10px] text-gray-500 hover:text-blue-400 font-mono transition-colors cursor-pointer"
                 >
-                  VoiceChat v{APP_VERSION}
+                  RVxis v{APP_VERSION}
                 </button>
               </Tooltip>
             )}

@@ -568,6 +568,36 @@
   animation: slide-up-fade 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Smooth layout-safe expand/collapse for banners and alerts */
+.banner-expand-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: grid-template-rows 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.28s ease-out,
+              transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.banner-expand-wrapper.expanded {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.banner-expand-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+@media (min-width: 1024px) {
+  .lg\:hidden.banner-expand-wrapper {
+    display: none !important;
+  }
+}
+
 @keyframes countdown-10s {
   from {
     width: 100%;
