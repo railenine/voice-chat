@@ -8,6 +8,7 @@
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "node --test scripts/unit-tests.js",
+    "test:mesh": "node scripts/test-multi-user-mesh.js",
     "start": "node server/index.js",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",

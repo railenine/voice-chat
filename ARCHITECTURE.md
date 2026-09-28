@@ -59,6 +59,7 @@ voice-chat-main/
 │   ├── components/                       # UI Компоненты приложения
 │   │   ├── AudioDeviceSettings.tsx       # Модальное окно выбора микрофона/динамиков и настройки хоткеев
 │   │   ├── ChatPanel.tsx                 # Текстовый чат комнаты в реальном времени (WebRTC DataChannel)
+│   │   ├── JellyBackground.tsx           # Фоновый слой с анимированными сферами плазменного свечения
 │   │   ├── LobbyScreen.tsx               # Стартовый экран создания и входа в комнату
 │   │   ├── Modal.tsx                     # Базовый компонент стеклянного модального окна
 │   │   ├── TitleBar.tsx                  # Кастомный заголовок окна для Desktop (Tauri)
@@ -66,14 +67,14 @@ voice-chat-main/
 │   │   ├── UpdateModal.tsx               # Диалог проверки и установки обновлений
 │   │   └── VoiceChatScreen.tsx           # Основной экран активной комнаты (десктопный и мобильный вид)
 │   ├── hooks/                            # Кастомные React-хуки бизнес-логики
+│   │   ├── useAppUpdater.ts              # Логика Tauri v2 Updater, проверки версий и атомарного Portable .exe swap
 │   │   ├── useAudioDevices.ts            # Управление аудиоустройствами, тестирование микрофона
-│   │   ├── useHotkeys.ts                 # Обработка локальных и глобальных шорткатов (PTT, Mute, Deafen)
+│   │   ├── useHotkey.ts                  # Обработка локальных и глобальных шорткатов (PTT, Mute, Deafen)
 │   │   └── useVoiceChat.ts               # Ядро WebRTC P2P Mesh, аудиографа и сигнального обмена
 │   ├── utils/                            # Вспомогательные утилиты
 │   │   ├── device.ts                     # Детекция смартфонов/планшетов/десктопа
 │   │   ├── nicknames.ts                  # Генератор читаемых никнеймов и 6-символьных room ID
-│   │   ├── soundEffects.ts               # Синтез звуковых сигналов (mute, unmute, deafen, join, leave)
-│   │   └── updater.ts                    # Логика Tauri v2 Updater и атомарного Portable .exe swap
+│   │   └── soundEffects.ts               # Синтез звуковых сигналов (mute, unmute, deafen, join, leave)
 │   ├── App.tsx                           # Корневой координатор состояния и маршрутизации
 │   ├── config.ts                         # Конфигурация приложения, версия и fallback ICE-серверы
 │   ├── index.css                         # Стили Tailwind CSS v4, ключевые кадры анимаций, 7 сфер плазмы
@@ -239,7 +240,7 @@ flowchart TD
     subgraph Frontend["React UI (WebView2)"]
         UI["Интерфейс RVxis"]
         TitleBar["TitleBar (Кастомные кнопки окна)"]
-        UpdaterHook["Модуль обновления (updater.ts)"]
+        UpdaterHook["Хук обновления (useAppUpdater.ts)"]
     end
 
     subgraph TauriCore["Tauri Core (Rust)"]
