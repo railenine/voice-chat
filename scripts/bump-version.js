@@ -80,18 +80,20 @@ function main() {
     console.log(`  ✓ public/health: -> ${cleanVersion}`);
   }
 
-  // 7. CHANGELOG.md
-  const changelogPath = path.join(rootDir, 'CHANGELOG.md');
-  if (fs.existsSync(changelogPath)) {
-    let changelog = fs.readFileSync(changelogPath, 'utf8');
-    if (!changelog.includes(`## [${cleanVersion}]`)) {
+  // 7. HISTORY.md (with CHANGELOG.md fallback)
+  const historyPath = fs.existsSync(path.join(rootDir, 'HISTORY.md'))
+    ? path.join(rootDir, 'HISTORY.md')
+    : path.join(rootDir, 'CHANGELOG.md');
+  if (fs.existsSync(historyPath)) {
+    let history = fs.readFileSync(historyPath, 'utf8');
+    if (!history.includes(`## [${cleanVersion}]`)) {
       const today = new Date().toISOString().split('T')[0];
-      const template = `\n## [${cleanVersion}] — ${today}\n\n### 🚀 Обновления и улучшения (Updates & Improvements)\n- Обновление компонентов приложения до версии ${cleanVersion}.\n\n---`;
-      changelog = changelog.replace(/^---\n/m, `---${template}\n`);
-      fs.writeFileSync(changelogPath, changelog, 'utf8');
-      console.log(`  ✓ CHANGELOG.md: Added entry for [${cleanVersion}]`);
+      const template = `\n### ## [${cleanVersion}] — ${today}\n\n#### 🚀 Обновления и улучшения (Updates & Improvements)\n- Обновление компонентов приложения до версии ${cleanVersion}.\n\n---`;
+      history = history.replace(/^---\n/m, `---${template}\n`);
+      fs.writeFileSync(historyPath, history, 'utf8');
+      console.log(`  ✓ ${path.basename(historyPath)}: Added entry for [${cleanVersion}]`);
     } else {
-      console.log(`  ✓ CHANGELOG.md: Entry for [${cleanVersion}] already present`);
+      console.log(`  ✓ ${path.basename(historyPath)}: Entry for [${cleanVersion}] already present`);
     }
   }
 

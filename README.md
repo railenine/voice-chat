@@ -1,317 +1,146 @@
-# 🎤 VoiceChat - Голосовой чат в браузере
+# 👑 RVxis — Децентрализованный P2P голосовой и текстовый мессенджер
 
-Веб-приложение для голосового общения в браузере с автоматической генерацией уникальных никнеймов. Использует WebRTC для peer-to-peer аудио связи.
+<p align="center">
+  <img src="public/favicon.svg" width="96" height="96" alt="RVxis Logo" />
+</p>
+
+<p align="center">
+  <b>Кристальный звук без серверов записи, сквозное шифрование DTLS/SRTP, студийное AI-шумоподавление RNNoise и полная конфиденциальность (RAM-only).</b>
+</p>
+
+<p align="center">
+  <a href="#-быстрый-старт">Быстрый старт</a> •
+  <a href="HISTORY.md">История и версионирование (HISTORY.md)</a> •
+  <a href="ARCHITECTURE.md">Архитектурный манифест (ARCHITECTURE.md)</a> •
+  <a href="#-возможности">Возможности</a> •
+  <a href="#-деплой-на-vps">Деплой</a>
+</p>
+
+---
+
+## 🌟 Ключевые особенности RVxis
+
+- **🎙️ Студийный аудиотракт**:
+  - Аппаратная фильтрация микрофона на уровне WebRTC.
+  - Нейросетевая модель **RNNoise** в `AudioWorklet` (WebAssembly) для изоляции голоса от кликов мыши, клавиатур и шума вентиляторов.
+  - Аналоговый срез 90 Гц (High-Pass), речевой Peaking EQ 3200 Гц и High-Cut 12 кГц.
+  - Мягкий экспоненциальный нойз-гейт (Downward Expander с атакой 10 мс и удержанием 400 мс).
+  - Режим Opus DTX (`usedtx=1`) для абсолютной тишины в паузах.
+- **🛡️ 100% Конфиденциальность (RAM-Only)**:
+  - Никакой регистрации, учетных записей, номеров телефонов или баз данных.
+  - Звонки и комнаты создаются на лету по 6-значному коду.
+  - Текстовый чат живет исключительно в оперативной памяти и передается по WebRTC DataChannels.
+- **🌐 Надежная P2P Mesh связь (с VPN и без)**:
+  - Прямые peer-to-peer соединения между всеми участниками комнаты (Full Mesh).
+  - Собственный сервер **Coturn STUN/TURN** на `rvxis.site` (UDP, TCP, TURNS TLS 5349) для бесперебойного обхода Symmetric NAT и работы через VPN.
+  - Автоматическое самовосстановление (ICE Restart) при смене сети без разрыва сессии.
+- **💻 Кроссплатформенность**:
+  - **Desktop**: Нативное настольное приложение Windows / macOS / Linux на базе **Tauri v2** с безрамочным окном, глобальными горячими клавишами (Push-to-Talk, Mute, Deafen) и двойной системой автообновления (NSIS + Portable).
+  - **Web & Mobile**: Отзывчивый интерфейс в стиле Glassmorphism Dark (`#020617`), поддержка мобильных браузеров iOS Safari и Android Chrome с удержанием фонового аудио (Screen WakeLock & MediaSession API).
+
+---
+
+## 📚 Документация проекта
+
+Подробные инженерные отчеты и спецификации вынесены в отдельные документы:
+
+- 📜 **[HISTORY.md](HISTORY.md)** — полная хронология развития проекта, история всех релизов (от v0.0.1 до текущей v0.0.52), инженерные расследования (исправление задвоения звука, спящего декодера Chromium, коллизий офферов и спектрального тюнинга).
+- 🏛️ **[ARCHITECTURE.md](ARCHITECTURE.md)** — подробная техническая архитектура RVxis: WebRTC Full-Mesh топология, спецификация WebSocket сигнального протокола, звуковой граф Web Audio API, архитектура десктопного приложения Tauri v2 и инструкция по развертыванию инфраструктуры.
+
+---
 
 ## 🚀 Быстрый старт
 
-### Локальная разработка
+### Требования
+- **Node.js** 20.0+
+- **Rust** и **Cargo** (для сборки десктопного клиента Tauri)
 
+### 1. Локальная разработка (Веб)
 ```bash
+# Клонирование репозитория
+git clone https://github.com/railenine/voice-chat.git
+cd voice-chat
+
 # Установка зависимостей
 npm install
 
-# Запуск в режиме разработки (только фронтенд)
+# Запуск в режиме разработки с HMR
 npm run dev
 
-# Сборка и запуск с сервером
-npm run build
-node server/index.js
+# Проверка типов и тестов
+npm run typecheck
+npm test
 ```
+Приложение откроется по адресу `http://localhost:5173`.
 
-Приложение будет доступно по адресу: `http://localhost:3000`
-
-### Docker (рекомендуется для VPS)
-
+### 2. Запуск локального продакшн сервера
 ```bash
-# Сборка и запуск
-docker-compose up -d
-
-# Просмотр логов
-docker-compose logs -f
-
-# Остановка
-docker-compose down
+npm run build
+npm start
 ```
+Сервер будет доступен по адресу `http://localhost:3000`.
+
+### 3. Запуск десктопного клиента (Tauri v2)
+```bash
+npm run desktop:dev
+```
+
+---
 
 ## 🖥️ Деплой на VPS
 
-### Вариант 1: Docker (рекомендуется)
-
-1. **Подготовьте VPS** (Ubuntu 20.04+):
+### Вариант 1: Docker Compose (рекомендуется)
 ```bash
-# Обновите систему
-sudo apt update && sudo apt upgrade -y
+# На вашем сервере (Ubuntu 20.04+)
+git clone https://github.com/railenine/voice-chat.git
+cd voice-chat
 
-# Установите Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# Установите Docker Compose
-sudo apt install docker-compose-plugin -y
-```
-
-2. **Клонируйте репозиторий**:
-```bash
-git clone <your-repo-url>
-cd voicechat
-```
-
-3. **Запустите приложение**:
-```bash
+# Запуск контейнера в фоне
 docker-compose up -d
+
+# Проверка статуса
+docker-compose ps
+curl http://localhost:3000/health
 ```
 
-4. **Настройте Nginx reverse proxy** (опционально, для HTTPS):
+### Вариант 2: PM2 / Systemd
 ```bash
-sudo apt install nginx -y
-```
-
-Создайте конфигурацию `/etc/nginx/sites-available/voicechat`:
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
-
-Активируйте конфигурацию:
-```bash
-sudo ln -s /etc/nginx/sites-available/voicechat /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
-5. **Настройте HTTPS** (Let's Encrypt):
-```bash
-sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d your-domain.com
-```
-
-### Вариант 2: Без Docker (PM2)
-
-1. **Установите Node.js 20+**:
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
-```
-
-2. **Установите PM2**:
-```bash
-sudo npm install -g pm2
-```
-
-3. **Клонируйте и настройте**:
-```bash
-git clone <your-repo-url>
-cd voicechat
 npm install
 npm run build
-```
-
-4. **Запустите с PM2**:
-```bash
-pm2 start server/index.js --name voicechat
+pm2 start server/index.js --name rvxis
 pm2 save
 pm2 startup
 ```
 
-5. **Управление**:
-```bash
-pm2 status          # Статус
-pm2 logs voicechat  # Логи
-pm2 restart voicechat  # Перезапуск
-pm2 stop voicechat     # Остановка
-```
+Полная конфигурация Nginx Reverse Proxy и Coturn приведена в **[ARCHITECTURE.md](ARCHITECTURE.md#9-развертывание-и-эксплуатация-на-vps)**.
 
-### Вариант 3: Systemd (без PM2)
+---
 
-Создайте сервис `/etc/systemd/system/voicechat.service`:
-```ini
-[Unit]
-Description=VoiceChat Server
-After=network.target
+## 🧪 Тестирование
 
-[Service]
-Type=simple
-User=www-data
-WorkingDirectory=/path/to/voicechat
-ExecStart=/usr/bin/node server/index.js
-Restart=on-failure
-RestartSec=10
-Environment=NODE_ENV=production
-Environment=PORT=3000
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Запустите:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable voicechat
-sudo systemctl start voicechat
-sudo systemctl status voicechat
-```
-
-## 🔧 Конфигурация
-
-### Переменные окружения
-
-Создайте файл `.env` на основе `.env.example`:
+RVxis поставляется со встроенными наборами автотестов:
 
 ```bash
-cp .env.example .env
+# Модульные тесты логики, хоткеев и детекции устройств
+npm test
+
+# Стресс-тест P2P Mesh сети на 7 одновременных участников
+node scripts/test-multi-user-mesh.js
 ```
 
-Основные параметры:
-- `PORT` - порт сервера (по умолчанию: 3000)
-- `NODE_ENV` - режим работы (development/production)
+---
 
-### TURN сервер (для сложных сетей)
+## 📦 Релизы и версионирование
 
-Если пользователи находятся за строгими файрволами, рекомендуется настроить TURN сервер:
-
-1. Установите coturn:
+Для выпуска новой версии используется автоматизированный скрипт:
 ```bash
-sudo apt install coturn -y
+# Бамп версии во всех файлах и отправка коммита/тега в репозиторий:
+node scripts/bump-version.js 0.0.53 --push
 ```
+GitHub Actions автоматически соберет кроссплатформенные бинарные файлы, подпишет их ключом Ed25519 и сгенерирует манифест автообновления `latest.json`.
 
-2. Настройте `/etc/turnserver.conf`:
-```
-listening-port=3478
-fingerprint
-lt-cred-mech
-user=username:password
-realm=your-domain.com
-```
+---
 
-3. Обновите `server/index.js` с TURN credentials.
+## 📄 Лицензия
 
-## 📊 Мониторинг
-
-### Проверка здоровья
-
-```bash
-curl http://localhost:3000/health
-```
-
-### Логи
-
-```bash
-# Docker
-docker-compose logs -f voicechat
-
-# PM2
-pm2 logs voicechat
-
-# Systemd
-journalctl -u voicechat -f
-```
-
-### Статистика
-
-Приложение автоматически логирует:
-- Подключения/отключения клиентов
-- Создание комнат
-- Ошибки соединения
-
-## 🔒 Безопасность
-
-### Рекомендации для продакшена:
-
-1. **HTTPS обязательно** - используйте Let's Encrypt
-2. **Firewall** - откройте только необходимые порты:
-```bash
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw allow 3478/udp  # TURN server (если используется)
-sudo ufw enable
-```
-
-3. **Rate limiting** - добавьте Nginx rate limiting:
-```nginx
-limit_req_zone $binary_remote_addr zone=api:10m rate=10r/s;
-
-location / {
-    limit_req zone=api burst=20;
-    proxy_pass http://localhost:3000;
-}
-```
-
-4. **Обновления** - регулярно обновляйте зависимости:
-```bash
-npm audit
-npm update
-```
-
-## 🏗️ Архитектура
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                      Browser A                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  React Frontend (TypeScript + Tailwind CSS)      │  │
-│  │  - Генерация никнейма                            │  │
-│  │  - UI голосового чата                            │  │
-│  │  - WebRTC управление                             │  │
-│  └──────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-                            │
-                            │ WebRTC (P2P Audio)
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                      Browser B                          │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  React Frontend (TypeScript + Tailwind CSS)      │  │
-│  └──────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-                            │
-                            │ WebSocket (Signaling)
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                    VPS Server                           │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │  Express + PeerJS Server                         │  │
-│  │  - Signaling для WebRTC                          │  │
-│  │  - Раздача статики (SPA)                         │  │
-│  │  - Health checks                                 │  │
-│  └──────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────┘
-```
-
-## 🐛 Troubleshooting
-
-### Проблема: Не работает микрофон
-**Решение**: Убедитесь что браузер имеет доступ к микрофону. Проверьте настройки разрешений.
-
-### Проблема: Нет звука у участников
-**Решение**: Проверьте что оба участника подключились к одной комнате. Проверьте логи сервера.
-
-### Проблема: Высокая задержка
-**Решение**: Проверьте качество интернет-соединения. Рассмотрите использование TURN сервера.
-
-### Проблема: Docker не запускается
-**Решение**: Проверьте что порт 3000 не занят:
-```bash
-sudo lsof -i :3000
-```
-
-## 📝 Лицензия
-
-MIT
-
-## 🤝 Поддержка
-
-При возникновении проблем создайте issue в репозитории.
+MIT License. Свободно для личного и коммерческого использования.

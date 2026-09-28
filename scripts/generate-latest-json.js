@@ -127,20 +127,22 @@ function main() {
     }
   }
 
-  // 4. Extract Release Notes from CHANGELOG.md if available
+  // 4. Extract Release Notes from HISTORY.md (or CHANGELOG.md) if available
   let notes = `RVxis v${version}`;
-  const changelogPath = path.join(rootDir, 'CHANGELOG.md');
+  const historyPath = fs.existsSync(path.join(rootDir, 'HISTORY.md'))
+    ? path.join(rootDir, 'HISTORY.md')
+    : path.join(rootDir, 'CHANGELOG.md');
   const releaseNotesPath = path.join(rootDir, 'RELEASE_NOTES.md');
   let generatedNotes = false;
 
-  if (fs.existsSync(changelogPath)) {
-    const changelog = fs.readFileSync(changelogPath, 'utf8');
-    const versionHeaderRegex = new RegExp(`##\\s*\\[${version.replace(/\./g, '\\.')}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s*\\[|$)`);
+  if (fs.existsSync(historyPath)) {
+    const changelog = fs.readFileSync(historyPath, 'utf8');
+    const versionHeaderRegex = new RegExp(`(?:^|\\n)#{2,4}\\s*(?:##\\s*)?\\[${version.replace(/\./g, '\\.')}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n#{2,4}\\s*(?:##\\s*)?\\[|$)`);
     const match = changelog.match(versionHeaderRegex);
     if (match && match[1]) {
       const fullNotes = match[1].replace(/\n*---\s*$/, '').trim();
       fs.writeFileSync(releaseNotesPath, fullNotes + '\n', 'utf8');
-      console.log(`[Updater] Generated RELEASE_NOTES.md for GitHub Release.`);
+      console.log(`[Updater] Generated RELEASE_NOTES.md from ${path.basename(historyPath)} for GitHub Release.`);
       generatedNotes = true;
 
       // Clean up markdown bullet points for notes
