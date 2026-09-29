@@ -122,7 +122,7 @@ export function useScreenShare({
     let mounted = true;
     const checkStatus = async () => {
       try {
-        const res = await fetch(`${getBackendBaseUrl()}/api/livekit/status`);
+        const res = await fetch(`${getBackendBaseUrl()}/peerjs/livekit/status`);
         if (!res.ok) return;
         const data = await res.json();
         if (mounted) {
@@ -236,7 +236,7 @@ export function useScreenShare({
       try {
         setError(null);
         // Request token from backend
-        const tokenRes = await fetch(`${getBackendBaseUrl()}/api/livekit/token`, {
+        const tokenRes = await fetch(`${getBackendBaseUrl()}/peerjs/livekit/token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ roomId, nickname, peerId }),
