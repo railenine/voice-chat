@@ -74,31 +74,31 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                     setNickname(val);
                     try {
                       sessionStorage.setItem('voicechat-nickname', val);
-                    } catch {}
+                    } catch { }
                   }}
                   placeholder="Введите никнейм"
                   maxLength={24}
                   className="w-full py-2 px-3 compact-h-input bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl text-center text-white font-bold text-base sm:text-lg placeholder:text-gray-400 focus:outline-none transition-all"
                 />
-                  <Tooltip
-                    content="Случайный никнейм"
-                    description="Сгенерировать случайное имя"
-                    position="top"
+                <Tooltip
+                  content="Случайный никнейм"
+                  description="Сгенерировать случайное имя"
+                  position="top"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newNick = generateNickname();
+                      setNickname(newNick);
+                      try {
+                        sessionStorage.setItem('voicechat-nickname', newNick);
+                      } catch { }
+                    }}
+                    className="p-2 sm:p-2.5 bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white rounded-xl transition-all border border-white/10 flex-shrink-0 flex items-center justify-center"
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newNick = generateNickname();
-                        setNickname(newNick);
-                        try {
-                          sessionStorage.setItem('voicechat-nickname', newNick);
-                        } catch {}
-                      }}
-                      className="p-2 sm:p-2.5 bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-white rounded-xl transition-all border border-white/10 flex-shrink-0 flex items-center justify-center"
-                    >
-                      <Dices className="w-4 h-4 text-blue-400" />
-                    </button>
-                  </Tooltip>
+                    <Dices className="w-4 h-4 text-blue-400" />
+                  </button>
+                </Tooltip>
               </div>
             </div>
           </div>
@@ -125,11 +125,10 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                 </div>
               </button>
               <div
-                className={`grid transition-all duration-300 ease-in-out ${
-                  showAudioSettings
-                    ? 'grid-rows-[1fr] opacity-100 pt-3 mt-3 border-t border-white/10'
-                    : 'grid-rows-[0fr] opacity-0 pt-0 mt-0 border-t-0'
-                }`}
+                className={`grid transition-all duration-300 ease-in-out ${showAudioSettings
+                  ? 'grid-rows-[1fr] opacity-100 pt-3 mt-3 border-t border-white/10'
+                  : 'grid-rows-[0fr] opacity-0 pt-0 mt-0 border-t-0'
+                  }`}
               >
                 <div className="overflow-hidden">
                   <AudioDeviceSettings deviceState={deviceState} compact />
@@ -144,22 +143,20 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
               <button
                 type="button"
                 onClick={() => setMode('create')}
-                className={`flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-medium transition-all text-xs sm:text-sm cursor-pointer select-none active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
-                  mode === 'create'
-                    ? 'bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg shadow-blue-900/50 border border-blue-500/40'
-                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white border border-white/[0.06]'
-                }`}
+                className={`flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-medium transition-all text-xs sm:text-sm cursor-pointer select-none active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${mode === 'create'
+                  ? 'bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg shadow-blue-900/50 border border-blue-500/40'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white border border-white/[0.06]'
+                  }`}
               >
                 Создать
               </button>
               <button
                 type="button"
                 onClick={() => setMode('join')}
-                className={`flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-medium transition-all text-xs sm:text-sm cursor-pointer select-none active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
-                  mode === 'join'
-                    ? 'bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg shadow-blue-900/50 border border-blue-500/40'
-                    : 'bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white border border-white/[0.06]'
-                }`}
+                className={`flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-medium transition-all text-xs sm:text-sm cursor-pointer select-none active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${mode === 'join'
+                  ? 'bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg shadow-blue-900/50 border border-blue-500/40'
+                  : 'bg-white/[0.04] hover:bg-white/[0.08] text-gray-400 hover:text-white border border-white/[0.06]'
+                  }`}
               >
                 Войти
               </button>
@@ -228,6 +225,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
             <p className="text-gray-500 text-[11px] sm:text-xs flex items-center justify-center gap-1.5">
               <Lock className="w-3 h-3 text-blue-400/70" />
               <span>Peer-to-peer шифрование • Без записи разговоров</span>
+            </p>
+            <p className="text-gray-500 text-[11px] sm:text-xs flex items-center justify-center gap-1.5">
+              <span>Проект создан исключительно в учебных целях</span>
             </p>
             {onCheckUpdates && (
               <Tooltip

@@ -55,3 +55,8 @@ RELEASE_NOTES.md
 CONVERSATION_HISTORY.md
 PROJECT_CONTEXT_HANDOFF.md
 scripts/export-chat.js
+
+# Local agent rules & workflows
+.agents/
+AGENTS.md
+

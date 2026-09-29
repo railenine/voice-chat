@@ -36,8 +36,14 @@ import {
   Volume1,
   Settings,
   RefreshCw,
+  ScreenShare,
+  ScreenShareOff,
+  Radio,
 } from 'lucide-react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
+import { useScreenShare } from '../hooks/useScreenShare';
+import { ScreenShareView } from './ScreenShareView';
+import { ScreenShareModal } from './ScreenShareModal';
 import { AudioDeviceSettings } from './AudioDeviceSettings';
 import { ChatPanel } from './ChatPanel';
 import { getShareUrl, isTauri } from '../config';
@@ -381,6 +387,33 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
   const [isMobileEditingNick, setIsMobileEditingNick] = useState(false);
   const [newNickInput, setNewNickInput] = useState(nickname);
 
+  // Screen Sharing via LiveKit SFU (completely isolated from voice WebRTC)
+  const screenShare = useScreenShare({
+    roomId,
+    nickname: myNickname,
+    peerId: myPeerId,
+    isJoined: isConnected,
+  });
+
+  // Track which peer's stream the user is actively watching (null if none, or peerId)
+  const [watchedPeerId, setWatchedPeerId] = useState<string | null>(null);
+
+  // Screen share settings modal state
+  const [showScreenShareModal, setShowScreenShareModal] = useState<boolean>(false);
+
+
+  // If the peer we are watching stopped streaming, close the view automatically
+  useEffect(() => {
+    if (watchedPeerId && watchedPeerId !== 'local') {
+      const stillStreaming =
+        screenShare.streamingPeerIds.has(watchedPeerId) ||
+        screenShare.activeStreams.some((s) => s.participantId === watchedPeerId);
+      if (!stillStreaming) {
+        setWatchedPeerId(null);
+      }
+    }
+  }, [watchedPeerId, screenShare.streamingPeerIds, screenShare.activeStreams]);
+
   // Selected peer for mobile volume modal
   const [selectedMobilePeer, setSelectedMobilePeer] = useState<any | null>(null);
   const [cachedMobilePeer, setCachedMobilePeer] = useState<any | null>(null);
@@ -595,6 +628,12 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               </Tooltip>
             )}
             <div className="flex items-center gap-1.5 mt-0.5">
+              {screenShare.isSharing && (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30 font-medium flex items-center gap-1.5 animate-pulse">
+                  <Radio className="w-3 h-3 text-emerald-400 shrink-0" />
+                  <span>В эфире</span>
+                </span>
+              )}
               {isDeafened ? (
                 <span className="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded border border-rose-500/30 font-medium">
                   Заглушен (всё)
@@ -666,6 +705,25 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   {peer.nickname}
                 </span>
                 <div className="flex items-center gap-1.5 mt-0.5">
+                  {screenShare.streamingPeerIds.has(peer.peerId) && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setWatchedPeerId((prev) => (prev === peer.peerId ? null : peer.peerId));
+                      }}
+                      className={`btn-compact !min-w-0 !min-h-0 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer shadow-sm ${
+                        watchedPeerId === peer.peerId
+                          ? 'bg-blue-500/25 text-blue-300 border border-blue-500/40 hover:bg-blue-500/35'
+                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/35 hover:scale-105 shadow-emerald-500/20'
+                      }`}
+                      style={{ minHeight: 'unset', minWidth: 'unset' }}
+                      title={watchedPeerId === peer.peerId ? 'Свернуть трансляцию' : 'Смотреть стрим'}
+                    >
+                      <Radio className={`w-3 h-3 shrink-0 ${watchedPeerId === peer.peerId ? 'text-blue-400 animate-pulse' : 'text-emerald-400 animate-pulse'}`} />
+                      <span>{watchedPeerId === peer.peerId ? 'Просмотр' : 'Смотреть стрим'}</span>
+                    </button>
+                  )}
                   {peer.isDeafened ? (
                     <span className="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded border border-rose-500/30 font-medium">
                       Заглушен (всё)
@@ -1022,6 +1080,10 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                       <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
                         <MicOff className="w-2.5 h-2.5" />
                       </span>
+                    ) : screenShare.isSharing ? (
+                      <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm animate-pulse" title="В эфире">
+                        <Radio className="w-2.5 h-2.5" />
+                      </span>
                     ) : null}
                   </div>
 
@@ -1033,8 +1095,16 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     >
                       {myNickname}
                     </span>
-                    <div className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-blue-500/20 border border-blue-500/30 text-blue-300 flex items-center justify-center">
-                      Вы
+                    <div className="flex items-center gap-1">
+                      <div className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-blue-500/20 border border-blue-500/30 text-blue-300 flex items-center justify-center">
+                        Вы
+                      </div>
+                      {screenShare.isSharing && (
+                        <span className="inline-flex items-center gap-0.5 text-[9px] font-semibold text-emerald-400 animate-pulse" title="Вы транслируете экран">
+                          <Radio className="w-2.5 h-2.5 shrink-0" />
+                          <span>Эфир</span>
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1086,6 +1156,10 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                           <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm">
                             <MicOff className="w-2.5 h-2.5" />
                           </span>
+                        ) : screenShare.streamingPeerIds.has(peer.peerId) ? (
+                          <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-slate-950 shadow-sm animate-pulse" title="В эфире">
+                            <Radio className="w-2.5 h-2.5" />
+                          </span>
                         ) : null}
                       </div>
 
@@ -1097,16 +1171,37 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                         >
                           {peer.nickname}
                         </span>
-                        <div
-                          className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-semibold flex items-center justify-center border transition-all ${
-                            vol === 0
-                              ? 'bg-red-500/20 border-red-500/30 text-red-300'
-                              : vol > 100
-                              ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400 font-bold'
-                              : 'bg-white/10 border-white/10 text-gray-300 group-hover:bg-white/15 group-hover:text-white'
-                          }`}
-                        >
-                          {vol === 0 ? '0%' : `${vol}%`}
+                        <div className="flex items-center gap-1">
+                          <div
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-semibold flex items-center justify-center border transition-all ${
+                              vol === 0
+                                ? 'bg-red-500/20 border-red-500/30 text-red-300'
+                                : vol > 100
+                                ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400 font-bold'
+                                : 'bg-white/10 border-white/10 text-gray-300 group-hover:bg-white/15 group-hover:text-white'
+                            }`}
+                          >
+                            {vol === 0 ? '0%' : `${vol}%`}
+                          </div>
+                          {screenShare.streamingPeerIds.has(peer.peerId) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setWatchedPeerId((prev) => (prev === peer.peerId ? null : peer.peerId));
+                              }}
+                              className={`btn-compact !min-w-0 !min-h-0 h-[18px] px-1.5 py-0 rounded-full text-[9px] font-semibold inline-flex items-center gap-1 border transition-all cursor-pointer select-none shrink-0 ${
+                                watchedPeerId === peer.peerId
+                                  ? 'bg-blue-500/30 border-blue-400 text-blue-200'
+                                  : 'bg-emerald-500/25 border-emerald-400/50 text-emerald-300 active:scale-95'
+                              }`}
+                              style={{ minHeight: 'unset', minWidth: 'unset', height: '18px', maxHeight: '18px' }}
+                              title={watchedPeerId === peer.peerId ? 'Свернуть трансляцию' : 'Смотреть стрим'}
+                            >
+                              <Radio className="w-2.5 h-2.5 shrink-0 animate-pulse text-emerald-400" />
+                              <span className="leading-none">{watchedPeerId === peer.peerId ? 'Стрим' : 'Смотреть'}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1329,6 +1424,35 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   </button>
                 </Tooltip>
 
+                {/* Screen Share Toggle */}
+                {screenShare.isAvailable && screenShare.canShareScreen && (
+                  <Tooltip
+                    content={screenShare.isSharing ? 'Остановить показ экрана' : 'Поделиться экраном'}
+                    description={
+                      screenShare.isSharing
+                        ? 'Прекратить демонстрацию экрана'
+                        : 'Трансляция экрана и звука системы через LiveKit'
+                    }
+                    position="top"
+                  >
+                    <button
+                      onClick={screenShare.isSharing ? screenShare.stopScreenShare : () => setShowScreenShareModal(true)}
+                      disabled={screenShare.isConnecting}
+                      className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
+                        screenShare.isSharing
+                          ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/40'
+                          : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
+                      }`}
+                    >
+                      {screenShare.isSharing ? (
+                        <ScreenShareOff className="w-5 h-5 text-emerald-400" />
+                      ) : (
+                        <ScreenShare className="w-5 h-5" />
+                      )}
+                    </button>
+                  </Tooltip>
+                )}
+
                 {/* Leave Button */}
                 <Tooltip
                   content="Выйти из комнаты"
@@ -1421,8 +1545,23 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             </div>
           </aside>
 
-          {/* MAIN CHAT AREA (Full height, center on desktop, full screen on mobile) */}
-          <main className="flex-1 flex flex-col min-w-0 p-2 pt-2 sm:p-4 sm:pt-3 lg:p-5 overflow-hidden">
+          {/* MAIN CHAT & STREAM AREA (Full height, center on desktop, full screen on mobile) */}
+          <main className="flex-1 flex flex-col min-w-0 p-2 pt-2 sm:p-4 sm:pt-3 lg:p-5 overflow-hidden gap-3">
+            {/* Screen Share Viewport (LiveKit SFU) */}
+            <ScreenShareView
+              activeStreams={screenShare.activeStreams}
+              localVideoTrack={screenShare.localVideoTrack}
+              localAudioTrack={screenShare.localAudioTrack}
+              isSharing={screenShare.isSharing}
+              myNickname={myNickname}
+              watchedPeerId={watchedPeerId}
+              onStopSharing={screenShare.stopScreenShare}
+              onCloseView={() => setWatchedPeerId(null)}
+              onSelectStream={(peerId) => setWatchedPeerId(peerId)}
+              streamVolumes={screenShare.streamVolumes}
+              onVolumeChange={screenShare.setStreamVolume}
+            />
+
             <ChatPanel
               roomId={roomId}
               messages={messages}
@@ -1499,6 +1638,36 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               <Sparkles className="w-5 h-5" />
             </button>
           </Tooltip>
+
+          {/* Screen Share Toggle (< 1024px) */}
+          {screenShare.isAvailable && screenShare.canShareScreen && (
+            <Tooltip
+              content={screenShare.isSharing ? 'Остановить показ экрана' : 'Поделиться экраном'}
+              description={
+                screenShare.isSharing
+                  ? 'Прекратить демонстрацию экрана'
+                  : 'Трансляция экрана и звука системы через LiveKit'
+              }
+              position="top"
+            >
+              <button
+                type="button"
+                onClick={screenShare.isSharing ? screenShare.stopScreenShare : () => setShowScreenShareModal(true)}
+                disabled={screenShare.isConnecting}
+                className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
+                  screenShare.isSharing
+                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/40'
+                    : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
+                }`}
+              >
+                {screenShare.isSharing ? (
+                  <ScreenShareOff className="w-5 h-5 text-emerald-400" />
+                ) : (
+                  <ScreenShare className="w-5 h-5" />
+                )}
+              </button>
+            </Tooltip>
+          )}
 
           <Tooltip
             content="Выйти из комнаты"
@@ -1586,6 +1755,55 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   <span>200% (Усиление)</span>
                 </div>
               </div>
+
+              {/* If peer is broadcasting their screen */}
+              {screenShare.streamingPeerIds.has(cachedMobilePeer.peerId) && (
+                <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                      <span className="text-xs font-semibold text-emerald-300">Прямой эфир экрана</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = watchedPeerId === cachedMobilePeer.peerId ? null : cachedMobilePeer.peerId;
+                        setWatchedPeerId(next);
+                        setSelectedMobilePeer(null);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                        watchedPeerId === cachedMobilePeer.peerId
+                          ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/30 active:scale-95'
+                      }`}
+                    >
+                      <Radio className="w-3.5 h-3.5" />
+                      <span>{watchedPeerId === cachedMobilePeer.peerId ? 'Закрыть просмотр' : 'Смотреть стрим'}</span>
+                    </button>
+                  </div>
+
+                  {/* Stream audio volume for this peer */}
+                  <div className="space-y-1.5 pt-1 border-t border-emerald-500/20">
+                    <div className="flex items-center justify-between text-xs text-gray-300">
+                      <span className="flex items-center gap-1 text-[11px] text-gray-400">
+                        <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Громкость трансляции</span>
+                      </span>
+                      <span className="font-mono font-bold text-emerald-300 text-[11px]">
+                        {screenShare.streamVolumes[cachedMobilePeer.peerId] ?? 100}%
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={screenShare.streamVolumes[cachedMobilePeer.peerId] ?? 100}
+                      onChange={(e) => screenShare.setStreamVolume(cachedMobilePeer.peerId, Number(e.target.value))}
+                      className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-white/15 accent-emerald-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-between p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-slate-950/50 rounded-b-2xl">
@@ -1679,6 +1897,17 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
           </div>
         </form>
       </Modal>
+
+      {/* Screen Share Settings Modal */}
+      <ScreenShareModal
+        isOpen={showScreenShareModal}
+        onClose={() => setShowScreenShareModal(false)}
+        onConfirm={(options) => {
+          setShowScreenShareModal(false);
+          screenShare.startScreenShare(options);
+        }}
+        isConnecting={screenShare.isConnecting}
+      />
 
       {/* Unified Settings Modal */}
       <Modal

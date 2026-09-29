@@ -1,6 +1,11 @@
-export const APP_VERSION = '0.0.52';
+export const APP_VERSION = '0.1.0';
 export const PRODUCTION_SERVER = 'https://rvxis.site';
 export const PRODUCTION_WS = 'wss://rvxis.site/peerjs/ws';
+
+// ⚠️ LOCAL TESTING FLAG (Set to true when running manual tests against localhost)
+const USE_LOCAL_SERVER_FOR_TAURI_TESTS = false;
+const LOCAL_DEV_SERVER = 'http://localhost:3000';
+const LOCAL_DEV_WS = 'ws://localhost:3000/peerjs/ws';
 
 export const isTauri = (): boolean =>
   typeof window !== 'undefined' &&
@@ -8,7 +13,7 @@ export const isTauri = (): boolean =>
 
 export function getBackendBaseUrl(): string {
   if (isTauri()) {
-    return PRODUCTION_SERVER;
+    return USE_LOCAL_SERVER_FOR_TAURI_TESTS ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
   }
   const isDev =
     typeof window !== 'undefined' &&
@@ -22,7 +27,7 @@ export function getBackendBaseUrl(): string {
 
 export function getWebSocketUrl(): string {
   if (isTauri()) {
-    return PRODUCTION_WS;
+    return USE_LOCAL_SERVER_FOR_TAURI_TESTS ? LOCAL_DEV_WS : PRODUCTION_WS;
   }
   const isDev =
     window.location.port === '5173' ||
@@ -38,7 +43,8 @@ export function getWebSocketUrl(): string {
 
 export function getShareUrl(roomId: string): string {
   if (isTauri()) {
-    return `${PRODUCTION_SERVER}?room=${roomId}`;
+    const base = USE_LOCAL_SERVER_FOR_TAURI_TESTS ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
+    return `${base}?room=${roomId}`;
   }
   return `${window.location.origin}?room=${roomId}`;
 }

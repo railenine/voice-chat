@@ -6,10 +6,29 @@ import cors from 'cors';
 import fs from 'fs';
 import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import { AccessToken } from 'livekit-server-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.join(__dirname, '..', 'dist');
+
+// Load .env file if present (native zero-dependency parser)
+const envPath = path.join(__dirname, '..', '.env');
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, 'utf8');
+  for (const line of envContent.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx > 0) {
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim().replace(/^['"](.*)['"]$/, '$1');
+      if (!process.env[key]) {
+        process.env[key] = val;
+      }
+    }
+  }
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -18,7 +37,7 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-const APP_VERSION = '0.0.52';
+const APP_VERSION = '0.1.0';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -136,6 +155,67 @@ app.get('/peerjs/ice-servers', (req, res) => {
   res.json({ iceServers: CACHED_ICE_SERVERS });
 });
 
+// LiveKit SFU Configuration & Token Endpoints
+const LIVEKIT_URL = process.env.LIVEKIT_URL || 'https://livekit.rvxis.site';
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'rvxis_livekit_key';
+const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
+
+// Status endpoint: tells clients if LiveKit SFU is enabled and configured
+app.get(['/api/livekit/status', '/peerjs/livekit/status'], (req, res) => {
+  res.json({
+    available: Boolean(LIVEKIT_API_SECRET),
+    url: LIVEKIT_URL,
+  });
+});
+
+// Token endpoint: generates a scoped JWT token for video screen sharing
+app.post(['/api/livekit/token', '/peerjs/livekit/token'], async (req, res) => {
+  const { roomId, nickname, peerId } = req.body || {};
+
+  if (!roomId || typeof roomId !== 'string') {
+    return res.status(400).json({ error: 'invalid_room_id', message: 'Room ID is required' });
+  }
+
+  // Graceful fallback if SFU secret is not set yet
+  if (!LIVEKIT_API_SECRET) {
+    return res.status(503).json({
+      error: 'livekit_not_configured',
+      message: 'LiveKit SFU is not configured on this server',
+    });
+  }
+
+  try {
+    const cleanRoom = roomId.trim();
+    const cleanNick = (nickname || 'User').trim().slice(0, 32);
+    const identity = (peerId || crypto.randomUUID()).trim().slice(0, 64);
+
+    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+      identity,
+      name: cleanNick,
+      ttl: '12h',
+    });
+
+    at.addGrant({
+      roomJoin: true,
+      room: cleanRoom,
+      canPublish: true,
+      canSubscribe: true,
+      canPublishData: true,
+    });
+
+    const token = await at.toJwt();
+    res.json({
+      token,
+      livekitUrl: LIVEKIT_URL,
+      room: cleanRoom,
+      identity,
+    });
+  } catch (err) {
+    console.error('[LiveKit] Token generation error:', err);
+    res.status(500).json({ error: 'token_generation_failed', message: err.message });
+  }
+});
+
 // In-memory room manager
 // roomId -> Map<peerId, { ws: WebSocket, peerId: string, nickname: string, isMuted: boolean, isSpeaking: boolean }>
 const rooms = new Map();
@@ -197,7 +277,7 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 // Handle upgrade for paths starting with /peerjs
 server.on('upgrade', (request, socket, head) => {
   const pathname = request.url ? new URL(request.url, 'http://localhost').pathname : '';
-  
+
   // Accept both /peerjs/ws and /peerjs (and any subpath like /peerjs/peerjs for compatibility)
   if (pathname.startsWith('/peerjs')) {
     wss.handleUpgrade(request, socket, head, (ws) => {
@@ -236,7 +316,7 @@ wss.on('connection', (ws) => {
           console.warn(`[WS] Rate limit exceeded for socket (${ws.msgCount} msgs/s). Throttling.`);
           try {
             ws.send(JSON.stringify({ type: 'error', message: 'Слишком много запросов. Подождите секунду.' }));
-          } catch (e) {}
+          } catch (e) { }
         }
         return; // Drop packet
       }
@@ -282,7 +362,7 @@ wss.on('connection', (ws) => {
         console.log(`[Room ${roomId}] Evicting stale duplicate peer ${staleId} (${staleClient.nickname})`);
         try {
           staleClient.ws.close();
-        } catch (e) {}
+        } catch (e) { }
         clientMeta.delete(staleClient.ws);
         room.delete(staleId);
         broadcastToRoom(roomId, {

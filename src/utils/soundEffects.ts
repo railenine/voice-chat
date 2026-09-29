@@ -337,3 +337,45 @@ export async function playUndeafenSound() {
     console.warn('[SoundEffects] playUndeafenSound error:', e);
   }
 }
+
+/**
+ * Stream start notification sound:
+ * Uplifting harmonic chime: C5 (523Hz) -> E5 (659Hz) -> G5 (784Hz)
+ */
+export async function playStreamStartSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playHarmonicChime(ctx, [523.25, 1046.5], now, 0.08, 0.25, 'sine');
+    playHarmonicChime(ctx, [659.25, 1318.5], now + 0.07, 0.08, 0.25, 'sine');
+    playHarmonicChime(ctx, [783.99, 1567.98], now + 0.14, 0.22, 0.28, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playStreamStartSound error:', e);
+  }
+}
+
+/**
+ * Stream stop notification sound:
+ * Gentle descending chime: G5 (784Hz) -> E5 (659Hz) -> C5 (523Hz)
+ */
+export async function playStreamStopSound() {
+  const ctx = getFallbackAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume();
+    }
+    const now = ctx.currentTime;
+    playHarmonicChime(ctx, [783.99, 1567.98], now, 0.08, 0.20, 'sine');
+    playHarmonicChime(ctx, [659.25, 1318.5], now + 0.07, 0.08, 0.20, 'sine');
+    playHarmonicChime(ctx, [523.25, 1046.5], now + 0.14, 0.18, 0.22, 'sine');
+  } catch (e) {
+    console.warn('[SoundEffects] playStreamStopSound error:', e);
+  }
+}

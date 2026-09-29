@@ -82,6 +82,84 @@ test('Device detection: Touchscreen Laptop (touch, but wide screen & fine mouse)
   );
 });
 
+// Strict Mobile & Tablet vs Desktop Screen Sharing Permission
+function simulateIsMobileOrTablet({
+  userAgent = '',
+  isTauriApp = false,
+  userAgentData = null,
+  platform = '',
+  maxTouchPoints = 0,
+}) {
+  if (isTauriApp) return false;
+  if (userAgentData && typeof userAgentData.mobile === 'boolean' && userAgentData.mobile) {
+    return true;
+  }
+  if (/Android/i.test(userAgent)) return true;
+  if (/iPhone|iPad|iPod/i.test(userAgent)) return true;
+  const isIPadOS =
+    (platform === 'MacIntel' || userAgent.includes('Macintosh')) &&
+    maxTouchPoints > 1;
+  if (isIPadOS) return true;
+  if (/webOS|BlackBerry|IEMobile|Opera Mini|Windows Phone|Mobile|Tablet/i.test(userAgent)) return true;
+  return false;
+}
+
+function simulateIsDesktopPlatform(opts) {
+  if (opts.isTauriApp) return true;
+  if (simulateIsMobileOrTablet(opts)) return false;
+  const ua = opts.userAgent || '';
+  const platform = (opts.userAgentData && opts.userAgentData.platform) || opts.platform || '';
+  if (/Win/i.test(platform) || /Windows NT/i.test(ua)) return true;
+  if ((/Mac/i.test(platform) || /Macintosh/i.test(ua)) && (opts.maxTouchPoints || 0) <= 1) return true;
+  if ((/Linux/i.test(platform) || /Linux|X11/i.test(ua)) && !/Android/i.test(ua)) return true;
+  if (/CrOS/i.test(ua)) return true;
+  return true;
+}
+
+function simulateCanShareScreen(opts) {
+  return simulateIsDesktopPlatform(opts) && opts.hasGetDisplayMedia !== false;
+}
+
+test('Screen share permission: iPhone is strictly forbidden from streaming', () => {
+  const ua = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
+  assert.strictEqual(simulateCanShareScreen({ userAgent: ua }), false);
+});
+
+test('Screen share permission: iPad (iPadOS 13+ with Macintosh UA and touch) is strictly forbidden', () => {
+  const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
+  assert.strictEqual(simulateCanShareScreen({ userAgent: ua, platform: 'MacIntel', maxTouchPoints: 5 }), false);
+});
+
+test('Screen share permission: Android Tablet (no Mobile keyword in UA) is strictly forbidden', () => {
+  const ua = 'Mozilla/5.0 (Linux; Android 13; SM-X906B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+  assert.strictEqual(simulateCanShareScreen({ userAgent: ua }), false);
+});
+
+test('Screen share permission: Android Phone is strictly forbidden', () => {
+  const ua = 'Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36';
+  assert.strictEqual(simulateCanShareScreen({ userAgent: ua }), false);
+});
+
+test('Screen share permission: Windows Desktop PC (even if resized narrow < 1024px) is allowed', () => {
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  assert.strictEqual(simulateCanShareScreen({ userAgent: ua, platform: 'Win32' }), true);
+});
+
+test('Screen share permission: Windows Touch Laptop (e.g. Surface) is allowed', () => {
+  const ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  assert.strictEqual(simulateCanShareScreen({ userAgent: ua, platform: 'Win32', maxTouchPoints: 10 }), true);
+});
+
+test('Screen share permission: macOS Desktop Safari/Chrome (MacBook/iMac) is allowed', () => {
+  const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1';
+  assert.strictEqual(simulateCanShareScreen({ userAgent: ua, platform: 'MacIntel', maxTouchPoints: 0 }), true);
+});
+
+test('Screen share permission: Linux Desktop (Ubuntu/Fedora) is allowed', () => {
+  const ua = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:125.0) Gecko/20100101 Firefox/125.0';
+  assert.strictEqual(simulateCanShareScreen({ userAgent: ua, platform: 'Linux x86_64' }), true);
+});
+
 // -------------------------------------------------------------
 // 2. Test Hotkey Utilities
 // -------------------------------------------------------------
@@ -276,6 +354,28 @@ test('Audio SDP Optimization: injects usedtx=1 and 32kbps mono for background no
   assert.ok(optimized.includes('usedtx=1'), 'SDP must include usedtx=1 for DTX discontinuous transmission');
   assert.ok(optimized.includes('maxaveragebitrate=32000'), 'SDP must include maxaveragebitrate=32000');
   assert.ok(optimized.includes('stereo=0'), 'SDP must enforce mono transmission');
+});
+
+// -------------------------------------------------------------
+// 5. Test LiveKit SFU Token Generation & Grants
+// -------------------------------------------------------------
+import { AccessToken } from 'livekit-server-sdk';
+
+test('LiveKit Token: generates valid JWT with room grants', async () => {
+  const at = new AccessToken('test_key', 'test_secret_with_sufficient_length_123', {
+    identity: 'peer-test-01',
+    name: 'TestUser',
+    ttl: '1h',
+  });
+  at.addGrant({
+    roomJoin: true,
+    room: 'room-xyz',
+    canPublish: true,
+    canSubscribe: true,
+  });
+  const jwt = await at.toJwt();
+  assert.ok(typeof jwt === 'string' && jwt.length > 50, 'JWT token must be a non-empty string');
+  assert.ok(jwt.split('.').length === 3, 'JWT token must have 3 parts (header.payload.signature)');
 });
 
 
