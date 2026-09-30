@@ -68,6 +68,20 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
     }
   }, [activeStreams, isSharing, watchedPeerId]);
 
+  // Safety net: when ScreenShareView unmounts, mute and detach all remote audio tracks
+  useEffect(() => {
+    return () => {
+      activeStreams.forEach((s) => {
+        if (s.audioTrack) {
+          try {
+            s.audioTrack.setVolume(0);
+            s.audioTrack.detach();
+          } catch { }
+        }
+      });
+    };
+  }, [activeStreams]);
+
   // Fullscreen toggle handler with universal Mobile/iOS/Android support
   const toggleFullscreen = async () => {
     const el = containerRef.current;
@@ -162,8 +176,8 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
       onTouchStart={handleUserInteraction}
       onClick={handleUserInteraction}
       className={`w-full overflow-hidden flex flex-col transition-all group ${isFullscreen
-          ? 'fixed inset-0 z-50 h-screen h-[100dvh] w-screen bg-black rounded-none border-none'
-          : 'relative rounded-2xl border border-white/10 bg-slate-950/80 backdrop-blur-2xl shadow-2xl max-h-[60vh] min-h-[280px] sm:min-h-[360px] flex-1'
+        ? 'fixed inset-0 z-50 h-screen h-[100dvh] w-screen bg-black rounded-none border-none'
+        : 'relative rounded-2xl border border-white/10 bg-slate-950/80 backdrop-blur-2xl shadow-2xl max-h-[60vh] min-h-[280px] sm:min-h-[360px] flex-1'
         }`}
       style={
         isFullscreen
@@ -195,6 +209,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
           />
         ) : focusedRemoteStream && focusedRemoteStream.videoTrack ? (
           <RemoteVideoPlayer
+            key={focusedRemoteStream.participantId}
             stream={focusedRemoteStream}
             volume={streamVolumes[focusedRemoteStream.participantId] ?? 100}
             onVolumeChange={(vol) => onVolumeChange(focusedRemoteStream.participantId, vol)}
@@ -316,8 +331,8 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
               type="button"
               onClick={() => handleSelectThumbnail('local')}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 flex-shrink-0 active:scale-95 cursor-pointer ${focusedId === 'local'
-                  ? 'bg-blue-600/30 border-blue-500/60 text-white shadow-sm shadow-blue-500/20'
-                  : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50'
+                ? 'bg-blue-600/30 border-blue-500/60 text-white shadow-sm shadow-blue-500/20'
+                : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50'
                 }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
@@ -331,8 +346,8 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
               type="button"
               onClick={() => handleSelectThumbnail(stream.participantId)}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 flex-shrink-0 active:scale-95 cursor-pointer ${focusedId === stream.participantId
-                  ? 'bg-blue-600/30 border-blue-500/60 text-white shadow-sm shadow-blue-500/20'
-                  : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50'
+                ? 'bg-blue-600/30 border-blue-500/60 text-white shadow-sm shadow-blue-500/20'
+                : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50'
                 }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
@@ -364,26 +379,47 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
   // Attach Remote Video Track
   useEffect(() => {
     const videoEl = videoRef.current;
-    if (!videoEl || !stream.videoTrack) return;
+    const videoTrack = stream.videoTrack;
+    if (!videoEl || !videoTrack) return;
 
-    stream.videoTrack.attach(videoEl);
+    videoTrack.attach(videoEl);
     videoEl.play().catch(() => { });
     return () => {
-      stream.videoTrack?.detach(videoEl);
+      try {
+        videoEl.pause();
+        videoEl.srcObject = null;
+        videoEl.removeAttribute('src');
+        videoEl.load();
+      } catch { }
+      try {
+        videoTrack.detach(videoEl);
+        videoTrack.detach();
+      } catch { }
     };
   }, [stream.videoTrack]);
 
   // Attach Remote Audio Track (System Audio)
   useEffect(() => {
     const audioEl = audioRef.current;
-    if (!audioEl || !stream.audioTrack) return;
+    const audioTrack = stream.audioTrack;
+    if (!audioEl || !audioTrack) return;
 
-    stream.audioTrack.attach(audioEl);
-    stream.audioTrack.setVolume(volume / 100);
+    audioTrack.attach(audioEl);
+    audioTrack.setVolume(volume / 100);
     audioEl.play().catch(() => { });
 
     return () => {
-      stream.audioTrack?.detach(audioEl);
+      try {
+        audioEl.pause();
+        audioEl.srcObject = null;
+        audioEl.removeAttribute('src');
+        audioEl.load();
+      } catch { }
+      try {
+        audioTrack.setVolume(0);
+        audioTrack.detach(audioEl);
+        audioTrack.detach();
+      } catch { }
     };
   }, [stream.audioTrack]);
 
