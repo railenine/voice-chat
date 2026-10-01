@@ -150,7 +150,35 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
     isSharing
   );
 
-  if (!isViewingStream) {
+  const [isRendered, setIsRendered] = useState(isViewingStream);
+  const [isClosing, setIsClosing] = useState(false);
+  const lastRemoteStreamRef = useRef<RemoteScreenShare | null>(null);
+
+  // Two-phase exit lifecycle: smoothly animate out before unmounting
+  useEffect(() => {
+    if (isViewingStream) {
+      setIsRendered(true);
+      setIsClosing(false);
+    } else if (isRendered) {
+      setIsClosing(true);
+      // Immediately silence and detach all audio tracks so audio stops on frame 0
+      activeStreams.forEach((s) => {
+        if (s.audioTrack) {
+          try {
+            s.audioTrack.setVolume(0);
+            s.audioTrack.detach();
+          } catch {}
+        }
+      });
+      const timer = setTimeout(() => {
+        setIsRendered(false);
+        setIsClosing(false);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isViewingStream, isRendered, activeStreams]);
+
+  if (!isRendered) {
     return null;
   }
 
@@ -159,10 +187,15 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
     focusedId === 'local' ||
     (isSharing && (!watchedPeerId || watchedPeerId === 'local'));
 
-  const focusedRemoteStream = isLocalFocused
+  const activeRemoteStream = isLocalFocused
     ? null
     : activeStreams.find((s) => s.participantId === focusedId) ||
     (watchedPeerId ? activeStreams.find((s) => s.participantId === watchedPeerId) : null);
+
+  if (activeRemoteStream) {
+    lastRemoteStreamRef.current = activeRemoteStream;
+  }
+  const focusedRemoteStream = activeRemoteStream || (isClosing ? lastRemoteStreamRef.current : null);
 
   const handleSelectThumbnail = (id: string) => {
     setFocusedId(id);
@@ -176,8 +209,12 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
       onTouchStart={handleUserInteraction}
       onClick={handleUserInteraction}
       className={`w-full overflow-hidden flex flex-col transition-all group ${isFullscreen
-        ? 'fixed inset-0 z-50 h-screen h-[100dvh] w-screen bg-black rounded-none border-none'
-        : 'relative rounded-2xl border border-white/10 bg-slate-950/80 backdrop-blur-2xl shadow-2xl max-h-[60vh] min-h-[280px] sm:min-h-[360px] flex-1'
+        ? `fixed inset-0 z-50 h-screen h-[100dvh] w-screen bg-black rounded-none border-none ${
+            isClosing ? 'opacity-0 scale-[0.98] transition-all duration-200 pointer-events-none' : ''
+          }`
+        : `relative rounded-2xl border border-white/10 bg-slate-950/80 backdrop-blur-2xl shadow-2xl max-h-[60vh] min-h-[280px] sm:min-h-[360px] flex-1 ${
+            isClosing ? 'animate-modal-out pointer-events-none' : 'animate-modal-in'
+          }`
         }`}
       style={
         isFullscreen
@@ -330,9 +367,9 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
             <button
               type="button"
               onClick={() => handleSelectThumbnail('local')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 flex-shrink-0 active:scale-95 cursor-pointer ${focusedId === 'local'
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center gap-1.5 flex-shrink-0 hover:scale-105 active:scale-95 cursor-pointer ${focusedId === 'local'
                 ? 'bg-blue-600/30 border-blue-500/60 text-white shadow-sm shadow-blue-500/20'
-                : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50'
+                : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50 hover:border-white/20'
                 }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
@@ -345,9 +382,9 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
               key={stream.participantId}
               type="button"
               onClick={() => handleSelectThumbnail(stream.participantId)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all flex items-center gap-1.5 flex-shrink-0 active:scale-95 cursor-pointer ${focusedId === stream.participantId
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center gap-1.5 flex-shrink-0 hover:scale-105 active:scale-95 cursor-pointer ${focusedId === stream.participantId
                 ? 'bg-blue-600/30 border-blue-500/60 text-white shadow-sm shadow-blue-500/20'
-                : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50'
+                : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50 hover:border-white/20'
                 }`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />

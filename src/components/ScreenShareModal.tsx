@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   Monitor,
-  Volume2,
-  VolumeX,
   Info,
   X,
   Check,
@@ -24,7 +22,6 @@ interface ScreenShareModalProps {
 }
 
 const STORAGE_QUALITY_KEY = 'voice_chat_screenshare_quality';
-const STORAGE_AUDIO_KEY = 'voice_chat_screenshare_audio';
 
 const PRESET_ORDER: ScreenShareQualityPreset[] = [
   '1440p30',
@@ -46,18 +43,8 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
       if (saved && saved in SCREEN_SHARE_PRESETS) {
         return saved as ScreenShareQualityPreset;
       }
-    } catch (e) {}
+    } catch (e) { }
     return '1080p60';
-  });
-
-  const [includeAudio, setIncludeAudio] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_AUDIO_KEY);
-      if (saved !== null) {
-        return saved === 'true';
-      }
-    } catch (e) {}
-    return true;
   });
 
   // Re-sync on open
@@ -68,23 +55,18 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
         if (savedQ && savedQ in SCREEN_SHARE_PRESETS) {
           setSelectedQuality(savedQ as ScreenShareQualityPreset);
         }
-        const savedA = localStorage.getItem(STORAGE_AUDIO_KEY);
-        if (savedA !== null) {
-          setIncludeAudio(savedA === 'true');
-        }
-      } catch (e) {}
+      } catch (e) { }
     }
   }, [isOpen]);
 
   const handleConfirm = () => {
     try {
       localStorage.setItem(STORAGE_QUALITY_KEY, selectedQuality);
-      localStorage.setItem(STORAGE_AUDIO_KEY, String(includeAudio));
-    } catch (e) {}
+    } catch (e) { }
 
     onConfirm({
       quality: selectedQuality,
-      includeAudio,
+      includeAudio: true,
     });
   };
 
@@ -102,7 +84,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
                 Параметры трансляции
               </h2>
               <p className="text-xs text-gray-400 mt-0.5">
-                Настройте качество видео и звук перед выбором экрана
+                Выберите качество видео и частоту кадров
               </p>
             </div>
           </div>
@@ -140,26 +122,23 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
                   key={key}
                   type="button"
                   onClick={() => setSelectedQuality(key)}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between gap-1.5 active:scale-[0.98] ${
-                    isSelected
-                      ? 'bg-blue-600/20 border-blue-500/70 ring-1 ring-blue-500/40 shadow-lg shadow-blue-950/40'
-                      : 'bg-white/[0.04] hover:bg-white/[0.08] border-white/10 hover:border-white/20'
-                  }`}
+                  className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col justify-between gap-1.5 active:scale-[0.98] ${isSelected
+                    ? 'bg-blue-600/20 border-blue-500/70 ring-1 ring-blue-500/40 shadow-lg shadow-blue-950/40'
+                    : 'bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 hover:shadow-md hover:shadow-black/20 border-white/10'
+                    }`}
                 >
                   <div className="flex items-center justify-between w-full">
                     <span
-                      className={`text-xs font-bold tracking-tight ${
-                        isSelected ? 'text-white' : 'text-gray-200'
-                      }`}
+                      className={`text-xs font-bold tracking-tight transition-colors duration-200 ${isSelected ? 'text-white' : 'text-gray-200'
+                        }`}
                     >
                       {preset.label}
                     </span>
                     <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                        isSelected
-                          ? 'bg-blue-500/30 border-blue-400/50 text-blue-200 font-bold'
-                          : 'bg-white/5 border-white/10 text-gray-400'
-                      }`}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all duration-200 ${isSelected
+                        ? 'bg-blue-500/30 border-blue-400/50 text-blue-200 font-bold shadow-sm shadow-blue-500/20'
+                        : 'bg-white/5 border-white/10 text-gray-400'
+                        }`}
                     >
                       {preset.badge}
                     </span>
@@ -169,63 +148,35 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
                     {preset.desc}
                   </p>
 
-                  {/* Selected Indicator Checkmark */}
-                  {isSelected && (
-                    <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-sm opacity-0 pointer-events-none">
-                      <Check className="w-2.5 h-2.5 stroke-[3]" />
-                    </div>
-                  )}
+                  {/* Selected Indicator Checkmark with Spring Animation */}
+                  <div
+                    className={`absolute bottom-2.5 right-2.5 w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md shadow-blue-500/50 transition-all duration-200 pointer-events-none ${isSelected
+                      ? 'opacity-100 scale-100 rotate-0'
+                      : 'opacity-0 scale-50 -rotate-45'
+                      }`}
+                  >
+                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                  </div>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Section 2: Audio Toggle Switch */}
-        <div className="bg-white/[0.04] border border-white/10 rounded-xl p-3.5 flex items-center justify-between gap-3 transition-colors hover:border-white/15">
-          <div className="flex items-start gap-3 min-w-0">
-            <div
-              className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ${
-                includeAudio
-                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                  : 'bg-white/5 text-gray-400 border border-white/10'
-              }`}
-            >
-              {includeAudio ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </div>
-            <div className="min-w-0">
-              <span className="text-xs sm:text-sm font-semibold text-white block">
-                Транслировать системный звук
-              </span>
-              <p className="text-[11px] text-gray-400 leading-relaxed mt-0.5">
-                Звуки открытых игр, музыки и видео будут слышны собеседникам
-              </p>
-            </div>
+        {/* Section 2: Informative Notice & Audio Guidance */}
+        <div className="space-y-2 animate-tab-fade">
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2.5 text-xs text-amber-200/90 leading-relaxed">
+            <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+            <span>
+              <strong className="font-semibold text-amber-300">Звук трансляции:</strong> если требуется передавать звук, отметьте галочку общего доступа к аудио в следующем окне выбора. Для изоляции звука видео или музыки выбирайте вкладку браузера.
+            </span>
           </div>
-
-          <button
-            type="button"
-            role="switch"
-            aria-checked={includeAudio}
-            onClick={() => setIncludeAudio(!includeAudio)}
-            className={`w-11 h-6 rounded-full transition-colors p-0.5 flex-shrink-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/40 ${
-              includeAudio ? 'bg-emerald-500' : 'bg-white/20'
-            }`}
-          >
-            <div
-              className={`w-5 h-5 rounded-full bg-white shadow-md transform transition-transform ${
-                includeAudio ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
-        </div>
-
-        {/* Section 3: Informative Notice */}
-        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2.5 text-xs text-blue-200/90 leading-relaxed">
-          <Info className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" />
-          <span>
-            На следующем шаге подтвердите выбор конкретного окна или всего экрана в системном диалоге.
-          </span>
+          <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2.5 text-[11px] text-blue-200/90 leading-relaxed">
+            <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+            <span>
+              На следующем шаге подтвердите выбор конкретного окна, вкладки или всего экрана в системном диалоге.
+            </span>
+          </div>
         </div>
 
         {/* Footer Actions */}
@@ -243,7 +194,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
             type="button"
             onClick={handleConfirm}
             disabled={isConnecting}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:to-indigo-500 active:scale-95 text-white text-xs font-bold shadow-lg shadow-blue-500/30 border border-blue-400/40 flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+            className="group px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:via-indigo-500 hover:to-blue-600 active:scale-[0.97] text-white text-xs font-bold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 border border-blue-400/40 flex items-center gap-2 transition-all duration-200 cursor-pointer disabled:opacity-50"
           >
             {isConnecting ? (
               <>
@@ -252,7 +203,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
               </>
             ) : (
               <>
-                <Monitor className="w-4 h-4" />
+                <Monitor className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
                 <span>Выбрать экран</span>
               </>
             )}

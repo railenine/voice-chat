@@ -1438,16 +1438,16 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                     <button
                       onClick={screenShare.isSharing ? screenShare.stopScreenShare : () => setShowScreenShareModal(true)}
                       disabled={screenShare.isConnecting}
-                      className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
+                      className={`w-11 h-11 rounded-xl border transition-all duration-200 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
                         screenShare.isSharing
                           ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/40'
-                          : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
+                          : 'bg-white/[0.08] hover:bg-white/[0.14] hover:border-white/25 hover:shadow-lg hover:shadow-blue-500/10 border-white/15 text-white'
                       }`}
                     >
                       {screenShare.isSharing ? (
                         <ScreenShareOff className="w-5 h-5 text-emerald-400" />
                       ) : (
-                        <ScreenShare className="w-5 h-5" />
+                        <ScreenShare className="w-5 h-5 transition-transform duration-200 hover:scale-110" />
                       )}
                     </button>
                   </Tooltip>
@@ -1654,16 +1654,16 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                 type="button"
                 onClick={screenShare.isSharing ? screenShare.stopScreenShare : () => setShowScreenShareModal(true)}
                 disabled={screenShare.isConnecting}
-                className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
+                className={`w-11 h-11 rounded-xl border transition-all duration-200 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
                   screenShare.isSharing
                     ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/40'
-                    : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
+                    : 'bg-white/[0.08] hover:bg-white/[0.14] hover:border-white/25 hover:shadow-lg hover:shadow-blue-500/10 border-white/15 text-white'
                 }`}
               >
                 {screenShare.isSharing ? (
                   <ScreenShareOff className="w-5 h-5 text-emerald-400" />
                 ) : (
-                  <ScreenShare className="w-5 h-5" />
+                  <ScreenShare className="w-5 h-5 transition-transform duration-200 hover:scale-110" />
                 )}
               </button>
             </Tooltip>

@@ -37,7 +37,7 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-const APP_VERSION = '0.1.11';
+const APP_VERSION = '0.1.12';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -288,8 +288,10 @@ server.on('upgrade', (request, socket, head) => {
   }
 });
 
-// In-memory sliding-window rate limiter per socket (max 25 messages per 1000ms window)
-const RATE_LIMIT_MAX_MSG = 25;
+// In-memory sliding-window rate limiter per socket
+// WebRTC ICE candidate gathering bursts naturally emit 30-60 msgs/s during connection handshake.
+const RATE_LIMIT_MAX_MSG = 100;
+const RATE_LIMIT_HARD_CAP = 250;
 const RATE_LIMIT_WINDOW_MS = 1000;
 
 wss.on('connection', (ws) => {
@@ -305,23 +307,6 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('message', async (raw) => {
-    const now = Date.now();
-    if (now - ws.lastMsgReset > RATE_LIMIT_WINDOW_MS) {
-      ws.msgCount = 1;
-      ws.lastMsgReset = now;
-    } else {
-      ws.msgCount++;
-      if (ws.msgCount > RATE_LIMIT_MAX_MSG) {
-        if (ws.msgCount === RATE_LIMIT_MAX_MSG + 1) {
-          console.warn(`[WS] Rate limit exceeded for socket (${ws.msgCount} msgs/s). Throttling.`);
-          try {
-            ws.send(JSON.stringify({ type: 'error', message: 'Слишком много запросов. Подождите секунду.' }));
-          } catch (e) { }
-        }
-        return; // Drop packet
-      }
-    }
-
     let msg;
     try {
       msg = JSON.parse(raw.toString());
@@ -332,6 +317,28 @@ wss.on('connection', (ws) => {
     }
 
     const { type } = msg;
+
+    // Rate limiter: exempt critical WebRTC signaling ('signal' for SDP/ICE) up to hard cap (250 msgs/s)
+    const now = Date.now();
+    if (now - ws.lastMsgReset > RATE_LIMIT_WINDOW_MS) {
+      ws.msgCount = 1;
+      ws.lastMsgReset = now;
+    } else {
+      ws.msgCount++;
+      if (ws.msgCount > RATE_LIMIT_MAX_MSG) {
+        // Critical WebRTC signaling (SDP offers/answers, ICE candidates) is allowed up to hard cap
+        const isCriticalSignal = type === 'signal';
+        if (!isCriticalSignal || ws.msgCount > RATE_LIMIT_HARD_CAP) {
+          if (ws.msgCount === RATE_LIMIT_MAX_MSG + 1 || ws.msgCount === RATE_LIMIT_HARD_CAP + 1) {
+            console.warn(`[WS] Rate limit exceeded for socket (${ws.msgCount} msgs/s, type: ${type}). Throttling.`);
+            try {
+              ws.send(JSON.stringify({ type: 'error', message: 'Слишком много запросов. Подождите секунду.' }));
+            } catch (e) { }
+          }
+          return; // Drop packet
+        }
+      }
+    }
 
     if (type === 'join') {
       const { roomId, peerId, nickname } = msg;
