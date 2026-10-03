@@ -13,21 +13,15 @@ import {
   playUndeafenSound,
 } from '../utils/soundEffects';
 
-export interface PeerInfo {
-  peerId: string;
-  nickname: string;
-  isMuted: boolean;
-  isDeafened?: boolean;
-  isSpeaking: boolean;
-}
+import type {
+  PeerInfo,
+  ChatMessage,
+  ClientMessage,
+  ServerMessage,
+  WebRTCSignalData,
+} from '../types/protocol';
 
-export interface ChatMessage {
-  id: string;
-  peerId: string;
-  nickname: string;
-  text: string;
-  timestamp: number;
-}
+export type { PeerInfo, ChatMessage };
 
 interface UseVoiceChatOptions {
   roomId: string;
@@ -190,7 +184,7 @@ export function useVoiceChat({
     setPeers(Array.from(peersInfoRef.current.values()));
   }, []);
 
-  const sendWsMessage = useCallback((msg: any) => {
+  const sendWsMessage = useCallback((msg: ClientMessage) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(msg));
     }
@@ -966,7 +960,7 @@ export function useVoiceChat({
   rebuildPeerRef.current = rebuildPeer;
 
   // Handle incoming signaling message (W3C Perfect Negotiation + Coordinated Rebuild)
-  const handleSignal = useCallback(async (from: string, data: any) => {
+  const handleSignal = useCallback(async (from: string, data: WebRTCSignalData) => {
     // 0. Coordinated reset requested by remote peer
     if (data.reconnect) {
       console.log(`[WebRTC] Received coordinated reconnect request from ${from}`);
@@ -1794,11 +1788,15 @@ export function useVoiceChat({
               }
             };
 
-            ws.onmessage = (event) => {
-              let msg: any;
+            ws.onmessage = (event: MessageEvent) => {
+              let msg: ServerMessage;
               try {
-                msg = JSON.parse(event.data);
+                msg = JSON.parse(event.data as string) as ServerMessage;
               } catch (e) {
+                return;
+              }
+
+              if (!msg || typeof msg !== 'object' || !('type' in msg)) {
                 return;
               }
 
@@ -1948,13 +1946,16 @@ export function useVoiceChat({
               }
 
               // In-room chat message
-              else if (type === 'chat-message' && msg.message) {
-                setMessages((prev) => [...prev, msg.message]);
+              else if (type === 'chat-message') {
+                if (msg.message) {
+                  setMessages((prev) => [...prev, msg.message]);
+                }
               }
 
               // Server-sent error message
-              else if (type === 'error' && msg.message) {
-                console.warn('[WS] Server error:', msg.message);
+              else if (type === 'error') {
+                const codeSuffix = msg.code ? ` (${msg.code})` : '';
+                console.warn(`[WS] Server error${codeSuffix}:`, msg.message);
                 setError(`Ошибка сервера: ${msg.message}`);
               }
             };

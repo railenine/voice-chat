@@ -7,6 +7,13 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
 import { AccessToken } from 'livekit-server-sdk';
+import {
+  ROOM_ID_REGEX,
+  PEER_ID_REGEX,
+  sanitizeNickname,
+  validateClientMessage,
+  createProtocolError,
+} from './protocol.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -335,13 +342,7 @@ function tokenRateLimiter(req, res, next) {
   next();
 }
 
-const ROOM_ID_REGEX = /^[a-zA-Z0-9_-]{3,64}$/;
-const PEER_ID_REGEX = /^[a-zA-Z0-9_-]{3,64}$/;
-
-function sanitizeNickname(rawNick) {
-  if (typeof rawNick !== 'string') return 'User';
-  return rawNick.replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, 32) || 'User';
-}
+// Note: ROOM_ID_REGEX, PEER_ID_REGEX, and sanitizeNickname are imported from ./protocol.js
 
 // Token endpoint: generates a scoped JWT token for video screen sharing
 app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, async (req, res) => {
@@ -424,18 +425,28 @@ function getRoom(roomId) {
   return rooms.get(roomId);
 }
 
+function safeSend(socket, payload) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    try {
+      const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      socket.send(data);
+      return true;
+    } catch (err) {
+      console.warn('[WS] Failed to send message to socket:', err.message);
+      return false;
+    }
+  }
+  return false;
+}
+
 function broadcastToRoom(roomId, message, excludePeerId = null) {
   const room = rooms.get(roomId);
   if (!room) return;
 
   const data = typeof message === 'string' ? message : JSON.stringify(message);
   for (const [peerId, client] of room.entries()) {
-    if (peerId !== excludePeerId && client.ws.readyState === WebSocket.OPEN) {
-      try {
-        client.ws.send(data);
-      } catch (err) {
-        console.warn(`[WS] Failed to send message to ${peerId}:`, err);
-      }
+    if (peerId !== excludePeerId) {
+      safeSend(client.ws, data);
     }
   }
 }
@@ -454,7 +465,7 @@ function removeClientFromRoom(ws) {
 
     broadcastToRoom(roomId, {
       type: 'user-left',
-      peerId
+      peerId,
     });
 
     if (room.size === 0) {
@@ -500,16 +511,17 @@ wss.on('connection', (ws) => {
   });
 
   ws.on('message', async (raw) => {
-    let msg;
+    let rawMsg;
     try {
-      msg = JSON.parse(raw.toString());
+      rawMsg = JSON.parse(raw.toString());
     } catch (e) {
       const rawSnippet = String(raw).slice(0, 100);
       console.warn('[WS] Invalid JSON received:', rawSnippet);
+      safeSend(ws, createProtocolError('invalid_message', 'Invalid JSON syntax'));
       return;
     }
 
-    const { type } = msg;
+    const { type } = rawMsg || {};
 
     // Rate limiter: exempt critical WebRTC signaling ('signal' for SDP/ICE) up to hard cap (250 msgs/s)
     const now = Date.now();
@@ -519,55 +531,46 @@ wss.on('connection', (ws) => {
     } else {
       ws.msgCount++;
       if (ws.msgCount > RATE_LIMIT_MAX_MSG) {
-        // Critical WebRTC signaling (SDP offers/answers, ICE candidates) is allowed up to hard cap
         const isCriticalSignal = type === 'signal';
         if (!isCriticalSignal || ws.msgCount > RATE_LIMIT_HARD_CAP) {
           if (ws.msgCount === RATE_LIMIT_MAX_MSG + 1 || ws.msgCount === RATE_LIMIT_HARD_CAP + 1) {
             console.warn(`[WS] Rate limit exceeded for socket (${ws.msgCount} msgs/s, type: ${type}). Throttling.`);
-            try {
-              ws.send(JSON.stringify({ type: 'error', message: 'Слишком много запросов. Подождите секунду.' }));
-            } catch (e) { }
+            safeSend(ws, createProtocolError('rate_limit_exceeded', 'Rate limit exceeded. Please slow down.'));
           }
           return; // Drop packet
         }
       }
     }
 
-    if (type === 'join') {
-      const { roomId, peerId, nickname } = msg;
-      if (!roomId || !peerId) {
-        ws.send(JSON.stringify({ type: 'error', message: 'roomId and peerId are required' }));
-        return;
-      }
+    const currentMeta = clientMeta.get(ws);
+    const validation = validateClientMessage(rawMsg, currentMeta);
+    if (!validation.valid) {
+      safeSend(ws, createProtocolError(validation.code, validation.message));
+      return;
+    }
+
+    const msg = validation.data;
+
+    if (msg.type === 'join') {
+      const { roomId, peerId, nickname, isMuted, isDeafened } = msg;
 
       // Cleanup any previous room for this socket
       removeClientFromRoom(ws);
 
       const room = getRoom(roomId);
 
-      // Check if room already has stale clients with the same peerId OR the same non-default nickname
-      const cleanNick = (nickname || '').trim();
-      const isNonDefaultNick = cleanNick && cleanNick !== 'Аноним';
-      const stalePeers = [];
-
-      for (const [existingId, client] of room.entries()) {
-        const isSamePeer = existingId === peerId;
-        const isSameNick = isNonDefaultNick && client.nickname === cleanNick;
-        if (isSamePeer || isSameNick) {
-          stalePeers.push({ peerId: existingId, client });
-        }
-      }
-
-      for (const { peerId: staleId, client: staleClient } of stalePeers) {
-        console.log(`[Room ${roomId}] Evicting stale duplicate peer ${staleId} (${staleClient.nickname})`);
+      // Check if room already has a client with the same peerId (evict stale duplicate)
+      const existingClient = room.get(peerId);
+      if (existingClient && existingClient.ws !== ws) {
+        console.log(`[Room ${roomId}] Evicting existing connection for duplicate peerId ${peerId}`);
         try {
-          staleClient.ws.close();
-        } catch (e) { }
-        clientMeta.delete(staleClient.ws);
-        room.delete(staleId);
+          existingClient.ws.close();
+        } catch (e) {}
+        clientMeta.delete(existingClient.ws);
+        room.delete(peerId);
         broadcastToRoom(roomId, {
           type: 'user-left',
-          peerId: staleId,
+          peerId,
         });
       }
 
@@ -585,37 +588,33 @@ wss.on('connection', (ws) => {
         });
       }
 
-      // Respect client's initial mute/deafen state (user may have toggled before WS connected)
-      const initialMuted = Boolean(msg.isMuted);
-      const initialDeafened = Boolean(msg.isDeafened);
-
       room.set(peerId, {
         ws,
         peerId,
-        nickname: nickname || 'Аноним',
-        isMuted: initialMuted,
-        isDeafened: initialDeafened,
+        nickname,
+        isMuted,
+        isDeafened,
         isSpeaking: false,
       });
 
       console.log(`[Room ${roomId}] Peer ${peerId} (${nickname}) joined. Total peers: ${room.size}`);
 
       // Send existing peers, in-memory messages, and iceServers to joining client
-      ws.send(JSON.stringify({
+      safeSend(ws, {
         type: 'room-state',
         peers: existingPeers,
         messages: room.messages || [],
         iceServers: getIceServers(peerId),
-      }));
+      });
 
       // Broadcast user-joined to all other peers in the room
       broadcastToRoom(roomId, {
         type: 'user-joined',
         peer: {
           peerId,
-          nickname: nickname || 'Аноним',
-          isMuted: initialMuted,
-          isDeafened: initialDeafened,
+          nickname,
+          isMuted,
+          isDeafened,
           isSpeaking: false,
         },
         iceServers: getIceServers(peerId),
@@ -624,43 +623,41 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    // WebRTC Signaling forwarding (offer, answer, candidate)
-    if (type === 'signal') {
+    if (msg.type === 'signal') {
       const { to, data } = msg;
       const meta = clientMeta.get(ws);
-      if (!meta || !to || !data) return;
+      if (!meta) return;
 
       const room = rooms.get(meta.roomId);
-      if (room && room.has(to)) {
-        const targetClient = room.get(to);
-        if (targetClient.ws.readyState === WebSocket.OPEN) {
-          // Backpressure guard: drop signal if client output buffer is severely backlogged
-          if (targetClient.ws.bufferedAmount > 512 * 1024) {
-            console.warn(`[WS] Dropping signal to ${to}: buffer clogged (${targetClient.ws.bufferedAmount} bytes)`);
-            return;
-          }
-          targetClient.ws.send(JSON.stringify({
-            type: 'signal',
-            from: meta.peerId,
-            data,
-          }));
+      if (!room || !room.has(to)) {
+        safeSend(ws, createProtocolError('target_not_found', `Peer ${to} not found in this room`));
+        return;
+      }
+
+      const targetClient = room.get(to);
+      if (targetClient.ws.readyState === WebSocket.OPEN) {
+        // Backpressure guard: drop signal if client output buffer is severely backlogged
+        if (targetClient.ws.bufferedAmount > 512 * 1024) {
+          console.warn(`[WS] Dropping signal to ${to}: buffer clogged (${targetClient.ws.bufferedAmount} bytes)`);
+          return;
         }
+        safeSend(targetClient.ws, {
+          type: 'signal',
+          from: meta.peerId,
+          data,
+        });
       }
       return;
     }
 
-    // Update nickname in room
-    if (type === 'update-nickname') {
+    if (msg.type === 'update-nickname') {
       const meta = clientMeta.get(ws);
       if (!meta) return;
-
-      const { nickname } = msg;
-      if (!nickname || typeof nickname !== 'string') return;
 
       const room = rooms.get(meta.roomId);
       if (room && room.has(meta.peerId)) {
         const client = room.get(meta.peerId);
-        client.nickname = nickname.trim().substring(0, 32) || 'Аноним';
+        client.nickname = msg.nickname;
 
         console.log(`[Room ${meta.roomId}] Peer ${meta.peerId} changed nickname to: ${client.nickname}`);
 
@@ -673,16 +670,14 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    // Update mute status
-    if (type === 'update-mute') {
+    if (msg.type === 'update-mute') {
       const meta = clientMeta.get(ws);
       if (!meta) return;
 
-      const { isMuted } = msg;
       const room = rooms.get(meta.roomId);
       if (room && room.has(meta.peerId)) {
         const client = room.get(meta.peerId);
-        client.isMuted = Boolean(isMuted);
+        client.isMuted = msg.isMuted;
 
         broadcastToRoom(meta.roomId, {
           type: 'user-muted',
@@ -693,16 +688,14 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    // Update deafen status (mute both mic and all sound)
-    if (type === 'update-deafen') {
+    if (msg.type === 'update-deafen') {
       const meta = clientMeta.get(ws);
       if (!meta) return;
 
-      const { isDeafened } = msg;
       const room = rooms.get(meta.roomId);
       if (room && room.has(meta.peerId)) {
         const client = room.get(meta.peerId);
-        client.isDeafened = Boolean(isDeafened);
+        client.isDeafened = msg.isDeafened;
         if (client.isDeafened) {
           client.isMuted = true;
           client.isSpeaking = false;
@@ -717,39 +710,30 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    // Speaking activity (VAD)
-    if (type === 'speaking') {
+    if (msg.type === 'speaking') {
       const meta = clientMeta.get(ws);
       if (!meta) return;
 
-      const isSpeaking = Boolean(msg.isSpeaking);
       const room = rooms.get(meta.roomId);
       if (room && room.has(meta.peerId)) {
         const client = room.get(meta.peerId);
-        // Optimize: Only broadcast when speaking state actually transitions!
-        if (client.isSpeaking === isSpeaking) {
+        if (client.isSpeaking === msg.isSpeaking) {
           return;
         }
-        client.isSpeaking = isSpeaking;
+        client.isSpeaking = msg.isSpeaking;
 
         broadcastToRoom(meta.roomId, {
           type: 'user-speaking',
           peerId: meta.peerId,
-          isSpeaking,
+          isSpeaking: msg.isSpeaking,
         }, meta.peerId);
       }
       return;
     }
 
-    // In-room Chat message (zero persistence, in-memory only)
-    if (type === 'chat-message') {
+    if (msg.type === 'chat-message') {
       const meta = clientMeta.get(ws);
       if (!meta) return;
-
-      const { text } = msg;
-      if (!text || typeof text !== 'string') return;
-      const trimmedText = text.trim();
-      if (!trimmedText || trimmedText.length > 1000) return;
 
       const room = rooms.get(meta.roomId);
       if (!room || !room.has(meta.peerId)) return;
@@ -759,7 +743,7 @@ wss.on('connection', (ws) => {
         id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         peerId: meta.peerId,
         nickname: client.nickname || 'Аноним',
-        text: trimmedText,
+        text: msg.text,
         timestamp: Date.now(),
       };
 
@@ -767,7 +751,6 @@ wss.on('connection', (ws) => {
         room.messages = [];
       }
       room.messages.push(chatMessage);
-      // Keep only last 100 messages in memory per room
       if (room.messages.length > 100) {
         room.messages.splice(0, room.messages.length - 100);
       }
@@ -779,8 +762,7 @@ wss.on('connection', (ws) => {
       return;
     }
 
-    // Explicit leave
-    if (type === 'leave') {
+    if (msg.type === 'leave') {
       removeClientFromRoom(ws);
       return;
     }
@@ -903,6 +885,14 @@ export {
   getIceServers,
   tokenRateLimiter,
   sanitizeNickname,
+  validateClientMessage,
+  createProtocolError,
   ROOM_ID_REGEX,
   PEER_ID_REGEX,
+  rooms,
+  clientMeta,
+  getRoom,
+  safeSend,
+  broadcastToRoom,
+  removeClientFromRoom,
 };

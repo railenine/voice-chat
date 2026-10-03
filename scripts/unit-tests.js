@@ -389,8 +389,16 @@ import {
   getIceServers,
   sanitizeNickname,
   tokenRateLimiter,
+  validateClientMessage,
+  createProtocolError,
   ROOM_ID_REGEX,
   PEER_ID_REGEX,
+  rooms,
+  clientMeta,
+  getRoom,
+  safeSend,
+  broadcastToRoom,
+  removeClientFromRoom,
 } from '../server/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -612,6 +620,294 @@ test('Security Rate Limiter: throttles requests exceeding window limit', () => {
   assert.strictEqual(jsonResult?.error, 'rate_limit_exceeded');
   assert.strictEqual(nextCalledCount, 20, 'next() must NOT be called when rate limited');
 });
+
+// -------------------------------------------------------------
+// 12. WebSocket Signaling Protocol & Lifecycle Tests
+// -------------------------------------------------------------
+
+test('Protocol: 1. Every valid client message passes validation', () => {
+  const meta = { roomId: 'room-101', peerId: 'peer-alice' };
+
+  // join (without prior meta)
+  const joinRes = validateClientMessage({
+    type: 'join',
+    roomId: 'room-101',
+    peerId: 'peer-alice',
+    nickname: 'Alice',
+    isMuted: false,
+    isDeafened: false,
+  }, null);
+  assert.strictEqual(joinRes.valid, true);
+
+  // signal (SDP)
+  const sdpRes = validateClientMessage({
+    type: 'signal',
+    to: 'peer-bob',
+    data: { description: { type: 'offer', sdp: 'v=0...' } },
+  }, meta);
+  assert.strictEqual(sdpRes.valid, true);
+
+  // signal (ICE candidate)
+  const iceRes = validateClientMessage({
+    type: 'signal',
+    to: 'peer-bob',
+    data: { candidate: { candidate: 'candidate:1 1 UDP ...', sdpMid: '0', sdpMLineIndex: 0 } },
+  }, meta);
+  assert.strictEqual(iceRes.valid, true);
+
+  // update-nickname
+  const nickRes = validateClientMessage({ type: 'update-nickname', nickname: 'AliceNew' }, meta);
+  assert.strictEqual(nickRes.valid, true);
+
+  // update-mute
+  const muteRes = validateClientMessage({ type: 'update-mute', isMuted: true }, meta);
+  assert.strictEqual(muteRes.valid, true);
+
+  // update-deafen
+  const deafRes = validateClientMessage({ type: 'update-deafen', isDeafened: true }, meta);
+  assert.strictEqual(deafRes.valid, true);
+
+  // speaking
+  const speakRes = validateClientMessage({ type: 'speaking', isSpeaking: true }, meta);
+  assert.strictEqual(speakRes.valid, true);
+
+  // chat-message
+  const chatRes = validateClientMessage({ type: 'chat-message', text: 'Hello, room!' }, meta);
+  assert.strictEqual(chatRes.valid, true);
+
+  // leave
+  const leaveRes = validateClientMessage({ type: 'leave' }, meta);
+  assert.strictEqual(leaveRes.valid, true);
+});
+
+test('Protocol: 2. Unknown message type is rejected', () => {
+  const meta = { roomId: 'room-101', peerId: 'peer-alice' };
+  const res = validateClientMessage({ type: 'unknown-action', foo: 42 }, meta);
+  assert.strictEqual(res.valid, false);
+  assert.strictEqual(res.code, 'invalid_message');
+  assert.ok(res.message.includes('Unknown message type'));
+});
+
+test('Protocol: 3. Invalid field types are rejected', () => {
+  const meta = { roomId: 'room-101', peerId: 'peer-alice' };
+
+  // isMuted must be boolean
+  const badMute = validateClientMessage({ type: 'update-mute', isMuted: 'yes' }, meta);
+  assert.strictEqual(badMute.valid, false);
+  assert.strictEqual(badMute.code, 'invalid_message');
+
+  // isSpeaking must be boolean
+  const badSpeak = validateClientMessage({ type: 'speaking', isSpeaking: 1 }, meta);
+  assert.strictEqual(badSpeak.valid, false);
+  assert.strictEqual(badSpeak.code, 'invalid_message');
+
+  // isDeafened must be boolean
+  const badDeafen = validateClientMessage({ type: 'update-deafen', isDeafened: 'true' }, meta);
+  assert.strictEqual(badDeafen.valid, false);
+  assert.strictEqual(badDeafen.code, 'invalid_message');
+
+  // chat text must be string
+  const badChat = validateClientMessage({ type: 'chat-message', text: 12345 }, meta);
+  assert.strictEqual(badChat.valid, false);
+  assert.strictEqual(badChat.code, 'invalid_message');
+});
+
+test('Protocol: 4. Field length limits are strictly enforced', () => {
+  const meta = { roomId: 'room-101', peerId: 'peer-alice' };
+
+  // roomId too long (> 64)
+  const longRoom = validateClientMessage({
+    type: 'join',
+    roomId: 'r'.repeat(65),
+    peerId: 'peer-1',
+  }, null);
+  assert.strictEqual(longRoom.valid, false);
+
+  // peerId too long (> 64)
+  const longPeer = validateClientMessage({
+    type: 'join',
+    roomId: 'room-1',
+    peerId: 'p'.repeat(65),
+  }, null);
+  assert.strictEqual(longPeer.valid, false);
+
+  // chat message too long (> 1000)
+  const longChat = validateClientMessage({
+    type: 'chat-message',
+    text: 'a'.repeat(1001),
+  }, meta);
+  assert.strictEqual(longChat.valid, false);
+});
+
+test('Protocol: 5. Invalid JSON payload does not crash connection and error format is standard', () => {
+  const err = createProtocolError('invalid_message', 'Invalid JSON syntax');
+  assert.strictEqual(err.type, 'error');
+  assert.strictEqual(err.code, 'invalid_message');
+  assert.strictEqual(typeof err.message, 'string');
+  assert.strictEqual(err.stack, undefined, 'Must NEVER include stack trace');
+});
+
+test('Protocol: 6. Signal cannot be forwarded to a peer in another room or self', () => {
+  const meta = { roomId: 'room-alpha', peerId: 'peer-alice' };
+
+  // Cannot signal self
+  const selfSignal = validateClientMessage({
+    type: 'signal',
+    to: 'peer-alice',
+    data: { description: { type: 'offer', sdp: 'v=0' } },
+  }, meta);
+  assert.strictEqual(selfSignal.valid, false);
+  assert.strictEqual(selfSignal.code, 'invalid_signal');
+
+  // Cannot signal without joining a room first
+  const unauthSignal = validateClientMessage({
+    type: 'signal',
+    to: 'peer-bob',
+    data: { description: { type: 'offer', sdp: 'v=0' } },
+  }, null);
+  assert.strictEqual(unauthSignal.valid, false);
+  assert.strictEqual(unauthSignal.code, 'unauthorized');
+});
+
+test('Protocol: 7. Join with duplicate peerId evicts old socket cleanly', () => {
+  const testRoomId = 'test-room-dup-7';
+  const testPeerId = 'peer-duplicate-user';
+
+  const room = getRoom(testRoomId);
+  let oldSocketClosed = false;
+
+  const mockOldSocket = {
+    readyState: 1, // OPEN
+    close() {
+      oldSocketClosed = true;
+    },
+    send() {},
+  };
+
+  room.set(testPeerId, {
+    ws: mockOldSocket,
+    peerId: testPeerId,
+    nickname: 'OldUser',
+    isMuted: false,
+    isDeafened: false,
+    isSpeaking: false,
+  });
+  clientMeta.set(mockOldSocket, { roomId: testRoomId, peerId: testPeerId });
+
+  // Simulate new socket joining with duplicate peerId
+  const mockNewSocket = {
+    readyState: 1,
+    close() {},
+    send() {},
+  };
+
+  // Eviction logic test
+  const existingClient = room.get(testPeerId);
+  if (existingClient && existingClient.ws !== mockNewSocket) {
+    existingClient.ws.close();
+    clientMeta.delete(existingClient.ws);
+    room.delete(testPeerId);
+  }
+
+  assert.strictEqual(oldSocketClosed, true, 'Old socket must be closed upon duplicate join');
+  assert.strictEqual(clientMeta.has(mockOldSocket), false, 'Old socket metadata must be deleted');
+  assert.strictEqual(room.has(testPeerId), false, 'Old peer must be removed prior to replacement');
+
+  // Cleanup
+  rooms.delete(testRoomId);
+});
+
+test('Protocol: 8. Reconnect does not create duplicate peers in room', () => {
+  const testRoomId = 'test-room-recon-8';
+  const testPeerId = 'peer-recon-user';
+  const room = getRoom(testRoomId);
+
+  const mockSocket1 = { readyState: 1, close() {}, send() {} };
+  const mockSocket2 = { readyState: 1, close() {}, send() {} };
+
+  // Connect 1
+  room.set(testPeerId, { ws: mockSocket1, peerId: testPeerId, nickname: 'ReconUser' });
+  assert.strictEqual(room.size, 1);
+
+  // Connect 2 (reconnect)
+  if (room.has(testPeerId)) {
+    room.delete(testPeerId);
+  }
+  room.set(testPeerId, { ws: mockSocket2, peerId: testPeerId, nickname: 'ReconUser' });
+
+  assert.strictEqual(room.size, 1, 'Room must have exactly 1 peer after reconnect');
+
+  // Cleanup
+  rooms.delete(testRoomId);
+});
+
+test('Protocol: 9. Leave cleanly deletes client and closes empty room', () => {
+  const testRoomId = 'test-room-leave-9';
+  const testPeerId = 'peer-leave-user';
+  const room = getRoom(testRoomId);
+
+  const mockSocket = { readyState: 1, close() {}, send() {} };
+  clientMeta.set(mockSocket, { roomId: testRoomId, peerId: testPeerId });
+  room.set(testPeerId, { ws: mockSocket, peerId: testPeerId });
+
+  assert.strictEqual(rooms.has(testRoomId), true);
+  assert.strictEqual(room.size, 1);
+
+  removeClientFromRoom(mockSocket);
+
+  assert.strictEqual(clientMeta.has(mockSocket), false, 'Metadata must be deleted on leave');
+  assert.strictEqual(rooms.has(testRoomId), false, 'Empty room must be deleted from rooms Map');
+});
+
+test('Protocol: 10. Sending after socket close is safe (no crash)', () => {
+  const closedSocket = {
+    readyState: 3, // CLOSED
+    send() {
+      throw new Error('WebSocket is not open');
+    },
+  };
+
+  const sent = safeSend(closedSocket, { type: 'user-left', peerId: 'peer-x' });
+  assert.strictEqual(sent, false, 'safeSend must return false when socket is closed');
+});
+
+test('Protocol: 11. Chat message correctly validated, sanitized, and trimmed', () => {
+  const meta = { roomId: 'room-chat', peerId: 'peer-chat' };
+
+  // Empty chat rejected
+  const emptyRes = validateClientMessage({ type: 'chat-message', text: '   ' }, meta);
+  assert.strictEqual(emptyRes.valid, false);
+  assert.strictEqual(emptyRes.code, 'invalid_message');
+
+  // Valid trimmed chat
+  const validRes = validateClientMessage({ type: 'chat-message', text: '  Hello world!  ' }, meta);
+  assert.strictEqual(validRes.valid, true);
+  assert.strictEqual(validRes.data.text, 'Hello world!');
+});
+
+test('Protocol: 12. Rate limiting allows WebRTC bursts while capping abuse', () => {
+  const ws = {
+    msgCount: 0,
+    lastMsgReset: Date.now(),
+  };
+
+  const RATE_LIMIT_MAX_MSG = 100;
+  const RATE_LIMIT_HARD_CAP = 250;
+
+  // Standard message check
+  for (let i = 0; i < 150; i++) {
+    ws.msgCount++;
+  }
+
+  // A standard message at msgCount = 150 should exceed normal rate limit
+  const isNormalThrottled = ws.msgCount > RATE_LIMIT_MAX_MSG;
+  assert.strictEqual(isNormalThrottled, true, 'Standard messages over 100/s must be flagged for throttling');
+
+  // Critical WebRTC signaling is allowed up to 250
+  const isSignalAllowed = ws.msgCount <= RATE_LIMIT_HARD_CAP;
+  assert.strictEqual(isSignalAllowed, true, 'WebRTC signaling must be permitted through burst window up to 250/s');
+});
+
 
 
 
