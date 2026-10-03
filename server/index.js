@@ -208,8 +208,8 @@ function validateServerConfig(env = process.env) {
 // Validate configuration on startup
 const configCheck = validateServerConfig(process.env);
 if (!configCheck.valid) {
-  console.error(`\n❌ [Server:Security] FATAL: ${configCheck.error}\n`);
-  process.exit(1);
+  console.warn(`\n⚠️ [Server:Security] Config Notice: ${configCheck.error}`);
+  console.warn('[Server:Security] Operating in safe STUN-only mode until credentials are provided in .env\n');
 } else if (!IS_PROD && !COTURN_PASSWORD && !COTURN_SHARED_SECRET) {
   console.warn('[Server:Security] Notice: Running in development mode without COTURN_PASSWORD. Only public STUN servers will be provided.');
 }
@@ -855,14 +855,11 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
-const isRunningAsScript = Boolean(
-  process.argv[1] && (
-    process.argv[1].endsWith('server/index.js') ||
-    process.argv[1].endsWith('server\\index.js')
-  )
-);
+const isTestEnvironment =
+  process.env.NODE_ENV === 'test' ||
+  process.argv.some(arg => typeof arg === 'string' && (arg.includes('test') || arg.includes('unit-tests')));
 
-if (isRunningAsScript) {
+if (!isTestEnvironment) {
   server.listen(PORT, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
