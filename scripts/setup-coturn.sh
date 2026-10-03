@@ -17,6 +17,17 @@ else
   SUDO=""
 fi
 
+# Загрузка .env если существует
+if [ -f .env ]; then
+  set -a
+  source .env 2>/dev/null || true
+  set +a
+elif [ -f /var/www/voice-chat-backend/.env ]; then
+  set -a
+  source /var/www/voice-chat-backend/.env 2>/dev/null || true
+  set +a
+fi
+
 # 1. Установка coturn
 echo "📦 1. Установка пакета coturn..."
 $SUDO apt-get update -qq
@@ -44,9 +55,16 @@ $SUDO chmod 644 /etc/coturn/certs/fullchain.pem
 $SUDO chmod 600 /etc/coturn/certs/privkey.pem
 $SUDO chown -R turnserver:turnserver /etc/coturn /var/log/turnserver || true
 
+COTURN_USER="${COTURN_USER:-voicechat}"
+if [ -z "$COTURN_PASSWORD" ]; then
+  echo "❌ Ошибка: Переменная окружения COTURN_PASSWORD не задана!"
+  echo "Перед запуском задайте пароль: export COTURN_PASSWORD='<ваш_надежный_пароль>'"
+  exit 1
+fi
+
 # 4. Создание конфигурации turnserver.conf
 echo "⚙️ 4. Запись конфигурации /etc/turnserver.conf..."
-$SUDO cat > /etc/turnserver.conf << 'EOF'
+$SUDO bash -c "cat > /etc/turnserver.conf" << EOF
 # Основные порты
 listening-port=3478
 tls-listening-port=5349
@@ -60,7 +78,7 @@ max-port=65535
 # Аутентификация
 fingerprint
 lt-cred-mech
-user=voicechat:VoiceChatSecret2026!
+user=${COTURN_USER}:${COTURN_PASSWORD}
 realm=rvxis.site
 server-name=rvxis.site
 
@@ -106,6 +124,6 @@ echo "✅ Coturn успешно установлен и запущен!"
 echo "📡 STUN: stun:rvxis.site:3478"
 echo "🔄 TURN: turn:rvxis.site:3478 (UDP & TCP)"
 echo "🔒 TURNS: turns:rvxis.site:5349 (TCP/TLS)"
-echo "👤 User: voicechat"
-echo "🔑 Pass: VoiceChatSecret2026!"
+echo "👤 User: $COTURN_USER"
+echo "🔑 Pass: [Configured via COTURN_PASSWORD]"
 echo "=========================================="

@@ -6,9 +6,22 @@ services:
     container_name: voicechat-server
     ports:
       - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - NODE_ENV=production
-      - PORT=3000
+      - NODE_ENV=${NODE_ENV:-production}
+      - PORT=${PORT:-3000}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - COTURN_DOMAIN=${COTURN_DOMAIN:-}
+      - COTURN_PORT=${COTURN_PORT:-3478}
+      - COTURN_TLS_PORT=${COTURN_TLS_PORT:-5349}
+      - COTURN_USER=${COTURN_USER:-voicechat}
+      - COTURN_PASSWORD=${COTURN_PASSWORD:-}
+      - COTURN_SHARED_SECRET=${COTURN_SHARED_SECRET:-}
+      - LIVEKIT_URL=${LIVEKIT_URL:-https://livekit.rvxis.site}
+      - LIVEKIT_API_KEY=${LIVEKIT_API_KEY:-}
+      - LIVEKIT_API_SECRET=${LIVEKIT_API_SECRET:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]

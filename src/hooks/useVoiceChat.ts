@@ -156,23 +156,8 @@ export function useVoiceChat({
   const connectWsRef = useRef<() => void>(() => {});
   const iceServersRef = useRef<RTCIceServer[]>([
     { urls: 'stun:rvxis.site:3478' },
-    {
-      urls: 'turn:rvxis.site:3478?transport=udp',
-      username: 'voicechat',
-      credential: 'VoiceChatSecret2026!',
-    },
-    {
-      urls: 'turn:rvxis.site:3478?transport=tcp',
-      username: 'voicechat',
-      credential: 'VoiceChatSecret2026!',
-    },
-    {
-      urls: 'turns:rvxis.site:5349?transport=tcp',
-      username: 'voicechat',
-      credential: 'VoiceChatSecret2026!',
-    },
-    { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.l.google.com:19302' },
   ]);
 
   // VAD refs

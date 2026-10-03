@@ -62,7 +62,7 @@ function main() {
 
   // Check if .sig already exists or we need to sign
   const privateKey = process.env.TAURI_SIGNING_PRIVATE_KEY;
-  const privateKeyPassword = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || 'VoiceChat2026!';
+  const privateKeyPassword = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD;
   const localKeyPath = path.join(rootDir, 'src-tauri', 'voicechat.key');
 
   let keyToUse = null;
@@ -76,6 +76,11 @@ function main() {
   } else if (fs.existsSync(localKeyPath)) {
     keyToUse = localKeyPath;
     console.log('[Updater] Using local private key at src-tauri/voicechat.key.');
+  }
+
+  if (keyToUse && !privateKeyPassword) {
+    console.error('[Updater] ERROR: TAURI_SIGNING_PRIVATE_KEY_PASSWORD environment variable is required to sign updater artifacts.');
+    process.exit(1);
   }
 
   try {

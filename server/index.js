@@ -30,12 +30,62 @@ if (fs.existsSync(envPath)) {
   }
 }
 
+const NODE_ENV = process.env.NODE_ENV || 'development';
+const IS_PROD = NODE_ENV === 'production';
+
 const app = express();
 const server = http.createServer(app);
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// CORS configuration: support whitelist via CORS_ORIGIN env, with sensible safe defaults
+const rawCorsOrigin = process.env.CORS_ORIGIN;
+let corsMiddleware;
+
+if (rawCorsOrigin && rawCorsOrigin !== '*') {
+  const allowedOrigins = rawCorsOrigin.split(',').map((s) => s.trim().toLowerCase());
+  corsMiddleware = cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      const lower = origin.toLowerCase();
+      const isAllowed = allowedOrigins.some((allowed) => {
+        return (
+          lower === allowed ||
+          lower.startsWith('tauri://') ||
+          lower.startsWith('http://tauri.') ||
+          (!IS_PROD && (lower.includes('localhost') || lower.includes('127.0.0.1')))
+        );
+      });
+      if (isAllowed) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+  });
+} else if (IS_PROD) {
+  // Production default when CORS_ORIGIN is not explicitly specified
+  corsMiddleware = cors({
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      const lower = origin.toLowerCase();
+      if (
+        lower.includes('rvxis.site') ||
+        lower.startsWith('tauri://') ||
+        lower.startsWith('http://tauri.')
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+  });
+} else {
+  // Development / Test mode default: permissive
+  corsMiddleware = cors();
+}
+
+app.use(corsMiddleware);
+// Body parser: strictly limit payload size to 10kb to prevent memory DoS attacks
+app.use(express.json({ limit: '10kb' }));
 
 const APP_VERSION = '0.1.12';
 const MIN_CLIENT_VERSION = '0.0.3';
@@ -118,76 +168,215 @@ app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/
 
 // Coturn TURN/STUN configuration (VPS rvxis.site)
 const COTURN_DOMAIN = process.env.COTURN_DOMAIN || 'rvxis.site';
-const COTURN_PORT = process.env.COTURN_PORT || 3478;
-const COTURN_TLS_PORT = process.env.COTURN_TLS_PORT || 5349;
+const COTURN_PORT = parseInt(process.env.COTURN_PORT, 10) || 3478;
+const COTURN_TLS_PORT = parseInt(process.env.COTURN_TLS_PORT, 10) || 5349;
 const COTURN_USER = process.env.COTURN_USER || 'voicechat';
-const COTURN_PASSWORD = process.env.COTURN_PASSWORD || 'VoiceChatSecret2026!';
-
-const CACHED_ICE_SERVERS = Object.freeze([
-  // VPS Dedicated STUN
-  { urls: `stun:${COTURN_DOMAIN}:${COTURN_PORT}` },
-  // VPS Dedicated TURN (UDP, TCP, and TURNS over TLS on port 5349 separated for reliable candidate gathering)
-  {
-    urls: `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=udp`,
-    username: COTURN_USER,
-    credential: COTURN_PASSWORD,
-  },
-  {
-    urls: `turn:${COTURN_DOMAIN}:${COTURN_PORT}?transport=tcp`,
-    username: COTURN_USER,
-    credential: COTURN_PASSWORD,
-  },
-  {
-    urls: `turns:${COTURN_DOMAIN}:${COTURN_TLS_PORT}?transport=tcp`,
-    username: COTURN_USER,
-    credential: COTURN_PASSWORD,
-  },
-  // Public Fallback STUNs (compact to prevent STUN flood timeouts across multiple VPN adapters)
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun.cloudflare.com:3478' },
-]);
-
-function getIceServers() {
-  return CACHED_ICE_SERVERS;
-}
-
-app.get('/peerjs/ice-servers', (req, res) => {
-  res.json({ iceServers: CACHED_ICE_SERVERS });
-});
+const COTURN_PASSWORD = process.env.COTURN_PASSWORD || '';
+const COTURN_SHARED_SECRET = process.env.COTURN_SHARED_SECRET || '';
 
 // LiveKit SFU Configuration & Token Endpoints
 const LIVEKIT_URL = process.env.LIVEKIT_URL || 'https://livekit.rvxis.site';
-const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'rvxis_livekit_key';
+const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || '';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
+
+// Security configuration validation helper
+function validateServerConfig(env = process.env) {
+  const currentEnv = env.NODE_ENV || 'development';
+  const isProduction = currentEnv === 'production';
+  const turnPassword = env.COTURN_PASSWORD || '';
+  const turnSecret = env.COTURN_SHARED_SECRET || '';
+
+  if (isProduction && !turnPassword && !turnSecret) {
+    return {
+      valid: false,
+      error: 'In production mode, COTURN_PASSWORD or COTURN_SHARED_SECRET must be configured. Never use default fallback passwords!'
+    };
+  }
+
+  const livekitKey = env.LIVEKIT_API_KEY || '';
+  const livekitSecret = env.LIVEKIT_API_SECRET || '';
+  if (isProduction && (Boolean(livekitKey) !== Boolean(livekitSecret))) {
+    return {
+      valid: false,
+      error: 'Both LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set if LiveKit is enabled in production.'
+    };
+  }
+
+  return { valid: true };
+}
+
+// Validate configuration on startup
+const configCheck = validateServerConfig(process.env);
+if (!configCheck.valid) {
+  console.error(`\n❌ [Server:Security] FATAL: ${configCheck.error}\n`);
+  process.exit(1);
+} else if (!IS_PROD && !COTURN_PASSWORD && !COTURN_SHARED_SECRET) {
+  console.warn('[Server:Security] Notice: Running in development mode without COTURN_PASSWORD. Only public STUN servers will be provided.');
+}
+
+// Generates ICE servers with ephemeral (time-limited) HMAC credentials or static credentials
+function getIceServers(peerId = 'voicechat') {
+  const domain = process.env.COTURN_DOMAIN || 'rvxis.site';
+  const port = parseInt(process.env.COTURN_PORT, 10) || 3478;
+  const tlsPort = parseInt(process.env.COTURN_TLS_PORT, 10) || 5349;
+  const user = process.env.COTURN_USER || 'voicechat';
+  const password = process.env.COTURN_PASSWORD || '';
+  const sharedSecret = process.env.COTURN_SHARED_SECRET || '';
+
+  const stunServers = [
+    { urls: `stun:${domain}:${port}` },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.l.google.com:19302' },
+  ];
+
+  // 1. Ephemeral (time-limited) TURN credentials via HMAC-SHA1 (RFC 5766 REST API)
+  if (sharedSecret) {
+    const ttlSeconds = 86400; // 24 hours validity
+    const expiry = Math.floor(Date.now() / 1000) + ttlSeconds;
+    const cleanPeer = String(peerId).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || 'voicechat';
+    const ephemeralUser = `${expiry}:${cleanPeer}`;
+    const ephemeralPassword = crypto
+      .createHmac('sha1', sharedSecret)
+      .update(ephemeralUser)
+      .digest('base64');
+
+    return [
+      ...stunServers,
+      {
+        urls: `turn:${domain}:${port}?transport=udp`,
+        username: ephemeralUser,
+        credential: ephemeralPassword,
+      },
+      {
+        urls: `turn:${domain}:${port}?transport=tcp`,
+        username: ephemeralUser,
+        credential: ephemeralPassword,
+      },
+      {
+        urls: `turns:${domain}:${tlsPort}?transport=tcp`,
+        username: ephemeralUser,
+        credential: ephemeralPassword,
+      },
+    ];
+  }
+
+  // 2. Static TURN credentials (when COTURN_PASSWORD is explicitly set)
+  if (password) {
+    return [
+      ...stunServers,
+      {
+        urls: `turn:${domain}:${port}?transport=udp`,
+        username: user,
+        credential: password,
+      },
+      {
+        urls: `turn:${domain}:${port}?transport=tcp`,
+        username: user,
+        credential: password,
+      },
+      {
+        urls: `turns:${domain}:${tlsPort}?transport=tcp`,
+        username: user,
+        credential: password,
+      },
+    ];
+  }
+
+  // 3. Fallback: return STUN-only in development/test if no credentials set
+  return stunServers;
+}
+
+app.get('/peerjs/ice-servers', (req, res) => {
+  const peerId = typeof req.query.peerId === 'string' ? req.query.peerId : 'client';
+  res.json({ iceServers: getIceServers(peerId) });
+});
 
 // Status endpoint: tells clients if LiveKit SFU is enabled and configured
 app.get(['/api/livekit/status', '/peerjs/livekit/status'], (req, res) => {
   res.json({
-    available: Boolean(LIVEKIT_API_SECRET),
+    available: Boolean(LIVEKIT_API_SECRET && LIVEKIT_API_KEY),
     url: LIVEKIT_URL,
   });
 });
 
-// Token endpoint: generates a scoped JWT token for video screen sharing
-app.post(['/api/livekit/token', '/peerjs/livekit/token'], async (req, res) => {
-  const { roomId, nickname, peerId } = req.body || {};
+// Sliding-window in-memory IP rate limiter for Token endpoint
+const tokenRateLimitWindowMs = 60 * 1000; // 1 minute
+const maxTokenRequestsPerWindow = parseInt(process.env.RATE_LIMIT_TOKEN_PER_MINUTE, 10) || 20;
+const tokenRequestCounts = new Map(); // ip -> { count: number, resetTime: number }
 
-  if (!roomId || typeof roomId !== 'string') {
-    return res.status(400).json({ error: 'invalid_room_id', message: 'Room ID is required' });
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of tokenRequestCounts.entries()) {
+    if (now > entry.resetTime) {
+      tokenRequestCounts.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000).unref();
+
+function tokenRateLimiter(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  let entry = tokenRequestCounts.get(ip);
+
+  if (!entry || now > entry.resetTime) {
+    entry = { count: 1, resetTime: now + tokenRateLimitWindowMs };
+    tokenRequestCounts.set(ip, entry);
+    return next();
   }
 
-  // Graceful fallback if SFU secret is not set yet
-  if (!LIVEKIT_API_SECRET) {
+  entry.count++;
+  if (entry.count > maxTokenRequestsPerWindow) {
+    return res.status(429).json({
+      error: 'rate_limit_exceeded',
+      message: 'Too many token requests. Please wait a minute.'
+    });
+  }
+
+  next();
+}
+
+const ROOM_ID_REGEX = /^[a-zA-Z0-9_-]{3,64}$/;
+const PEER_ID_REGEX = /^[a-zA-Z0-9_-]{3,64}$/;
+
+function sanitizeNickname(rawNick) {
+  if (typeof rawNick !== 'string') return 'User';
+  return rawNick.replace(/[\x00-\x1F\x7F]/g, '').trim().slice(0, 32) || 'User';
+}
+
+// Token endpoint: generates a scoped JWT token for video screen sharing
+app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, async (req, res) => {
+  const { roomId, nickname, peerId } = req.body || {};
+
+  // Strict validation: roomId
+  if (!roomId || typeof roomId !== 'string' || !ROOM_ID_REGEX.test(roomId.trim())) {
+    return res.status(400).json({
+      error: 'invalid_room_id',
+      message: 'Room ID must be 3-64 characters and contain only letters, numbers, underscores, or hyphens'
+    });
+  }
+
+  // Strict validation: peerId (if provided)
+  if (peerId !== undefined && peerId !== null) {
+    if (typeof peerId !== 'string' || !PEER_ID_REGEX.test(peerId.trim())) {
+      return res.status(400).json({
+        error: 'invalid_peer_id',
+        message: 'Peer ID must be 3-64 characters and contain only letters, numbers, underscores, or hyphens'
+      });
+    }
+  }
+
+  // Graceful check if SFU credentials are configured
+  if (!LIVEKIT_API_SECRET || !LIVEKIT_API_KEY) {
     return res.status(503).json({
       error: 'livekit_not_configured',
-      message: 'LiveKit SFU is not configured on this server',
+      message: 'LiveKit SFU screen sharing is not configured on this server'
     });
   }
 
   try {
     const cleanRoom = roomId.trim();
-    const cleanNick = (nickname || 'User').trim().slice(0, 32);
-    const identity = (peerId || crypto.randomUUID()).trim().slice(0, 64);
+    const cleanNick = sanitizeNickname(nickname);
+    const identity = (peerId && typeof peerId === 'string' ? peerId.trim() : crypto.randomUUID()).slice(0, 64);
 
     const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
       identity,
@@ -211,8 +400,12 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], async (req, res) => {
       identity,
     });
   } catch (err) {
-    console.error('[LiveKit] Token generation error:', err);
-    res.status(500).json({ error: 'token_generation_failed', message: err.message });
+    console.error('[LiveKit] Token generation error');
+    // NEVER expose err.message or stack trace to client
+    res.status(500).json({
+      error: 'token_generation_failed',
+      message: 'Failed to generate access token'
+    });
   }
 });
 
@@ -412,7 +605,7 @@ wss.on('connection', (ws) => {
         type: 'room-state',
         peers: existingPeers,
         messages: room.messages || [],
-        iceServers: CACHED_ICE_SERVERS,
+        iceServers: getIceServers(peerId),
       }));
 
       // Broadcast user-joined to all other peers in the room
@@ -425,7 +618,7 @@ wss.on('connection', (ws) => {
           isDeafened: initialDeafened,
           isSpeaking: false,
         },
-        iceServers: CACHED_ICE_SERVERS,
+        iceServers: getIceServers(peerId),
       }, peerId);
 
       return;
@@ -613,7 +806,7 @@ const pingInterval = setInterval(() => {
     ws.isAlive = false;
     ws.ping();
   });
-}, 30000);
+}, 30000).unref();
 
 wss.on('close', () => {
   clearInterval(pingInterval);
@@ -662,8 +855,16 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
-server.listen(PORT, () => {
-  console.log(`
+const isRunningAsScript = Boolean(
+  process.argv[1] && (
+    process.argv[1].endsWith('server/index.js') ||
+    process.argv[1].endsWith('server\\index.js')
+  )
+);
+
+if (isRunningAsScript) {
+  server.listen(PORT, () => {
+    console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
 ║   🎤 RVxis Server 2.0 (Pure WebRTC + WS)                  ║
@@ -675,8 +876,9 @@ server.listen(PORT, () => {
 ║   Press Ctrl+C to stop                                    ║
 ║                                                           ║
 ╚═══════════════════════════════════════════════════════════╝
-  `);
-});
+    `);
+  });
+}
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
@@ -696,3 +898,14 @@ process.on('SIGINT', () => {
     process.exit(0);
   });
 });
+
+export {
+  app,
+  server,
+  validateServerConfig,
+  getIceServers,
+  tokenRateLimiter,
+  sanitizeNickname,
+  ROOM_ID_REGEX,
+  PEER_ID_REGEX,
+};

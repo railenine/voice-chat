@@ -361,7 +361,7 @@ external-ip=ВАШ_ВНЕШНИЙ_IP
 realm=rvxis.site
 fingerprint
 lt-cred-mech
-user=voicechat:VoiceChat2026SecureTurnPassword!
+user=voicechat:<YOUR_SECURE_COTURN_PASSWORD>
 cert=/etc/letsencrypt/live/rvxis.site/fullchain.pem
 pkey=/etc/letsencrypt/live/rvxis.site/privkey.pem
 min-port=49152
