@@ -3,16 +3,12 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package manifests for cached dependency installation
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci
 
-# Copy source code
+# Copy frontend source and build configuration
 COPY . .
-
-# Build frontend
 RUN npm run build
 
 # Production stage
@@ -20,22 +16,26 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Copy package files
+ENV NODE_ENV=production \
+    PORT=3000
+
+# Install production dependencies only and purge cache
 COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
-# Install production dependencies only
-RUN npm ci --omit=dev
+# Copy built frontend assets from builder stage
+COPY --from=builder --chown=node:node /app/dist ./dist
 
-# Copy built frontend from builder
-COPY --from=builder /app/dist ./dist
+# Copy backend server
+COPY --chown=node:node server ./server
 
-# Copy server
-COPY server ./server
+# Switch to unprivileged built-in node user for security
+USER node
 
-# Expose port
+# Expose server port
 EXPOSE 3000
 
-# Health check
+# Container healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
 

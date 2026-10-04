@@ -1,15 +1,55 @@
+# Dependencies & Package Managers
 node_modules
-npm-debug.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+
+# Build output & caches
 dist
-.git
-.gitignore
-README.md
-.env
-.env.local
-*.md
-.vscode
-.idea
-.DS_Store
+build
+.cache
+.next
 coverage
 .nyc_output
+
+# Git & CI/CD
+.git
+.github
+.gitignore
+
+# Environment & Secrets (Security)
+.env
+.env.*
+*.key
+*.pem
+
+# Tauri & Desktop artifacts (Prevents leaking private keys and copying large target/ binaries)
+src-tauri
+*.exe
+
+# Tests & Documentation
+test
+*.md
+
+# Editor & OS files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+[Dd]esktop.ini
+
+# Agent & Context files
+.agents
+AGENTS.md
+scripts/export-chat.js
+
+# Temporary files & Logs
 *.log
+*.tmp
+*.temp
