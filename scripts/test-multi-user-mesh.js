@@ -361,6 +361,61 @@ async function run() {
     );
     assert(Boolean(aliceSawFrankMuted), 'Alice received mute update from Frank after reconnection');
 
+    // ---------------------------------------------------------
+    // Phase 9: Scale Mesh to MAX_ROOM_PEERS (12 Peers Full-Mesh)
+    // ---------------------------------------------------------
+    console.log('\n--- Phase 9: Scaling Mesh to 12 Peers (Full-Mesh Max Capacity) ---');
+    // Currently active: 5 peers (Alice, Bob, Grace, Frank, David)
+    // Add 7 more peers to reach exactly 12
+    const extraPeers = [];
+    for (let i = 8; i <= 14; i++) {
+      const p = new SimulatedPeer(`Участник-${i}`, `peer-extra-${i}`);
+      await p.connect(wsUrl);
+      p.join(ROOM_ID);
+      await sleep(150);
+      extraPeers.push(p);
+    }
+
+    assert(extraPeers[extraPeers.length - 1].knownPeers.size === 11, '12th peer sees all 11 existing peers');
+    assert(alice.knownPeers.size === 11, 'Alice tracks all 11 other peers (room is at max 12)');
+
+    // ---------------------------------------------------------
+    // Phase 10: 13th Peer Join Rejection (room_full error)
+    // ---------------------------------------------------------
+    console.log('\n--- Phase 10: Capacity Limit Enforcement (13th Peer Join Attempt) ---');
+    const peer13 = new SimulatedPeer('Тринадцатый', 'peer-rejected-13');
+    await peer13.connect(wsUrl);
+    peer13.join(ROOM_ID);
+    await sleep(250);
+
+    const roomFullError = peer13.receivedEvents.find(
+      e => e.type === 'error' && (e.code === 'room_full' || (e.message && e.message.includes('заполнена')))
+    );
+    assert(Boolean(roomFullError), '13th peer received room_full error rejection from server');
+    assert(peer13.knownPeers.size === 0, '13th peer did not receive room-state and was not added to room');
+    assert(alice.knownPeers.size === 11, 'Room participant count remains strictly capped at 12');
+
+    // ---------------------------------------------------------
+    // Phase 11: Reconnection In A Full Room (Reconnecting peer is allowed)
+    // ---------------------------------------------------------
+    console.log('\n--- Phase 11: Reconnection In Full Room (12/12) ---');
+    // Simulate extra peer 14 network glitch and reconnect with identical peerId
+    const lastPeer = extraPeers[extraPeers.length - 1];
+    lastPeer.abruptDisconnect();
+    await sleep(200);
+
+    console.log('  -> Reconnecting last peer with existing peerId in 12-peer room...');
+    const reconnectedLastPeer = new SimulatedPeer('Участник-14 (Reconnected)', lastPeer.peerId);
+    await reconnectedLastPeer.connect(wsUrl);
+    reconnectedLastPeer.join(ROOM_ID);
+    await sleep(250);
+
+    const reconnectedLastPeerError = reconnectedLastPeer.receivedEvents.find(
+      e => e.type === 'error' && e.code === 'room_full'
+    );
+    assert(!reconnectedLastPeerError, 'Reconnecting peer in full room is NOT rejected with room_full');
+    assert(reconnectedLastPeer.knownPeers.size === 11, 'Reconnecting peer successfully received all 11 peers');
+
     console.log('\n====================================================');
     console.log(`🎉 ALL STRESS TESTS PASSED: ${passed} checks passed, ${failed} failed!`);
     console.log('====================================================\n');

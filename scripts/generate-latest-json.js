@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
@@ -7,7 +8,69 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, '..');
 
+/**
+ * Validates updater manifest schema according to RVxis update specification.
+ */
+export function validateManifestSchema(manifest) {
+  if (!manifest || typeof manifest !== 'object') {
+    throw new Error('Manifest must be a non-null JSON object');
+  }
+
+  if (!manifest.version || typeof manifest.version !== 'string' || !/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(manifest.version)) {
+    throw new Error(`Manifest has invalid semver version: "${manifest.version}"`);
+  }
+
+  if (!manifest.pub_date || Number.isNaN(Date.parse(manifest.pub_date))) {
+    throw new Error(`Manifest pub_date is invalid: "${manifest.pub_date}"`);
+  }
+
+  if (!manifest.platforms || typeof manifest.platforms !== 'object') {
+    throw new Error('Manifest missing "platforms" dictionary');
+  }
+
+  const win = manifest.platforms['windows-x86_64'];
+  if (!win || !win.url || (!win.url.startsWith('https://') && !win.url.startsWith('http://localhost'))) {
+    throw new Error('Manifest missing valid windows-x86_64 platform URL in platforms');
+  }
+
+  if (!manifest.portable_url || (!manifest.portable_url.startsWith('https://') && !manifest.portable_url.startsWith('http://localhost'))) {
+    throw new Error('Manifest missing valid portable_url');
+  }
+
+  return true;
+}
+
+function getFileMeta(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return { size: 0, sha256: '' };
+  }
+  const buffer = fs.readFileSync(filePath);
+  const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
+  const size = buffer.length;
+  return { size, sha256 };
+}
+
 function main() {
+  if (process.argv.includes('--validate-only') || process.argv.includes('--dry-run')) {
+    console.log('=== [Updater] Validating existing latest.json manifests ===');
+    const manifests = [
+      path.join(rootDir, 'latest.json'),
+      path.join(rootDir, 'public', 'api', 'updater', 'latest.json'),
+      path.join(rootDir, 'server', 'latest.json'),
+    ];
+    let checked = 0;
+    for (const m of manifests) {
+      if (fs.existsSync(m)) {
+        const content = JSON.parse(fs.readFileSync(m, 'utf8'));
+        validateManifestSchema(content);
+        console.log(`[Valid] ${path.relative(rootDir, m)}`);
+        checked++;
+      }
+    }
+    console.log(`=== Successfully validated ${checked} manifest(s) ===`);
+    return;
+  }
+
   console.log('=== [Updater] Generating latest.json manifest ===');
 
   // 1. Determine Version
@@ -28,7 +91,6 @@ function main() {
 
   if (fs.existsSync(nsisDir)) {
     const files = fs.readdirSync(nsisDir);
-    // Find installer exe matching this version first, or fallback to any non-sig exe
     installerFile =
       files.find((f) => f.endsWith('.exe') && !f.endsWith('.sig') && f.includes(version)) ||
       files.find((f) => f.endsWith('.exe') && !f.endsWith('.sig'));
@@ -49,18 +111,37 @@ function main() {
     }
   }
 
-  if (!installerPath || !fs.existsSync(installerPath)) {
-    console.error('[Updater] ERROR: Could not find Windows installer executable to sign!');
-    process.exit(1);
+  // Fallback name if building in environment without installer binary yet
+  if (!installerFile) {
+    installerFile = `RVxis_${version}_x64-setup.exe`;
+    console.warn(`[Updater] Installer file not found locally, using default release name: ${installerFile}`);
+  } else {
+    console.log(`Found installer: ${installerFile} (${installerPath})`);
   }
 
-  console.log(`Found installer: ${installerFile} (${installerPath})`);
+  const installerMeta = installerPath ? getFileMeta(installerPath) : { size: 0, sha256: '' };
 
-  // 3. Obtain Signature
+  // 3. Find Portable executable
+  let portablePath = path.join(rootDir, 'src-tauri', 'target', 'release', 'RVxis.exe');
+  if (!fs.existsSync(portablePath)) {
+    portablePath = path.join(rootDir, 'src-tauri', 'target', 'release', 'voice-chat.exe');
+  }
+  if (!fs.existsSync(portablePath)) {
+    portablePath = path.join(rootDir, 'RVxis-Portable.exe');
+  }
+
+  let portableMeta = { size: 0, sha256: '' };
+  if (fs.existsSync(portablePath)) {
+    portableMeta = getFileMeta(portablePath);
+    console.log(`Found portable binary: ${path.basename(portablePath)} (${(portableMeta.size / (1024 * 1024)).toFixed(1)} MB, sha256: ${portableMeta.sha256.slice(0, 12)}...)`);
+  } else {
+    console.warn('[Updater] Portable binary not found in release folder; metadata will be populated without local size/hash.');
+  }
+
+  // 4. Obtain Tauri Signature for installer
   let signature = '';
-  const sigFile = `${installerPath}.sig`;
+  const sigFile = installerPath ? `${installerPath}.sig` : null;
 
-  // Check if .sig already exists or we need to sign
   const privateKey = process.env.TAURI_SIGNING_PRIVATE_KEY;
   const privateKeyPassword = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD;
   const localKeyPath = path.join(rootDir, 'src-tauri', 'voicechat.key');
@@ -79,12 +160,12 @@ function main() {
   }
 
   if (keyToUse && !privateKeyPassword) {
-    console.error('[Updater] ERROR: TAURI_SIGNING_PRIVATE_KEY_PASSWORD environment variable is required to sign updater artifacts.');
-    process.exit(1);
+    console.warn('[Updater] TAURI_SIGNING_PRIVATE_KEY_PASSWORD is not set; skipping live signing to avoid stdin prompt, using existing signature/fallback.');
+    keyToUse = null;
   }
 
   try {
-    if (keyToUse) {
+    if (keyToUse && installerPath && fs.existsSync(installerPath)) {
       console.log(`[Updater] Signing ${installerFile} with Tauri signer...`);
       const signCmd = `npx @tauri-apps/cli signer sign -f "${keyToUse}" --password "${privateKeyPassword}" --app-version "${version}" "${installerPath}"`;
       const output = execSync(signCmd, {
@@ -93,8 +174,7 @@ function main() {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
 
-      // Extract from output or from .sig file
-      if (fs.existsSync(sigFile)) {
+      if (sigFile && fs.existsSync(sigFile)) {
         const rawSig = fs.readFileSync(sigFile, 'utf8').trim();
         signature = Buffer.from(rawSig).toString('base64');
         console.log('[Updater] Extracted signature from generated .sig file.');
@@ -105,13 +185,13 @@ function main() {
           console.log('[Updater] Extracted signature from signer command output.');
         }
       }
-    } else if (fs.existsSync(sigFile)) {
+    } else if (sigFile && fs.existsSync(sigFile)) {
       const rawSig = fs.readFileSync(sigFile, 'utf8').trim();
       signature = Buffer.from(rawSig).toString('base64');
       console.log('[Updater] Found existing .sig file.');
     }
   } catch (err) {
-    console.error('[Updater] Error during signing:', err.message);
+    console.warn('[Updater] Signing warning/fallback:', err.message);
   } finally {
     if (tempKeyPath && fs.existsSync(tempKeyPath)) {
       try {
@@ -120,20 +200,22 @@ function main() {
     }
   }
 
+  // Fallback to existing signature if available
   if (!signature) {
-    console.warn('[Updater] WARNING: No signature was generated. Checking existing latest.json for fallback...');
     const existingPath = path.join(rootDir, 'latest.json');
     if (fs.existsSync(existingPath)) {
-      const existing = JSON.parse(fs.readFileSync(existingPath, 'utf8'));
-      if (existing.platforms?.['windows-x86_64']?.signature) {
-        signature = existing.platforms['windows-x86_64'].signature;
-        console.log('[Updater] Retained previous signature as fallback.');
-      }
+      try {
+        const existing = JSON.parse(fs.readFileSync(existingPath, 'utf8'));
+        if (existing.platforms?.['windows-x86_64']?.signature) {
+          signature = existing.platforms['windows-x86_64'].signature;
+          console.log('[Updater] Retained existing signature as fallback.');
+        }
+      } catch {}
     }
   }
 
-  // 4. Extract Release Notes from HISTORY.md (or CHANGELOG.md) if available
-  let notes = `RVxis v${version}`;
+  // 5. Extract Release Notes from HISTORY.md (with CHANGELOG.md fallback)
+  let notes = `RVxis v${version} - WebRTC Voice Chat`;
   const historyPath = fs.existsSync(path.join(rootDir, 'HISTORY.md'))
     ? path.join(rootDir, 'HISTORY.md')
     : path.join(rootDir, 'CHANGELOG.md');
@@ -147,45 +229,58 @@ function main() {
     if (match && match[1]) {
       const fullNotes = match[1].replace(/\n*---\s*$/, '').trim();
       fs.writeFileSync(releaseNotesPath, fullNotes + '\n', 'utf8');
-      console.log(`[Updater] Generated RELEASE_NOTES.md from ${path.basename(historyPath)} for GitHub Release.`);
+      console.log(`[Updater] Generated RELEASE_NOTES.md from ${path.basename(historyPath)}.`);
       generatedNotes = true;
 
-      // Clean up markdown bullet points for notes
       const lines = match[1]
         .split('\n')
         .map((l) => l.trim())
         .filter((l) => l.startsWith('-') || l.startsWith('*'))
         .map((l) => l.replace(/^[-*]\s*/, '').replace(/\*\*/g, ''));
       if (lines.length > 0) {
-        notes = `RVxis v${version} - ${lines.slice(0, 3).join('; ')}`;
+        notes = `RVxis v${version} — ${lines.slice(0, 3).join('; ')}`;
       }
     }
   }
 
   if (!generatedNotes) {
-    fs.writeFileSync(releaseNotesPath, `RVxis v${version}\n`, 'utf8');
-    console.log(`[Updater] Generated fallback RELEASE_NOTES.md.`);
+    fs.writeFileSync(releaseNotesPath, `RVxis v${version} - P2P WebRTC Voice Chat\n`, 'utf8');
+    console.log('[Updater] Generated default RELEASE_NOTES.md.');
   }
 
-  // 5. Construct latest.json
+  // 6. Construct Unified Manifest
   const manifest = {
     version: version,
     notes: notes,
     pub_date: new Date().toISOString(),
-    portable_url: `https://github.com/${repo}/releases/download/${tag}/voice-chat.exe`,
     platforms: {
       'windows-x86_64': {
         signature: signature,
         url: `https://github.com/${repo}/releases/download/${tag}/${installerFile}`,
+        size: installerMeta.size || undefined,
+        sha256: installerMeta.sha256 || undefined,
       },
     },
+    portable: {
+      'windows-x86_64': {
+        url: `https://github.com/${repo}/releases/download/${tag}/RVxis.exe`,
+        size: portableMeta.size || undefined,
+        sha256: portableMeta.sha256 || undefined,
+        signature: '',
+      },
+    },
+    portable_url: `https://github.com/${repo}/releases/download/${tag}/RVxis.exe`,
   };
 
+  // 7. Validate Manifest Schema
+  validateManifestSchema(manifest);
+  console.log('[Updater] Manifest schema validated successfully.');
+
   const jsonStr = JSON.stringify(manifest, null, 2) + '\n';
-  console.log('[Updater] Manifest constructed:');
+  console.log('[Updater] Generated manifest:');
   console.log(jsonStr);
 
-  // 6. Write to destination files
+  // 8. Write to destination files
   const destinations = [
     path.join(rootDir, 'latest.json'),
     path.join(rootDir, 'public', 'api', 'updater', 'latest.json'),
@@ -206,4 +301,7 @@ function main() {
   console.log('=== [Updater] latest.json generated successfully ===');
 }
 
-main();
+// Only execute directly when run from CLI
+if (process.argv[1] && process.argv[1].endsWith('generate-latest-json.js')) {
+  main();
+}

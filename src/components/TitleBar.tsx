@@ -2,10 +2,13 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { Mic } from 'lucide-react';
 import { isTauri, APP_VERSION } from '../config';
 import { Tooltip } from './Tooltip';
+import { UpdateBadge } from './updater/UpdateBadge';
 
 interface TitleBarProps {
   roomId?: string;
   onCheckUpdates?: () => void;
+  hasUpdate?: boolean;
+  updateVersion?: string;
 }
 
 let cachedInvoke: (<T>(command: string, args?: Record<string, any>) => Promise<T>) | null = null;
@@ -17,7 +20,7 @@ async function getTauriInvoke() {
   return cachedInvoke;
 }
 
-export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates }) => {
+export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates, hasUpdate, updateVersion }) => {
   const [isMaximized, setIsMaximized] = useState(false);
 
   // Invoke helper with cached import and graceful fallback
@@ -112,11 +115,13 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates 
           <Mic className="w-2.5 h-2.5 text-white" />
         </div>
         <span className="font-semibold text-white/90 text-xs tracking-tight">RVxis</span>
-        {roomId ? (
-          <span className="bg-blue-500/15 text-blue-300 border border-blue-500/30 px-1.5 py-0.2 rounded font-mono text-[10px] tracking-wider">
-            #{roomId}
-          </span>
-        ) : (
+
+        {hasUpdate && updateVersion ? (
+          <UpdateBadge
+            version={updateVersion}
+            onClick={onCheckUpdates || (() => { })}
+          />
+        ) : onCheckUpdates ? (
           <Tooltip
             content="Проверить обновления"
             description="Нажмите, чтобы проверить наличие новой версии"
@@ -130,7 +135,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates 
               v{APP_VERSION}
             </button>
           </Tooltip>
-        )}
+        ) : null}
       </div>
 
       {/* Middle: Draggable title space */}

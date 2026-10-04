@@ -94,7 +94,7 @@ app.use(corsMiddleware);
 // Body parser: strictly limit payload size to 10kb to prevent memory DoS attacks
 app.use(express.json({ limit: '10kb' }));
 
-const APP_VERSION = '0.1.12';
+const APP_VERSION = '0.1.13';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -134,7 +134,27 @@ try {
   console.warn('[Server] Could not parse local latest.json fallback:', e.message);
 }
 
+app.get('/downloads/RVxis.exe', (req, res) => {
+  const exePath = path.join(__dirname, '..', 'RVxis.exe');
+  if (fs.existsSync(exePath)) {
+    return res.sendFile(exePath);
+  }
+  res.status(404).send('RVxis.exe not found');
+});
+
 app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/latest.json'], async (req, res) => {
+  // In local development / testing mode, always serve fresh local server/latest.json
+  if (!IS_PROD) {
+    try {
+      if (fs.existsSync(latestJsonPath)) {
+        const fresh = JSON.parse(fs.readFileSync(latestJsonPath, 'utf8'));
+        return res.json(fresh);
+      }
+    } catch (e) {
+      console.warn('[Server] Error reading local latest.json:', e.message);
+    }
+  }
+
   const now = Date.now();
   if (cachedManifest && now - cachedManifestTime < 60000) {
     return res.json(cachedManifest);
@@ -164,12 +184,17 @@ app.get(['/peerjs/updater/latest.json', '/api/updater/latest.json', '/downloads/
     version: APP_VERSION,
     notes: `RVxis v${APP_VERSION} - P2P WebRTC Voice Chat`,
     pub_date: new Date().toISOString(),
-    portable_url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/voice-chat.exe`,
     platforms: {
       'windows-x86_64': {
         url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/RVxis_${APP_VERSION}_x64-setup.exe`
       }
-    }
+    },
+    portable: {
+      'windows-x86_64': {
+        url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/RVxis.exe`
+      }
+    },
+    portable_url: `https://github.com/railenine/voice-chat/releases/download/v${APP_VERSION}/RVxis.exe`
   });
 });
 
@@ -367,7 +392,9 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
   }
 
   // Graceful check if SFU credentials are configured
-  if (!LIVEKIT_API_SECRET || !LIVEKIT_API_KEY) {
+  const currentKey = process.env.LIVEKIT_API_KEY || '';
+  const currentSecret = process.env.LIVEKIT_API_SECRET || '';
+  if (!currentSecret || !currentKey) {
     return res.status(503).json({
       error: 'livekit_not_configured',
       message: 'LiveKit SFU screen sharing is not configured on this server'
@@ -379,7 +406,7 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
     const cleanNick = sanitizeNickname(nickname);
     const identity = (peerId && typeof peerId === 'string' ? peerId.trim() : crypto.randomUUID()).slice(0, 64);
 
-    const at = new AccessToken(LIVEKIT_API_KEY, LIVEKIT_API_SECRET, {
+    const at = new AccessToken(currentKey, currentSecret, {
       identity,
       name: cleanNick,
       ttl: '12h',
@@ -415,6 +442,9 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
 const rooms = new Map();
 // ws -> { roomId: string, peerId: string }
 const clientMeta = new Map();
+
+// Maximum participants in a single Full-Mesh P2P room (default: 12)
+export const MAX_ROOM_PEERS = parseInt(process.env.MAX_ROOM_PEERS, 10) || 12;
 
 function getRoom(roomId) {
   if (!rooms.has(roomId)) {
@@ -561,6 +591,22 @@ wss.on('connection', (ws) => {
 
       // Check if room already has a client with the same peerId (evict stale duplicate)
       const existingClient = room.get(peerId);
+      const isReconnecting = Boolean(existingClient);
+
+      // Room capacity policy for Full Mesh WebRTC stability:
+      // If room is full and this is NOT a reconnecting client with the same peerId, reject join
+      if (!isReconnecting && room.size >= MAX_ROOM_PEERS) {
+        console.warn(`[Room ${roomId}] Join rejected for ${peerId}: room is full (${room.size}/${MAX_ROOM_PEERS})`);
+        safeSend(
+          ws,
+          createProtocolError(
+            'room_full',
+            `Комната заполнена (максимум ${MAX_ROOM_PEERS} участников для прямого P2P-аудио)`
+          )
+        );
+        return;
+      }
+
       if (existingClient && existingClient.ws !== ws) {
         console.log(`[Room ${roomId}] Evicting existing connection for duplicate peerId ${peerId}`);
         try {
@@ -881,6 +927,7 @@ process.on('SIGINT', () => {
 export {
   app,
   server,
+  wss,
   validateServerConfig,
   getIceServers,
   tokenRateLimiter,

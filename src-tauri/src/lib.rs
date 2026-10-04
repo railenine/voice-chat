@@ -156,18 +156,29 @@ fn is_portable_mode() -> bool {
 }
 
 #[tauri::command]
-async fn apply_portable_update(app: tauri::AppHandle, download_url: String) -> Result<(), String> {
+async fn apply_portable_update(
+    app: tauri::AppHandle,
+    download_url: String,
+    expected_sha256: Option<String>,
+    expected_size: Option<u64>,
+) -> Result<(), String> {
     use futures_util::StreamExt;
+    use sha2::{Digest, Sha256};
     use tauri::Emitter;
     use tokio::io::AsyncWriteExt;
 
     let current_exe = std::env::current_exe().map_err(|e| format!("Не удалось определить путь к приложению: {e}"))?;
     let parent_dir = current_exe.parent().ok_or("Не удалось определить папку приложения")?;
     let exe_name = current_exe.file_name().ok_or("Не удалось определить имя файла")?.to_string_lossy().to_string();
-    let new_exe = parent_dir.join(format!("{exe_name}.new"));
+    let tmp_exe = parent_dir.join(format!("{exe_name}.update.tmp"));
     let old_exe = parent_dir.join(format!("{exe_name}.old"));
 
-    // 1. Download new executable
+    // Clean up any stale temp file from previous failed attempts
+    if tmp_exe.exists() {
+        let _ = std::fs::remove_file(&tmp_exe);
+    }
+
+    // 1. Download new executable with streaming hash calculation
     let client = reqwest::Client::builder()
         .build()
         .map_err(|e| format!("Ошибка создания HTTP клиента: {e}"))?;
@@ -183,18 +194,34 @@ async fn apply_portable_update(app: tauri::AppHandle, download_url: String) -> R
     }
 
     let total_bytes = response.content_length().unwrap_or(0);
-    let mut file = tokio::fs::File::create(&new_exe)
+    let mut file = tokio::fs::File::create(&tmp_exe)
         .await
         .map_err(|e| format!("Не удалось создать временный файл обновления: {e}"))?;
 
     let mut downloaded_bytes: u64 = 0;
+    let mut hasher = Sha256::new();
+    let mut first_bytes = Vec::new();
     let mut stream = response.bytes_stream();
 
     while let Some(chunk_res) = stream.next().await {
-        let chunk = chunk_res.map_err(|e| format!("Ошибка получения данных: {e}"))?;
+        let chunk = chunk_res.map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_exe);
+            format!("Ошибка получения данных: {e}")
+        })?;
+
+        if first_bytes.len() < 2 {
+            let needed = 2 - first_bytes.len();
+            first_bytes.extend_from_slice(&chunk[..std::cmp::min(needed, chunk.len())]);
+        }
+
+        hasher.update(&chunk);
+
         file.write_all(&chunk)
             .await
-            .map_err(|e| format!("Ошибка записи файла обновления: {e}"))?;
+            .map_err(|e| {
+                let _ = std::fs::remove_file(&tmp_exe);
+                format!("Ошибка записи файла обновления: {e}")
+            })?;
         downloaded_bytes += chunk.len() as u64;
 
         let _ = app.emit("portable-update-progress", serde_json::json!({
@@ -205,29 +232,73 @@ async fn apply_portable_update(app: tauri::AppHandle, download_url: String) -> R
 
     file.flush()
         .await
-        .map_err(|e| format!("Ошибка финализации файла: {e}"))?;
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_exe);
+            format!("Ошибка финализации файла: {e}")
+        })?;
     drop(file);
 
-    // 2. Perform atomic swap
+    // 2. Strict Validations before touching active executable
+    // 2.1 File size sanity check (valid RVxis Windows PE binary is >= 3 MB)
+    if downloaded_bytes < 3 * 1024 * 1024 {
+        let _ = std::fs::remove_file(&tmp_exe);
+        return Err(format!(
+            "Скачанный файл повреждён или не является бинарником программы (размер: {downloaded_bytes} байт)"
+        ));
+    }
+
+    // 2.2 Windows PE Header magic check (MZ = 0x4D, 0x5A)
+    if first_bytes.len() < 2 || first_bytes[0] != 0x4D || first_bytes[1] != 0x5A {
+        let _ = std::fs::remove_file(&tmp_exe);
+        return Err("Скачанный файл не является корректным исполняемым файлом Windows (отсутствует PE-сигнатура MZ)".into());
+    }
+
+    // 2.3 Expected size check if provided by manifest
+    if let Some(exp_size) = expected_size {
+        if exp_size > 0 && downloaded_bytes != exp_size {
+            let _ = std::fs::remove_file(&tmp_exe);
+            return Err(format!(
+                "Размер файла ({downloaded_bytes} байт) не совпадает с заявленным в манифесте ({exp_size} байт)"
+            ));
+        }
+    }
+
+    // 2.4 Cryptographic SHA-256 Checksum Verification
+    let computed_hash = format!("{:x}", hasher.finalize());
+    if let Some(ref exp_hash) = expected_sha256 {
+        let exp_clean = exp_hash.trim().to_lowercase();
+        if !exp_clean.is_empty() && !computed_hash.eq_ignore_ascii_case(&exp_clean) {
+            let _ = std::fs::remove_file(&tmp_exe);
+            return Err(format!(
+                "Контрольная сумма SHA-256 не совпала! Обновление отклонено (факт: {computed_hash}, ожидалось: {exp_clean})"
+            ));
+        }
+    }
+
+    // 3. Perform atomic swap with rollback safety
     if old_exe.exists() {
         let _ = std::fs::remove_file(&old_exe);
     }
 
     std::fs::rename(&current_exe, &old_exe)
-        .map_err(|e| format!("Не удалось переименовать текущий файл: {e}"))?;
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&tmp_exe);
+            format!("Не удалось переименовать текущий файл (проверьте права доступа): {e}")
+        })?;
 
-    if let Err(e) = std::fs::rename(&new_exe, &current_exe) {
-        // Rollback
+    if let Err(e) = std::fs::rename(&tmp_exe, &current_exe) {
+        // Rollback immediately
         let _ = std::fs::rename(&old_exe, &current_exe);
-        return Err(format!("Не удалось установить новый файл (выполнен откат): {e}"));
+        let _ = std::fs::remove_file(&tmp_exe);
+        return Err(format!("Не удалось установить новый файл (выполнен автоматический откат): {e}"));
     }
 
-    // 3. Launch the new executable
+    // 4. Launch the new executable
     std::process::Command::new(&current_exe)
         .spawn()
         .map_err(|e| format!("Не удалось запустить обновлённое приложение: {e}"))?;
 
-    // 4. Background cleanup for .old file
+    // 5. Background cleanup for .old file
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
@@ -238,7 +309,7 @@ async fn apply_portable_update(app: tauri::AppHandle, download_url: String) -> R
             .spawn();
     }
 
-    // 5. Exit old process
+    // 6. Exit old process cleanly
     std::process::exit(0);
 }
 
@@ -249,12 +320,20 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
-            // Clean up any leftover .old file from previous portable update
+            // Clean up any leftover .old and .update.tmp files from previous portable updates
             if let Ok(current_exe) = std::env::current_exe() {
                 let exe_name = current_exe.file_name().unwrap_or_default().to_string_lossy();
                 let old_exe = current_exe.with_file_name(format!("{exe_name}.old"));
+                let tmp_exe = current_exe.with_file_name(format!("{exe_name}.update.tmp"));
+                let legacy_new_exe = current_exe.with_file_name(format!("{exe_name}.new"));
                 if old_exe.exists() {
                     let _ = std::fs::remove_file(old_exe);
+                }
+                if tmp_exe.exists() {
+                    let _ = std::fs::remove_file(tmp_exe);
+                }
+                if legacy_new_exe.exists() {
+                    let _ = std::fs::remove_file(legacy_new_exe);
                 }
             }
 

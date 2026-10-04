@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 
@@ -10,8 +9,8 @@ build/
 
 # Environment
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 
 # Logs
 logs/
@@ -21,26 +20,30 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Editor
+# Editor & OS
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 .DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
 
 # Testing
 coverage/
 .nyc_output/
 *REPORT*.md
-*CHECK*.md
 TEST_*.md
+!test/manual-smoke/SMOKE_TEST_CHECKLIST.md
 
 # Docker
 .docker/
 
 # Temporary files
 *.tmp
+*.temp
 .cache/
 .next/
 
@@ -49,12 +52,12 @@ src-tauri/target/
 src-tauri/gen/
 *.key
 *.exe
-RELEASE_NOTES.md
 
-# Internal context & conversation backups
+# Internal context & generated release artifacts
 CONVERSATION_HISTORY.md
 PROJECT_CONTEXT_HANDOFF.md
 scripts/export-chat.js
+RELEASE_NOTES.md
 
 # Local agent rules & workflows
 .agents/

@@ -9,6 +9,7 @@ export interface PeerInfo {
   isMuted: boolean;
   isDeafened?: boolean;
   isSpeaking: boolean;
+  connectionState?: 'connected' | 'reconnecting' | 'disconnected';
 }
 
 export interface ChatMessage {
@@ -37,6 +38,7 @@ export type ProtocolErrorCode =
   | 'room_not_found'
   | 'target_not_found'
   | 'invalid_signal'
+  | 'room_full'
   | 'internal_error';
 
 // -------------------------------------------------------------

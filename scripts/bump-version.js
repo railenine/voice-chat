@@ -27,13 +27,28 @@ function main() {
 
   console.log(`\n🚀 Bumping project version to: v${cleanVersion}\n`);
 
-  // 1. package.json
+  // 1. package.json & package-lock.json
   const pkgPath = path.join(rootDir, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
   const oldVersion = pkg.version;
   pkg.version = cleanVersion;
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
   console.log(`  ✓ package.json: ${oldVersion} -> ${cleanVersion}`);
+
+  const lockPath = path.join(rootDir, 'package-lock.json');
+  if (fs.existsSync(lockPath)) {
+    try {
+      const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+      lock.version = cleanVersion;
+      if (lock.packages && lock.packages['']) {
+        lock.packages[''].version = cleanVersion;
+      }
+      fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n', 'utf8');
+      console.log(`  ✓ package-lock.json: -> ${cleanVersion}`);
+    } catch (e) {
+      console.warn(`  ⚠ Could not update package-lock.json: ${e.message}`);
+    }
+  }
 
   // 2. src-tauri/tauri.conf.json
   const tauriConfPath = path.join(rootDir, 'src-tauri', 'tauri.conf.json');
@@ -94,6 +109,33 @@ function main() {
       console.log(`  ✓ ${path.basename(historyPath)}: Added entry for [${cleanVersion}]`);
     } else {
       console.log(`  ✓ ${path.basename(historyPath)}: Entry for [${cleanVersion}] already present`);
+    }
+  }
+
+  // 8. Sync latest.json manifests
+  const manifestDestinations = [
+    path.join(rootDir, 'latest.json'),
+    path.join(rootDir, 'public', 'api', 'updater', 'latest.json'),
+    path.join(rootDir, 'server', 'latest.json'),
+  ];
+  for (const mPath of manifestDestinations) {
+    if (fs.existsSync(mPath)) {
+      try {
+        const m = JSON.parse(fs.readFileSync(mPath, 'utf8'));
+        m.version = cleanVersion;
+        m.pub_date = new Date().toISOString();
+        m.portable_url = `https://github.com/railenine/voice-chat/releases/download/v${cleanVersion}/RVxis.exe`;
+        if (m.portable?.['windows-x86_64']) {
+          m.portable['windows-x86_64'].url = `https://github.com/railenine/voice-chat/releases/download/v${cleanVersion}/RVxis.exe`;
+        }
+        if (m.platforms?.['windows-x86_64']) {
+          m.platforms['windows-x86_64'].url = `https://github.com/railenine/voice-chat/releases/download/v${cleanVersion}/RVxis_${cleanVersion}_x64-setup.exe`;
+        }
+        fs.writeFileSync(mPath, JSON.stringify(m, null, 2) + '\n', 'utf8');
+        console.log(`  ✓ ${path.relative(rootDir, mPath)}: -> ${cleanVersion}`);
+      } catch (e) {
+        console.warn(`  ⚠ Could not update ${mPath}: ${e.message}`);
+      }
     }
   }
 

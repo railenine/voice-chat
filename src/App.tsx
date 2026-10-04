@@ -1,12 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { generateNickname, generateRoomId, extractRoomId } from './utils/nicknames';
 import { LobbyScreen } from './components/LobbyScreen';
-import { VoiceChatScreen } from './components/VoiceChatScreen';
 import { TitleBar } from './components/TitleBar';
-import { UpdateModal } from './components/UpdateModal';
+import { ChunkErrorBoundary, RoomLoadingFallback } from './components/ChunkErrorBoundary';
 import { useAudioDevices } from './hooks/useAudioDevices';
 import { useAppUpdater } from './hooks/useAppUpdater';
 import { isTauri } from './config';
+
+const VoiceChatScreen = lazy(() =>
+  import('./components/VoiceChatScreen').then((m) => ({ default: m.VoiceChatScreen }))
+);
+
+const UpdateModal = lazy(() =>
+  import('./components/UpdateModal').then((m) => ({ default: m.UpdateModal }))
+);
 
 const safeStorage = {
   getItem: (key: string): string | null => {
@@ -44,19 +51,20 @@ function App() {
     totalBytes,
     error: updateError,
     isModalOpen: isUpdateModalOpen,
-    setIsModalOpen: setIsUpdateModalOpen,
     isPortable,
     checkForUpdates,
     installUpdate,
-  } = useAppUpdater();
+    dismissModal,
+    hasAvailableUpdate,
+  } = useAppUpdater({ isInRoom: joined });
 
   const handleCheckUpdates = useCallback(() => {
     checkForUpdates(true);
   }, [checkForUpdates]);
 
   const handleCloseUpdateModal = useCallback(() => {
-    setIsUpdateModalOpen(false);
-  }, [setIsUpdateModalOpen]);
+    dismissModal();
+  }, [dismissModal]);
 
   useEffect(() => {
     // Check URL for room ID
@@ -192,12 +200,32 @@ function App() {
     };
   }, []);
 
+  // Preload VoiceChatScreen chunk during idle time while user is in Lobby
+  useEffect(() => {
+    if (!joined) {
+      const prefetch = () => {
+        import('./components/VoiceChatScreen');
+      };
+      if ('requestIdleCallback' in window) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const handle = (window as any).requestIdleCallback(prefetch, { timeout: 3000 });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return () => (window as any).cancelIdleCallback?.(handle);
+      } else {
+        const timer = setTimeout(prefetch, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [joined]);
+
   return (
     <div className="h-full w-full flex flex-col overflow-hidden bg-transparent select-none relative z-10">
       {isTauri() && (
         <TitleBar
           roomId={joined ? roomId : undefined}
           onCheckUpdates={handleCheckUpdates}
+          hasUpdate={hasAvailableUpdate}
+          updateVersion={updateInfo?.version}
         />
       )}
       <div className="flex-1 min-h-0 w-full relative flex flex-col overflow-hidden">
@@ -215,29 +243,43 @@ function App() {
             onCheckUpdates={handleCheckUpdates}
           />
         ) : (
-          <VoiceChatScreen
-            nickname={nickname}
-            roomId={roomId}
-            deviceState={audioDevices}
-            onLeave={handleLeaveRoom}
-          />
+          <ChunkErrorBoundary fallbackText="Не удалось загрузить модуль комнаты">
+            <Suspense fallback={<RoomLoadingFallback />}>
+              <VoiceChatScreen
+                nickname={nickname}
+                roomId={roomId}
+                deviceState={audioDevices}
+                onLeave={handleLeaveRoom}
+                onCheckUpdates={handleCheckUpdates}
+                hasUpdate={hasAvailableUpdate}
+                updateVersion={updateInfo?.version}
+              />
+            </Suspense>
+          </ChunkErrorBoundary>
         )}
       </div>
 
       {/* Global Update Modal (Web & Tauri Desktop) */}
-      <UpdateModal
-        isOpen={isUpdateModalOpen}
-        onClose={handleCloseUpdateModal}
-        status={updateStatus}
-        updateInfo={updateInfo}
-        downloadProgress={downloadProgress}
-        downloadedBytes={downloadedBytes}
-        totalBytes={totalBytes}
-        error={updateError}
-        isPortable={isPortable}
-        onInstall={installUpdate}
-        onCheckAgain={handleCheckUpdates}
-      />
+      {isUpdateModalOpen && (
+        <ChunkErrorBoundary fallbackText="Не удалось загрузить модуль обновления">
+          <Suspense fallback={null}>
+            <UpdateModal
+              isOpen={isUpdateModalOpen}
+              onClose={handleCloseUpdateModal}
+              status={updateStatus}
+              updateInfo={updateInfo}
+              downloadProgress={downloadProgress}
+              downloadedBytes={downloadedBytes}
+              totalBytes={totalBytes}
+              error={updateError}
+              isPortable={isPortable}
+              isInRoom={joined}
+              onInstall={installUpdate}
+              onCheckAgain={handleCheckUpdates}
+            />
+          </Suspense>
+        </ChunkErrorBoundary>
+      )}
     </div>
   );
 }

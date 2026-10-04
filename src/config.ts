@@ -1,6 +1,9 @@
-export const APP_VERSION = '0.1.12';
+export const APP_VERSION = '0.1.13';
 export const PRODUCTION_SERVER = 'https://rvxis.site';
 export const PRODUCTION_WS = 'wss://rvxis.site/peerjs/ws';
+
+// Maximum participants in a single Full-Mesh P2P room (default: 12)
+export const MAX_ROOM_PEERS = 12;
 
 // ⚠️ LOCAL TESTING FLAG (Set to true when running manual tests against localhost)
 const USE_LOCAL_SERVER_FOR_TAURI_TESTS = false;
