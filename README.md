@@ -1,7 +1,7 @@
 # 👑 RVxis — Децентрализованный P2P голосовой и текстовый мессенджер
 
 <p align="center">
-  <img src="public/favicon.svg" width="96" height="96" alt="RVxis Logo" />
+  <img src="public/icon.png" width="96" height="96" alt="RVxis Logo" />
 </p>
 
 <p align="center">
