@@ -94,3 +94,68 @@ export function detectIsSmartphone(env: DeviceEnv = {}): boolean {
 
   return false;
 }
+
+/**
+ * Normalizes an audio output sinkId for HTMLMediaElement.setSinkId / AudioContext.setSinkId.
+ * W3C specification dictates that the default device is represented by an empty string ("").
+ * If passed "default", "communications", null, or undefined, returns "".
+ */
+export function normalizeSinkId(sinkId?: string | null): string {
+  if (!sinkId) return '';
+  const trimmed = sinkId.trim();
+  if (trimmed === 'default' || trimmed === 'communications') {
+    return '';
+  }
+  return trimmed;
+}
+
+/**
+ * Builds resilient MediaTrackConstraints for audio input (microphone).
+ * Avoids throwing OverconstrainedError when selecting "default" or general microphone.
+ */
+export function buildAudioInputConstraints(deviceId?: string | null): MediaTrackConstraints {
+  const baseConstraints: MediaTrackConstraints = {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+  };
+
+  if (!deviceId || deviceId === 'default' || deviceId === 'communications') {
+    return baseConstraints;
+  }
+
+  return {
+    ...baseConstraints,
+    deviceId: { ideal: deviceId.trim() },
+  };
+}
+
+/**
+ * Reconciles the selected device ID with currently available devices.
+ * CRITICAL: If permissions are not yet granted (hasPermission = false), we MUST NOT wipe
+ * the user's saved preference because the browser has not yet revealed real device IDs.
+ */
+export function reconcileSelectedDevice(
+  savedDeviceId: string,
+  availableDevices: Array<{ deviceId: string }>,
+  hasPermission: boolean
+): string {
+  if (!hasPermission) {
+    // Preserve saved preference while waiting for permissions
+    return savedDeviceId || '';
+  }
+
+  if (savedDeviceId && availableDevices.some((d) => d.deviceId === savedDeviceId)) {
+    return savedDeviceId;
+  }
+
+  // If savedDeviceId was "default" or empty, see if "default" exists or fallback to first
+  if (!savedDeviceId || savedDeviceId === 'default') {
+    const hasDefault = availableDevices.some((d) => d.deviceId === 'default');
+    if (hasDefault) return 'default';
+    return availableDevices[0]?.deviceId || '';
+  }
+
+  // Saved device is no longer plugged in: fallback to first available
+  return availableDevices[0]?.deviceId || '';
+}

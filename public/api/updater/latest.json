@@ -1,22 +1,22 @@
 {
-  "version": "0.1.13",
+  "version": "0.1.14",
   "notes": "RVxis v0.1.13 — Разделение чанков и Lazy Loading (`React.lazy` + `Suspense`):; Тяжелые модули вынесены из initial chunk: `VoiceChatScreen` (с WebRTC и аудиографом), `ScreenShareModal`, `ScreenShareView` (LiveKit Client SFU), `UpdateModal` и `SettingsModal` загружаются динамически по требованию.; Initial JS bundle сокращен с 923 kB до 193 kB (60 kB gzip) — снижение объема загружаемого кода при старте на 79%.",
-  "pub_date": "2026-10-04T17:25:05.904Z",
+  "pub_date": "2026-10-09T18:25:37.486Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUUXBRQ09zd3c3SGlDZEpXMkNIQnJhNHZ1aFFrVGFBSTVKWENEb1E3NXdPMzNyK0dRMnMzN3dhdmUwT0E3bnFRZU1ra0EyUzAwSXRJNVpWZGVGWXJINDZDSjJzQlFPaVFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMTc2Mjk5CWZpbGU6dGVtcF9Wb2ljZUNoYXRfMC4wLjQ1X3g2NC5leGUJdmVyc2lvbjowLjAuNDUKdngzd1dHSGJveUpxeDVVRTZERWx4VGZqTDUzL0MwbnV6SnZ1dnlpU1dNUUNEWGhzbVUveXMyQWI1K1BMZWtBR3YzWDVycmp5U2JjbmxCaEZNaXM2Q1E9PQo=",
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.1.13/RVxis_0.0.52_x64-setup.exe",
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.1.14/RVxis_0.1.14_x64-setup.exe",
       "size": 4703402,
       "sha256": "4a33f68806ceb42a8822955e13e27cf4ba13442a741b58d8d9bd63b77c686112"
     }
   },
   "portable": {
     "windows-x86_64": {
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.1.13/RVxis.exe",
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.1.14/RVxis.exe",
       "size": 17463808,
       "sha256": "b3d6a61e24a933470fb6f692495db98dcd7a09ab348be01eb0efc551d20880fe",
       "signature": ""
     }
   },
-  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.1.13/RVxis.exe"
+  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.1.14/RVxis.exe"
 }

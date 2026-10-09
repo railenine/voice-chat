@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect, type MutableRefObject } from 'react';
 import type { PeerInfo } from '../../types/protocol';
 import { getSavedPeerVolume, savePeerVolume, clampVolume, calculateVolumeGain } from '../../utils/volumePolicy';
+import { normalizeSinkId } from '../../utils/devicePolicy';
 
 const isIOS =
   typeof navigator !== 'undefined' &&
@@ -252,7 +253,7 @@ export function useRemoteAudio({
         ? peerProcessedDestNodesRef.current.get(peerId)!.stream
         : stream;
 
-      const sinkId = audioOutputDeviceIdRef.current || '';
+      const sinkId = normalizeSinkId(audioOutputDeviceIdRef.current);
 
       let audio = audioElementsRef.current.get(peerId);
       if (!audio) {
@@ -478,8 +479,8 @@ export function useRemoteAudio({
 
   // Update output sink for all peer audio elements when audioOutputDeviceId changes
   useEffect(() => {
-    const sinkId = audioOutputDeviceId || '';
-    audioOutputDeviceIdRef.current = sinkId;
+    const sinkId = normalizeSinkId(audioOutputDeviceId);
+    audioOutputDeviceIdRef.current = audioOutputDeviceId;
     audioElementsRef.current.forEach((audio, peerId) => {
       if (typeof (audio as any).setSinkId === 'function') {
         (audio as any).setSinkId(sinkId).catch((err: any) => {

@@ -5,6 +5,9 @@ import {
   detectIsDesktopPlatform,
   detectCanShareScreen,
   detectIsSmartphone,
+  normalizeSinkId,
+  buildAudioInputConstraints,
+  reconcileSelectedDevice,
   type DeviceEnv,
 } from './devicePolicy';
 
@@ -13,6 +16,9 @@ export {
   detectIsDesktopPlatform,
   detectCanShareScreen,
   detectIsSmartphone,
+  normalizeSinkId,
+  buildAudioInputConstraints,
+  reconcileSelectedDevice,
   type DeviceEnv,
 };
 

@@ -12,6 +12,9 @@ import {
   detectIsDesktopPlatform,
   detectCanShareScreen,
   detectIsMobileOrTablet,
+  normalizeSinkId,
+  buildAudioInputConstraints,
+  reconcileSelectedDevice,
 } from '../../src/utils/devicePolicy.ts';
 import {
   formatKeyLabel,
@@ -167,6 +170,60 @@ describe('2. Real Device & Screen Share Policy Unit Tests', () => {
     };
     assert.strictEqual(detectIsSmartphone(env), false);
     assert.strictEqual(detectIsDesktopPlatform(env), true);
+  });
+
+  it('normalizes audio output sinkId correctly for W3C compliance', () => {
+    assert.strictEqual(normalizeSinkId('default'), '');
+    assert.strictEqual(normalizeSinkId('communications'), '');
+    assert.strictEqual(normalizeSinkId(''), '');
+    assert.strictEqual(normalizeSinkId(null), '');
+    assert.strictEqual(normalizeSinkId(undefined), '');
+    assert.strictEqual(normalizeSinkId('4a2b9f31c'), '4a2b9f31c');
+  });
+
+  it('builds audio input constraints without throwing OverconstrainedError on default or empty', () => {
+    const defaultConstraints = buildAudioInputConstraints();
+    assert.strictEqual(defaultConstraints.echoCancellation, true);
+    assert.strictEqual(defaultConstraints.noiseSuppression, true);
+    assert.strictEqual(defaultConstraints.autoGainControl, true);
+    assert.strictEqual('deviceId' in defaultConstraints, false);
+
+    const emptyConstraints = buildAudioInputConstraints('');
+    assert.strictEqual('deviceId' in emptyConstraints, false);
+
+    const namedDefaultConstraints = buildAudioInputConstraints('default');
+    assert.strictEqual('deviceId' in namedDefaultConstraints, false);
+
+    const specificConstraints = buildAudioInputConstraints('mic-usb-1');
+    assert.deepStrictEqual(specificConstraints.deviceId, { ideal: 'mic-usb-1' });
+    assert.strictEqual(specificConstraints.echoCancellation, true);
+  });
+
+  it('reconciles selected device without dropping saved preference before permission is granted', () => {
+    const savedId = 'headset-mic-123';
+    // Case 1: Permission not yet granted (e.g. initial load) -> preserve savedId
+    assert.strictEqual(reconcileSelectedDevice(savedId, [], false), savedId);
+
+    // Case 2: Permission granted and device is available -> keep savedId
+    const devices = [
+      { deviceId: 'headset-mic-123', label: 'USB Headset' },
+      { deviceId: 'internal-mic', label: 'Realtek Audio' },
+    ];
+    assert.strictEqual(reconcileSelectedDevice(savedId, devices, true), savedId);
+
+    // Case 3: Permission granted but device was unplugged -> fallback to first available device
+    const otherDevices = [
+      { deviceId: 'internal-mic', label: 'Realtek Audio' },
+    ];
+    assert.strictEqual(reconcileSelectedDevice(savedId, otherDevices, true), 'internal-mic');
+
+    // Case 4: No devices available -> returns ''
+    assert.strictEqual(reconcileSelectedDevice(savedId, [], true), '');
+
+    // Case 5: Default or empty id -> returns 'default' if present, or first available device
+    assert.strictEqual(reconcileSelectedDevice('default', devices, true), 'headset-mic-123');
+    assert.strictEqual(reconcileSelectedDevice('', devices, true), 'headset-mic-123');
+    assert.strictEqual(reconcileSelectedDevice(null, [], true), '');
   });
 });
 

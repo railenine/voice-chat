@@ -79,11 +79,14 @@ if (typeof window !== 'undefined') {
   window.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
 }
 
+import { normalizeSinkId } from './devicePolicy';
+
 export function setSoundOutputDevice(sinkId: string) {
-  currentOutputSinkId = sinkId || '';
+  const normalized = normalizeSinkId(sinkId);
+  currentOutputSinkId = normalized;
   if (sfxAudioElement && typeof (sfxAudioElement as any).setSinkId === 'function') {
     try {
-      (sfxAudioElement as any).setSinkId(sinkId || '').catch((err: any) => {
+      (sfxAudioElement as any).setSinkId(normalized).catch((err: any) => {
         console.warn('[SoundEffects] Failed to set sinkId on sfxAudioElement:', err);
       });
     } catch {}
@@ -91,7 +94,7 @@ export function setSoundOutputDevice(sinkId: string) {
   const ctx = getFallbackAudioContext();
   if (ctx && typeof (ctx as any).setSinkId === 'function') {
     try {
-      (ctx as any).setSinkId(sinkId || '').catch((err: any) => {
+      (ctx as any).setSinkId(normalized).catch((err: any) => {
         console.warn('[SoundEffects] Failed to set sinkId on AudioContext:', err);
       });
     } catch {}

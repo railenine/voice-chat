@@ -508,6 +508,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               onSelectStream={(peerId) => setWatchedPeerId(peerId)}
               streamVolumes={screenShare.streamVolumes}
               onVolumeChange={screenShare.setStreamVolume}
+              audioOutputDeviceId={deviceState?.selectedOutput}
             />
 
             <ChatPanel

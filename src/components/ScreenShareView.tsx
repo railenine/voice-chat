@@ -17,6 +17,7 @@ import {
   X,
 } from 'lucide-react';
 import { RemoteScreenShare } from '../hooks/useScreenShare';
+import { normalizeSinkId } from '../utils/device';
 
 interface ScreenShareViewProps {
   activeStreams: RemoteScreenShare[];
@@ -30,6 +31,7 @@ interface ScreenShareViewProps {
   onSelectStream: (participantId: string) => void;
   streamVolumes: Record<string, number>;
   onVolumeChange: (participantId: string, volume: number) => void;
+  audioOutputDeviceId?: string;
 }
 
 export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
@@ -44,6 +46,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
   onSelectStream,
   streamVolumes,
   onVolumeChange,
+  audioOutputDeviceId,
 }) => {
   const [focusedId, setFocusedId] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -250,6 +253,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
             stream={focusedRemoteStream}
             volume={streamVolumes[focusedRemoteStream.participantId] ?? 100}
             onVolumeChange={(vol) => onVolumeChange(focusedRemoteStream.participantId, vol)}
+            audioOutputDeviceId={audioOutputDeviceId}
           />
         ) : (
           <div className="flex flex-col items-center gap-2 text-gray-400">
@@ -403,12 +407,14 @@ interface RemoteVideoPlayerProps {
   stream: RemoteScreenShare;
   volume: number;
   onVolumeChange: (volume: number) => void;
+  audioOutputDeviceId?: string;
 }
 
 const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
   stream,
   volume,
   onVolumeChange,
+  audioOutputDeviceId,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -443,6 +449,12 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
 
     audioTrack.attach(audioEl);
     audioTrack.setVolume(volume / 100);
+
+    const targetSinkId = normalizeSinkId(audioOutputDeviceId);
+    if (typeof (audioEl as any).setSinkId === 'function') {
+      (audioEl as any).setSinkId(targetSinkId).catch(() => {});
+    }
+
     audioEl.play().catch(() => { });
 
     return () => {
@@ -459,6 +471,18 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
       } catch { }
     };
   }, [stream.audioTrack]);
+
+  // Set audio output device (sinkId)
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+    const targetSinkId = normalizeSinkId(audioOutputDeviceId);
+    if (typeof (audioEl as any).setSinkId === 'function') {
+      (audioEl as any).setSinkId(targetSinkId).catch((err: any) => {
+        console.warn('[ScreenShare] Error setting sinkId on audio element:', err);
+      });
+    }
+  }, [audioOutputDeviceId]);
 
   // Update volume when slider moves
   useEffect(() => {

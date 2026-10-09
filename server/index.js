@@ -94,7 +94,7 @@ app.use(corsMiddleware);
 // Body parser: strictly limit payload size to 10kb to prevent memory DoS attacks
 app.use(express.json({ limit: '10kb' }));
 
-const APP_VERSION = '0.1.13';
+const APP_VERSION = '0.1.14';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints

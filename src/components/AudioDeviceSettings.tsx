@@ -60,11 +60,21 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
               Микрофон по умолчанию
             </option>
           ) : (
-            audioInputs.map((device) => (
-              <option key={device.deviceId} value={device.deviceId} className="bg-slate-900 text-white">
-                {device.label || `Микрофон (${device.deviceId.slice(0, 8)}...)`}
-              </option>
-            ))
+            audioInputs.map((device, index) => {
+              const fallbackLabel =
+                device.deviceId && device.deviceId !== 'default'
+                  ? `Микрофон ${index + 1} (${device.deviceId.slice(0, 8)}...)`
+                  : 'Микрофон по умолчанию';
+              return (
+                <option
+                  key={device.deviceId || `input-${index}`}
+                  value={device.deviceId}
+                  className="bg-slate-900 text-white"
+                >
+                  {device.label || fallbackLabel}
+                </option>
+              );
+            })
           )}
         </select>
 
@@ -137,13 +147,24 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
                 Устройство вывода по умолчанию
               </option>
             ) : (
-              audioOutputs.map((device) => (
-                <option key={device.deviceId} value={device.deviceId} className="bg-slate-900 text-white">
-                  {device.label || `Динамики (${device.deviceId.slice(0, 8)}...)`}
-                </option>
-              ))
+              audioOutputs.map((device, index) => {
+                const fallbackLabel =
+                  device.deviceId && device.deviceId !== 'default'
+                    ? `Динамики ${index + 1} (${device.deviceId.slice(0, 8)}...)`
+                    : 'Устройство вывода по умолчанию';
+                return (
+                  <option
+                    key={device.deviceId || `output-${index}`}
+                    value={device.deviceId}
+                    className="bg-slate-900 text-white"
+                  >
+                    {device.label || fallbackLabel}
+                  </option>
+                );
+              })
             )}
           </select>
+
         ) : (
           <p className="text-[11px] text-gray-400 py-0.5">
             Вывод звука управляется системными настройками Windows / браузера.

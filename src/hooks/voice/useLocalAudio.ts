@@ -4,6 +4,8 @@ import rnnoiseWorkletUrl from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.j
 import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 import { playMuteSound, playUnmuteSound } from '../../utils/soundEffects';
+import { normalizeSinkId, buildAudioInputConstraints } from '../../utils/device';
+
 
 const SILENT_AUDIO_URI =
   'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
@@ -105,8 +107,8 @@ export function useLocalAudio({
         } catch {
           audioContextRef.current = new AudioContextClass();
         }
-        const sinkId = audioOutputDeviceIdRef.current;
-        if (sinkId && typeof (audioContextRef.current as any).setSinkId === 'function') {
+        const sinkId = normalizeSinkId(audioOutputDeviceIdRef.current);
+        if (typeof (audioContextRef.current as any).setSinkId === 'function') {
           (audioContextRef.current as any).setSinkId(sinkId).catch(() => {});
         }
       }
@@ -308,14 +310,7 @@ export function useLocalAudio({
       }
 
       let rawStream: MediaStream;
-      const micConstraints: MediaTrackConstraints = {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      };
-      if (inputDeviceId) {
-        micConstraints.deviceId = { exact: inputDeviceId };
-      }
+      const micConstraints = buildAudioInputConstraints(inputDeviceId);
 
       try {
         rawStream = await navigator.mediaDevices.getUserMedia({
@@ -394,24 +389,13 @@ export function useLocalAudio({
       try {
         console.log(`[Audio] Switching input device to: ${audioInputDeviceId || 'default'}`);
         const constraints: MediaStreamConstraints = {
-          audio: audioInputDeviceId
-            ? {
-                deviceId: { exact: audioInputDeviceId },
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-              }
-            : {
-                echoCancellation: true,
-                noiseSuppression: true,
-                autoGainControl: true,
-              },
+          audio: buildAudioInputConstraints(audioInputDeviceId),
         };
         let newRawStream: MediaStream;
         try {
           newRawStream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch (deviceErr) {
-          console.warn('[Audio] Failed with exact input device, falling back to default mic:', deviceErr);
+          console.warn('[Audio] Failed with input device constraints, falling back to default mic:', deviceErr);
           newRawStream = await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
@@ -437,19 +421,25 @@ export function useLocalAudio({
             } catch (e) {}
           }
           micSourceNodeRef.current = audioCtx.createMediaStreamSource(newRawStream);
+        } else {
+          streamRef.current = newRawStream;
         }
 
         connectMicGraph();
 
         const activeTrack = streamRef.current?.getAudioTracks()[0] || newRawTrack;
-        peerConnectionsRef.current.forEach((pc) => {
-          const sender = pc.getSenders().find((s) => !s.track || s.track.kind === 'audio');
-          if (sender && activeTrack) {
-            sender.replaceTrack(activeTrack).catch((err) => {
-              console.warn('[WebRTC] Error replacing track on device change:', err);
-            });
-          }
-        });
+        activeTrack.enabled = !isMutedRef.current;
+
+        if (activeTrack && activeTrack.readyState === 'live') {
+          peerConnectionsRef.current.forEach((pc) => {
+            const sender = pc.getSenders().find((s) => !s.track || s.track.kind === 'audio');
+            if (sender) {
+              sender.replaceTrack(activeTrack).catch((err) => {
+                console.warn('[WebRTC] Error replacing track on device change:', err);
+              });
+            }
+          });
+        }
       } catch (err) {
         console.warn('[Audio] Failed to switch microphone device:', err);
       }
@@ -457,6 +447,13 @@ export function useLocalAudio({
 
     switchMic();
   }, [audioInputDeviceId, connectMicGraph, getAudioContext, peerConnectionsRef]);
+
+  // Dynamically update audioContext sinkId when output device changes
+  useEffect(() => {
+    if (audioContextRef.current && typeof (audioContextRef.current as any).setSinkId === 'function') {
+      (audioContextRef.current as any).setSinkId(normalizeSinkId(audioOutputDeviceId)).catch(() => {});
+    }
+  }, [audioOutputDeviceId]);
 
   // Auto-unlock AudioContext, Screen WakeLock, and mobile background audio retention (iOS & Android)
   useEffect(() => {

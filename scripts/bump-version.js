@@ -104,7 +104,7 @@ function main() {
     if (!history.includes(`## [${cleanVersion}]`)) {
       const today = new Date().toISOString().split('T')[0];
       const template = `\n### ## [${cleanVersion}] — ${today}\n\n#### 🚀 Обновления и улучшения (Updates & Improvements)\n- Обновление компонентов приложения до версии ${cleanVersion}.\n\n---`;
-      history = history.replace(/^---\n/m, `---${template}\n`);
+      history = history.replace(/^---\r?\n/m, `---${template}\n`);
       fs.writeFileSync(historyPath, history, 'utf8');
       console.log(`  ✓ ${path.basename(historyPath)}: Added entry for [${cleanVersion}]`);
     } else {

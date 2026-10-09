@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { setSoundOutputDevice, playTestSound } from '../utils/soundEffects';
+import {
+  reconcileSelectedDevice,
+  normalizeSinkId,
+  buildAudioInputConstraints,
+} from '../utils/devicePolicy';
 
 export interface AudioDevice {
   deviceId: string;
@@ -74,16 +79,9 @@ export function useAudioDevices() {
       setAudioOutputs(outputs);
       setHasPermission(hasLabels);
 
-      // If stored deviceId is no longer valid, fallback to default / first
-      setSelectedInputState((prev) => {
-        if (prev && inputs.some((d) => d.deviceId === prev)) return prev;
-        return inputs[0]?.deviceId || '';
-      });
-
-      setSelectedOutputState((prev) => {
-        if (prev && outputs.some((d) => d.deviceId === prev)) return prev;
-        return outputs[0]?.deviceId || '';
-      });
+      // Reconcile devices without wiping preferences when permission is not yet granted
+      setSelectedInputState((prev) => reconcileSelectedDevice(prev, inputs, hasLabels));
+      setSelectedOutputState((prev) => reconcileSelectedDevice(prev, outputs, hasLabels));
     } catch (err) {
       console.warn('[AudioDevices] Error enumerating devices:', err);
     }
@@ -117,7 +115,7 @@ export function useAudioDevices() {
     try {
       localStorage.setItem(STORAGE_KEY_OUTPUT, deviceId);
     } catch {}
-    setSoundOutputDevice(deviceId);
+    setSoundOutputDevice(normalizeSinkId(deviceId));
   }, []);
 
   // Start / stop microphone test meter
@@ -144,7 +142,7 @@ export function useAudioDevices() {
       let stream: MediaStream;
       try {
         const constraints: MediaStreamConstraints = {
-          audio: selectedInput ? { deviceId: { exact: selectedInput } } : true,
+          audio: buildAudioInputConstraints(selectedInput),
         };
         stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (err) {
@@ -214,9 +212,7 @@ export function useAudioDevices() {
 
   // Sync initial sound output
   useEffect(() => {
-    if (selectedOutput) {
-      setSoundOutputDevice(selectedOutput);
-    }
+    setSoundOutputDevice(normalizeSinkId(selectedOutput));
   }, [selectedOutput]);
 
   return {
