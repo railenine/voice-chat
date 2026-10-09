@@ -83,12 +83,12 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
           <button
             type="button"
             onClick={toggleMicTest}
-            className={`rounded-lg text-[11px] font-medium transition-all flex-shrink-0 active:scale-95 ${
+            className={`rounded-lg text-[11px] font-medium transition-all shrink-0 active:scale-95 ${
               compact ? 'px-2.5 py-1' : 'px-3 py-1.5'
             } ${
               isTestingMic
                 ? 'bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30'
-                : 'bg-white/[0.06] hover:bg-white/[0.12] text-gray-200 border border-white/10'
+                : 'bg-white/6 hover:bg-white/12 text-gray-200 border border-white/10'
             }`}
           >
             {isTestingMic ? (
@@ -107,7 +107,7 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
           {isTestingMic && (
             <div className="flex-1 bg-black/40 h-2.5 rounded-full overflow-hidden border border-white/10 p-0.5 animate-fade-in">
               <div
-                className="h-full bg-gradient-to-r from-green-500 via-yellow-400 to-red-500 rounded-full transition-all duration-75"
+                className="h-full bg-linear-to-r from-green-500 via-yellow-400 to-red-500 rounded-full transition-all duration-75"
                 style={{ width: `${Math.min(100, micVolume * 1.5)}%` }}
               />
             </div>

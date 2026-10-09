@@ -367,16 +367,16 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               e.stopPropagation();
               unlockAudio();
             }}
-            className="cursor-pointer bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-600 hover:from-amber-500 hover:to-yellow-500 text-white px-3 sm:px-4 py-2 text-center text-xs sm:text-sm font-medium shadow-lg flex items-center justify-center gap-2 border-b border-amber-400/40 transition-all z-50 animate-slide-down-fade flex-shrink-0"
+            className="cursor-pointer bg-linear-to-r from-amber-600 via-yellow-600 to-amber-600 hover:from-amber-500 hover:to-yellow-500 text-white px-3 sm:px-4 py-2 text-center text-xs sm:text-sm font-medium shadow-lg flex items-center justify-center gap-2 border-b border-amber-400/40 transition-all z-50 animate-slide-down-fade shrink-0"
           >
-            <Volume2 className="w-4 h-4 flex-shrink-0 text-white" />
+            <Volume2 className="w-4 h-4 shrink-0 text-white" />
             <span>
               Браузер приостановил звук собеседников.{' '}
               <strong className="underline">Нажмите сюда</strong>, чтобы включить звук.
             </span>
             <button
               type="button"
-              className="px-2.5 py-0.5 bg-white text-amber-900 rounded-md font-bold text-xs shadow hover:bg-amber-100 transition-all flex-shrink-0 ml-1"
+              className="px-2.5 py-0.5 bg-white text-amber-900 rounded-md font-bold text-xs shadow hover:bg-amber-100 transition-all shrink-0 ml-1"
             >
               Включить
             </button>
