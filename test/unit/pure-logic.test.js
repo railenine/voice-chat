@@ -29,6 +29,7 @@ import {
 } from '../../src/utils/connectionPolicy.ts';
 import {
   clampVolume,
+  calculateVolumeGain,
   getSavedPeerVolume,
   savePeerVolume,
 } from '../../src/utils/volumePolicy.ts';
@@ -276,6 +277,16 @@ describe('6. Real Volume Policy & Persistence Unit Tests', () => {
     assert.strictEqual(clampVolume(250), 200);
     assert.strictEqual(clampVolume(124.6), 125);
     assert.strictEqual(clampVolume(100), 100);
+  });
+
+  it('calculates linear gain from 0 to 1.0, and boosted gain up to 2.5x above 100%', () => {
+    assert.strictEqual(calculateVolumeGain(0), 0);
+    assert.strictEqual(calculateVolumeGain(-20), 0);
+    assert.strictEqual(calculateVolumeGain(50), 0.5);
+    assert.strictEqual(calculateVolumeGain(100), 1.0);
+    assert.strictEqual(calculateVolumeGain(150), 1.75);
+    assert.strictEqual(calculateVolumeGain(200), 2.5);
+    assert.strictEqual(calculateVolumeGain(300), 2.5);
   });
 
   it('saves and restores volume isolated by peerId and nickname', () => {

@@ -6,6 +6,22 @@ export function clampVolume(volume: number): number {
   return Math.max(0, Math.min(200, Math.round(volume)));
 }
 
+/**
+ * Maps a volume percentage [0, 200] to a linear audio gain multiplier.
+ * - 0% -> 0.0 (mute)
+ * - 100% -> 1.0 (unity gain, 0 dB)
+ * - >100% -> Smooth boost up to 2.5x (+7.96 dB / ~+8 dB) at 200% for quiet mics.
+ */
+export function calculateVolumeGain(volume: number): number {
+  const clamped = clampVolume(volume);
+  if (clamped <= 0) return 0;
+  if (clamped <= 100) {
+    return clamped / 100;
+  }
+  // For 101% - 200%: smooth scaling from 1.0 up to 2.5 (an additional +1.5 gain)
+  return 1.0 + ((clamped - 100) / 100) * 1.5;
+}
+
 export interface VolumeStorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;

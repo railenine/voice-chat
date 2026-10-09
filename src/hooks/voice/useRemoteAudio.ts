@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, type MutableRefObject } from 'react';
 import type { PeerInfo } from '../../types/protocol';
-import { getSavedPeerVolume, savePeerVolume, clampVolume } from '../../utils/volumePolicy';
+import { getSavedPeerVolume, savePeerVolume, clampVolume, calculateVolumeGain } from '../../utils/volumePolicy';
 
 const isIOS =
   typeof navigator !== 'undefined' &&
@@ -70,7 +70,7 @@ export function useRemoteAudio({
       // 2. Web Audio GainNode (provides full 0% to 200% volume for non-iOS)
       const gainNode = gainNodesRef.current.get(peerId);
       if (gainNode) {
-        gainNode.gain.value = isDeafenedRef.current ? 0 : clamped / 100;
+        gainNode.gain.value = isDeafenedRef.current ? 0 : calculateVolumeGain(clamped);
       }
 
       // 3. Audio element
@@ -202,16 +202,16 @@ export function useRemoteAudio({
           peerMergerNodesRef.current.set(peerId, merger);
 
           gainNode = ctx.createGain();
-          gainNode.gain.value = isDeafenedRef.current ? 0 : currentVol / 100;
+          gainNode.gain.value = isDeafenedRef.current ? 0 : calculateVolumeGain(currentVol);
           merger.connect(gainNode);
 
-          // Dynamics compressor limiter to prevent clipping when boosted above 100%
+          // Transparent True Peak Limiter: protects against digital clipping above 100% while keeping speech open
           const compressor = ctx.createDynamicsCompressor();
-          compressor.threshold.value = -6;
-          compressor.knee.value = 10;
-          compressor.ratio.value = 12;
-          compressor.attack.value = 0.003;
-          compressor.release.value = 0.15;
+          compressor.threshold.value = -2.0; // Brickwall ceiling threshold at -2.0 dBFS
+          compressor.knee.value = 3;         // Smooth transition into limiting without distortion
+          compressor.ratio.value = 20;       // Maximum compression ratio (brickwall limiting)
+          compressor.attack.value = 0.002;   // 2ms ultra-fast transient attack to catch sudden shouts
+          compressor.release.value = 0.08;   // 80ms fast recovery without audio pumping
           gainNode.connect(compressor);
           peerCompressorNodesRef.current.set(peerId, compressor);
 
@@ -244,7 +244,7 @@ export function useRemoteAudio({
           console.warn(`[Audio] Could not create Web Audio graph for ${peerId}, falling back to direct <audio>:`, err);
         }
       } else if (gainNode) {
-        gainNode.gain.value = isDeafenedRef.current ? 0 : currentVol / 100;
+        gainNode.gain.value = isDeafenedRef.current ? 0 : calculateVolumeGain(currentVol);
       }
 
       const hasProcessedStream = !isIOS && Boolean(peerProcessedDestNodesRef.current.get(peerId));
@@ -384,7 +384,7 @@ export function useRemoteAudio({
     });
     gainNodesRef.current.forEach((gn, peerId) => {
       const pVol = peerVolumesRef.current.get(peerId) ?? 100;
-      gn.gain.value = isDeafened ? 0 : pVol / 100;
+      gn.gain.value = isDeafened ? 0 : calculateVolumeGain(pVol);
     });
     remoteStreamsRef.current.forEach((stream, peerId) => {
       const pVol = peerVolumesRef.current.get(peerId) ?? 100;
