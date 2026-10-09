@@ -47,6 +47,10 @@ export function useVoiceChat({
   const [myPeerId, setMyPeerId] = useState<string>('');
   const myPeerIdRef = useRef<string>('');
   const currentNicknameRef = useRef<string>(nickname);
+  const audioInputDeviceIdRef = useRef<string | undefined>(audioInputDeviceId);
+  useEffect(() => {
+    audioInputDeviceIdRef.current = audioInputDeviceId;
+  }, [audioInputDeviceId]);
   const peerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
 
   const initDoneRef = useRef(false);
@@ -529,7 +533,7 @@ export function useVoiceChat({
         }
 
         setConnectionStatus('Запрос доступа к микрофону...');
-        await initLocalAudio(audioInputDeviceId);
+        await initLocalAudio(audioInputDeviceIdRef.current);
         startVad();
         connectWs();
       } catch (err: any) {
@@ -560,7 +564,6 @@ export function useVoiceChat({
     };
   }, [
     roomId,
-    audioInputDeviceId,
     clearAllPeerConnections,
     clearAllRemoteAudio,
     cleanupLocalAudio,
