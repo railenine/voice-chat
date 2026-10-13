@@ -46,6 +46,7 @@ import {
   verifyChecksum,
   checkNetworkState,
   buildUpdaterUrl,
+  parseUpdateNotes,
 } from '../../src/utils/updaterPolicy.ts';
 import {
   ROOM_ID_REGEX,
@@ -54,7 +55,26 @@ import {
   createProtocolError,
   validateClientMessage,
 } from '../../server/protocol.js';
-import { validateManifestSchema } from '../../scripts/generate-latest-json.js';
+import {
+  validateManifestSchema,
+  extractReleaseNotes,
+} from '../../scripts/generate-latest-json.js';
+import {
+  getStoredNickname,
+  saveStoredNickname,
+  normalizeNickname,
+  isValidNickname,
+  NICKNAME_STORAGE_KEY,
+} from '../../src/utils/nicknames.ts';
+import {
+  getRecentRooms,
+  addRecentRoom,
+  removeRecentRoom,
+  clearRecentRooms,
+  formatRecentTime,
+  RECENT_ROOMS_STORAGE_KEY,
+  MAX_RECENT_ROOMS,
+} from '../../src/utils/recentRoomsPolicy.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -336,14 +356,14 @@ describe('6. Real Volume Policy & Persistence Unit Tests', () => {
     assert.strictEqual(clampVolume(100), 100);
   });
 
-  it('calculates linear gain from 0 to 1.0, and boosted gain up to 2.5x above 100%', () => {
+  it('calculates linear gain from 0 to 1.0, and perceptual boosted gain up to 4.0x above 100%', () => {
     assert.strictEqual(calculateVolumeGain(0), 0);
     assert.strictEqual(calculateVolumeGain(-20), 0);
     assert.strictEqual(calculateVolumeGain(50), 0.5);
     assert.strictEqual(calculateVolumeGain(100), 1.0);
-    assert.strictEqual(calculateVolumeGain(150), 1.75);
-    assert.strictEqual(calculateVolumeGain(200), 2.5);
-    assert.strictEqual(calculateVolumeGain(300), 2.5);
+    assert.strictEqual(calculateVolumeGain(150), 2.0);
+    assert.strictEqual(calculateVolumeGain(200), 4.0);
+    assert.strictEqual(calculateVolumeGain(300), 4.0);
   });
 
   it('saves and restores volume isolated by peerId and nickname', () => {
@@ -410,6 +430,24 @@ describe('8. Real Updater Policy Unit Tests', () => {
     const url = buildUpdaterUrl('https://example.com', 1700000000);
     assert.strictEqual(url, 'https://example.com/peerjs/updater/latest.json?_t=1700000000');
   });
+
+  it('parses update notes into clean list of items', () => {
+    const multiline = '• Бесшовная смена микрофона на лету\n• Устранено отключение от звонка';
+    assert.deepStrictEqual(parseUpdateNotes(multiline), [
+      'Бесшовная смена микрофона на лету',
+      'Устранено отключение от звонка',
+    ]);
+
+    const legacySemicolon = 'RVxis v0.1.15 — Устранение перезапуска сессии; Параметр исключен; Ранее при переключении';
+    assert.deepStrictEqual(parseUpdateNotes(legacySemicolon), [
+      'Устранение перезапуска сессии',
+      'Параметр исключен',
+      'Ранее при переключении',
+    ]);
+
+    assert.deepStrictEqual(parseUpdateNotes(null), []);
+    assert.deepStrictEqual(parseUpdateNotes(''), []);
+  });
 });
 
 describe('9. Real Protocol & Manifest Schema Validation Unit Tests', () => {
@@ -468,4 +506,204 @@ describe('9. Real Protocol & Manifest Schema Validation Unit Tests', () => {
     };
     assert.strictEqual(validateManifestSchema(validManifest), true);
   });
+
+  it('extracts release notes prioritizing user-facing block and milestones', () => {
+    const changelogWithBlock = `
+### ## [0.2.0] — 2026-10-15
+
+> **Что нового:**
+> • Новая функция A
+> • Улучшение B
+
+#### Технические детали
+- Внутренний фикс
+`;
+    assert.strictEqual(
+      extractReleaseNotes('0.2.0', changelogWithBlock),
+      '• Новая функция A\n• Улучшение B'
+    );
+
+    const changelogWithMilestone = `
+| **0.2.0** | 2026-10-15 | 🚀 Быстрый запуск и оптимизация |
+
+### ## [0.2.0] — 2026-10-15
+#### Технические детали
+- Внутренний фикс
+`;
+    assert.strictEqual(
+      extractReleaseNotes('0.2.0', changelogWithMilestone),
+      '• 🚀 Быстрый запуск и оптимизация'
+    );
+  });
 });
+
+describe('10. Real Nickname Persistence Policy Unit Tests', () => {
+  function createMockStorage(initial = {}) {
+    const store = new Map(Object.entries(initial));
+    return {
+      getItem(key) {
+        return store.has(key) ? store.get(key) : null;
+      },
+      setItem(key, val) {
+        store.set(key, String(val));
+      },
+      has(key) {
+        return store.has(key);
+      },
+    };
+  }
+
+  it('normalizes and validates nicknames correctly', () => {
+    assert.strictEqual(normalizeNickname('   Alex99   '), 'Alex99');
+    assert.strictEqual(normalizeNickname(null), '');
+    assert.strictEqual(normalizeNickname(undefined), '');
+    assert.strictEqual(normalizeNickname('A'.repeat(30)), 'A'.repeat(24));
+
+    assert.strictEqual(isValidNickname('User1'), true);
+    assert.strictEqual(isValidNickname(''), false);
+    assert.strictEqual(isValidNickname('   '), false);
+    assert.strictEqual(isValidNickname('A'.repeat(24)), true);
+    assert.strictEqual(isValidNickname('A'.repeat(25)), false);
+  });
+
+  it('generates and persists fresh nickname when storage is empty', () => {
+    const local = createMockStorage();
+    const session = createMockStorage();
+
+    const nick = getStoredNickname(local, session);
+    assert.ok(nick && nick.length >= 3);
+    assert.strictEqual(local.getItem(NICKNAME_STORAGE_KEY), nick);
+    assert.strictEqual(session.getItem(NICKNAME_STORAGE_KEY), nick);
+  });
+
+  it('reads existing persistent nickname from localStorage', () => {
+    const local = createMockStorage({ [NICKNAME_STORAGE_KEY]: 'BraveWolf77' });
+    const session = createMockStorage();
+
+    const nick = getStoredNickname(local, session);
+    assert.strictEqual(nick, 'BraveWolf77');
+  });
+
+  it('migrates legacy key from localStorage to canonical key', () => {
+    const local = createMockStorage({ voice_chat_nickname: 'LegacyBear12' });
+    const session = createMockStorage();
+
+    const nick = getStoredNickname(local, session);
+    assert.strictEqual(nick, 'LegacyBear12');
+    assert.strictEqual(local.getItem(NICKNAME_STORAGE_KEY), 'LegacyBear12');
+  });
+
+  it('migrates session-only nickname from previous tab into persistent storage', () => {
+    const local = createMockStorage();
+    const session = createMockStorage({ 'voicechat-nickname': 'TabTiger55' });
+
+    const nick = getStoredNickname(local, session);
+    assert.strictEqual(nick, 'TabTiger55');
+    assert.strictEqual(local.getItem(NICKNAME_STORAGE_KEY), 'TabTiger55');
+  });
+
+  it('saveStoredNickname writes to canonical key and legacy fallbacks', () => {
+    const local = createMockStorage();
+    const session = createMockStorage();
+
+    const saved = saveStoredNickname('  CyberHawk  ', local, session);
+    assert.strictEqual(saved, 'CyberHawk');
+    assert.strictEqual(local.getItem(NICKNAME_STORAGE_KEY), 'CyberHawk');
+    assert.strictEqual(local.getItem('voice_chat_nickname'), 'CyberHawk');
+    assert.strictEqual(local.getItem('voicechat-nickname'), 'CyberHawk');
+    assert.strictEqual(session.getItem(NICKNAME_STORAGE_KEY), 'CyberHawk');
+    assert.strictEqual(session.getItem('voicechat-nickname'), 'CyberHawk');
+
+    // Rejects invalid input
+    assert.strictEqual(saveStoredNickname('   ', local, session), '');
+  });
+});
+
+describe('11. Real Recent Rooms Policy Unit Tests', () => {
+  function createMockStorage(initial = {}) {
+    const store = new Map(Object.entries(initial));
+    return {
+      getItem(key) {
+        return store.has(key) ? store.get(key) : null;
+      },
+      setItem(key, val) {
+        store.set(key, String(val));
+      },
+      has(key) {
+        return store.has(key);
+      },
+    };
+  }
+
+  it('getRecentRooms returns empty array on empty or invalid storage', () => {
+    const storage = createMockStorage();
+    assert.deepStrictEqual(getRecentRooms(storage), []);
+
+    const brokenStorage = createMockStorage({ [RECENT_ROOMS_STORAGE_KEY]: 'invalid json{' });
+    assert.deepStrictEqual(getRecentRooms(brokenStorage), []);
+  });
+
+  it('addRecentRoom adds rooms, updates timestamp, and caps at MAX_RECENT_ROOMS', () => {
+    const storage = createMockStorage();
+    const t0 = 1000000;
+
+    addRecentRoom('ROOM1', t0, storage);
+    addRecentRoom('ROOM2', t0 + 1000, storage);
+    addRecentRoom('ROOM3', t0 + 2000, storage);
+
+    let rooms = getRecentRooms(storage);
+    assert.strictEqual(rooms.length, 3);
+    assert.strictEqual(rooms[0].roomId, 'ROOM3');
+    assert.strictEqual(rooms[2].roomId, 'ROOM1');
+
+    // Adding 4th room evicts the oldest (ROOM1)
+    addRecentRoom('ROOM4', t0 + 3000, storage);
+    rooms = getRecentRooms(storage);
+    assert.strictEqual(rooms.length, 3);
+    assert.strictEqual(rooms[0].roomId, 'ROOM4');
+    assert.strictEqual(rooms.some((r) => r.roomId === 'ROOM1'), false);
+
+    // Re-visiting ROOM2 moves it to the top
+    addRecentRoom('ROOM2', t0 + 4000, storage);
+    rooms = getRecentRooms(storage);
+    assert.strictEqual(rooms.length, 3);
+    assert.strictEqual(rooms[0].roomId, 'ROOM2');
+    assert.strictEqual(rooms[0].lastVisited, t0 + 4000);
+  });
+
+  it('removeRecentRoom removes a specific room from storage', () => {
+    const storage = createMockStorage();
+    addRecentRoom('ALPHA', 1000, storage);
+    addRecentRoom('BETA', 2000, storage);
+
+    removeRecentRoom('ALPHA', storage);
+    const rooms = getRecentRooms(storage);
+    assert.strictEqual(rooms.length, 1);
+    assert.strictEqual(rooms[0].roomId, 'BETA');
+  });
+
+  it('clearRecentRooms removes all entries', () => {
+    const storage = createMockStorage();
+    addRecentRoom('ALPHA', 1000, storage);
+    clearRecentRooms(storage);
+    assert.deepStrictEqual(getRecentRooms(storage), []);
+  });
+
+  it('formatRecentTime formats seconds, minutes, hours, and days cleanly', () => {
+    const baseNow = new Date('2026-10-13T12:00:00Z').getTime();
+
+    assert.strictEqual(formatRecentTime(baseNow - 10000, baseNow), 'только что');
+    assert.strictEqual(formatRecentTime(baseNow - 5 * 60 * 1000, baseNow), '5 мин назад');
+    assert.strictEqual(formatRecentTime(baseNow - 3 * 3600 * 1000, baseNow), '3 ч назад');
+
+    // 24 hours ago (yesterday)
+    const yesterday = new Date(baseNow);
+    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setHours(yesterday.getHours() - 1);
+    assert.strictEqual(formatRecentTime(yesterday.getTime(), baseNow), 'вчера');
+
+    // Invalid/empty fallback
+    assert.strictEqual(formatRecentTime(0, baseNow), '');
+  });
+});
+

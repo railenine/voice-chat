@@ -7,10 +7,10 @@ export function clampVolume(volume: number): number {
 }
 
 /**
- * Maps a volume percentage [0, 200] to a linear audio gain multiplier.
+ * Maps a volume percentage [0, 200] to an audio gain multiplier.
  * - 0% -> 0.0 (mute)
  * - 100% -> 1.0 (unity gain, 0 dB)
- * - >100% -> Smooth boost up to 2.5x (+7.96 dB / ~+8 dB) at 200% for quiet mics.
+ * - >100% -> Perceptually uniform exponential curve reaching 4.0x (+12.04 dB) at 200% for quiet mics.
  */
 export function calculateVolumeGain(volume: number): number {
   const clamped = clampVolume(volume);
@@ -18,8 +18,10 @@ export function calculateVolumeGain(volume: number): number {
   if (clamped <= 100) {
     return clamped / 100;
   }
-  // For 101% - 200%: smooth scaling from 1.0 up to 2.5 (an additional +1.5 gain)
-  return 1.0 + ((clamped - 100) / 100) * 1.5;
+  // For 101% - 200%: smooth exponential curve 4^((clamped - 100) / 100)
+  // Reaches 2.0x (+6 dB) at 150%, and 4.0x (+12 dB) at 200% (clean subjective loudness doubling).
+  const boostFraction = (clamped - 100) / 100;
+  return Math.pow(4, boostFraction);
 }
 
 export interface VolumeStorageLike {

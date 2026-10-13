@@ -40,6 +40,52 @@ export function validateManifestSchema(manifest) {
   return true;
 }
 
+/**
+ * Extracts a concise, human-friendly update summary for the given version from changelog/HISTORY.md.
+ * Priority:
+ * 1. Dedicated user block: > **Что нового:**
+ * 2. Milestones table summary row
+ * 3. Default fallback
+ */
+export function extractReleaseNotes(version, changelogContent) {
+  if (!changelogContent || typeof changelogContent !== 'string') {
+    return `• Обновление RVxis v${version} с улучшениями звука, производительности и стабильности.`;
+  }
+
+  const versionHeaderRegex = new RegExp(
+    `(?:^|\\n)#{2,4}\\s*(?:##\\s*)?\\[${version.replace(/\./g, '\\.')}\\][^\\n]*\\n([\\s\\S]*?)(?=\\n#{2,4}\\s*(?:##\\s*)?\\[|$)`
+  );
+  const match = changelogContent.match(versionHeaderRegex);
+
+  if (match && match[1]) {
+    // 1. Check for dedicated "> **Что нового:**" block
+    const userBlockMatch = match[1].match(/>\s*\*\*Что нового:\*\*\s*\r?\n((?:>[^\r\n]*\r?\n?)+)/i);
+    if (userBlockMatch && userBlockMatch[1]) {
+      const userLines = userBlockMatch[1]
+        .split(/\r?\n/)
+        .map((l) => l.replace(/^>\s*/, '').trim())
+        .filter(Boolean)
+        .map((l) => (l.startsWith('•') || l.startsWith('-') || l.startsWith('*') ? l.replace(/^[-*]\s*/, '• ') : `• ${l}`));
+      if (userLines.length > 0) {
+        return userLines.join('\n');
+      }
+    }
+  }
+
+  // 2. Look for Milestones table entry: | **version** | date | summary |
+  const milestoneMatch = changelogContent.match(
+    new RegExp(`\\|\\s*\\*\\*${version.replace(/\./g, '\\.')}\\*\\*\\s*\\|[^|]*\\|\\s*([^|\\r\\n]+)`)
+  );
+  if (milestoneMatch && milestoneMatch[1]) {
+    const cleanMilestone = milestoneMatch[1].trim().replace(/\s+/g, ' ');
+    if (cleanMilestone) {
+      return `• ${cleanMilestone}`;
+    }
+  }
+
+  return `• Обновление RVxis v${version} с улучшениями звука, производительности и стабильности.`;
+}
+
 function getFileMeta(filePath) {
   if (!filePath || !fs.existsSync(filePath)) {
     return { size: 0, sha256: '' };
@@ -231,16 +277,8 @@ function main() {
       fs.writeFileSync(releaseNotesPath, fullNotes + '\n', 'utf8');
       console.log(`[Updater] Generated RELEASE_NOTES.md from ${path.basename(historyPath)}.`);
       generatedNotes = true;
-
-      const lines = match[1]
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l.startsWith('-') || l.startsWith('*'))
-        .map((l) => l.replace(/^[-*]\s*/, '').replace(/\*\*/g, ''));
-      if (lines.length > 0) {
-        notes = `RVxis v${version} — ${lines.slice(0, 3).join('; ')}`;
-      }
     }
+    notes = extractReleaseNotes(version, changelog);
   }
 
   if (!generatedNotes) {

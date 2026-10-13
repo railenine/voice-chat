@@ -206,13 +206,13 @@ export function useRemoteAudio({
           gainNode.gain.value = isDeafenedRef.current ? 0 : calculateVolumeGain(currentVol);
           merger.connect(gainNode);
 
-          // Transparent True Peak Limiter: protects against digital clipping above 100% while keeping speech open
+          // Transparent Peak Limiter: protects against digital clipping above 100% while allowing loud signals to breathe
           const compressor = ctx.createDynamicsCompressor();
-          compressor.threshold.value = -2.0; // Brickwall ceiling threshold at -2.0 dBFS
-          compressor.knee.value = 3;         // Smooth transition into limiting without distortion
-          compressor.ratio.value = 20;       // Maximum compression ratio (brickwall limiting)
-          compressor.attack.value = 0.002;   // 2ms ultra-fast transient attack to catch sudden shouts
-          compressor.release.value = 0.08;   // 80ms fast recovery without audio pumping
+          compressor.threshold.value = -0.5; // High threshold at -0.5 dBFS to prevent early compression squashing
+          compressor.knee.value = 6;         // Musical soft-knee transition
+          compressor.ratio.value = 10;       // Strong safety compression (10:1) to catch shout peaks without flat brickwalling
+          compressor.attack.value = 0.003;   // 3ms transient attack
+          compressor.release.value = 0.06;   // 60ms fast recovery without audio pumping
           gainNode.connect(compressor);
           peerCompressorNodesRef.current.set(peerId, compressor);
 

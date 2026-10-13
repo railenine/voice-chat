@@ -18,6 +18,7 @@ import { getShareUrl, isTauri } from '../config';
 import { playLeaveSound } from '../utils/soundEffects';
 import { JellyBackground } from './JellyBackground';
 import { useIsSmartphone } from '../utils/device';
+import { saveStoredNickname } from '../utils/nicknames';
 import type { PeerInfo } from '../types/protocol';
 
 import { VoiceConnectionBanner, type BannerState } from './voice/VoiceConnectionBanner';
@@ -154,7 +155,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
 
   const isSmartphone = useIsSmartphone();
   const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<'audio' | 'hotkeys'>('audio');
+  const [settingsTab, setSettingsTab] = useState<'audio' | 'hotkeys' | 'about'>('audio');
 
   const [showConnectedToast, setShowConnectedToast] = useState(false);
   const prevConnectedRef = useRef(isConnected);
@@ -330,9 +331,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
     if (trimmed) {
       changeNickname(trimmed);
       setMyNickname(trimmed);
-      try {
-        localStorage.setItem('voice_chat_nickname', trimmed);
-      } catch (err) {}
+      saveStoredNickname(trimmed);
       setIsEditingNick(false);
     }
   };
@@ -343,9 +342,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
     if (trimmed) {
       changeNickname(trimmed);
       setMyNickname(trimmed);
-      try {
-        localStorage.setItem('voice_chat_nickname', trimmed);
-      } catch (err) {}
+      saveStoredNickname(trimmed);
       setIsMobileEditingNick(false);
     }
   };

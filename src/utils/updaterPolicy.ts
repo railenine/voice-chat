@@ -72,3 +72,37 @@ export function buildUpdaterUrl(baseUrl: string, timestamp = Date.now()): string
   const cleanBase = baseUrl.replace(/\/+$/, '');
   return `${cleanBase}/peerjs/updater/latest.json?_t=${timestamp}`;
 }
+
+/**
+ * Parses raw update notes into a clean array of short, user-friendly items.
+ * Handles multiline bulleted notes, single lines, and legacy semicolon-separated strings.
+ */
+export function parseUpdateNotes(rawNotes?: string | null): string[] {
+  if (!rawNotes || typeof rawNotes !== 'string') return [];
+  const trimmed = rawNotes.trim();
+  if (!trimmed) return [];
+
+  // 1. If multiline (separated by \n)
+  if (trimmed.includes('\n')) {
+    return trimmed
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => line.replace(/^RVxis\s+v[\d.]+\s*[-—]\s*/i, '').replace(/^[•\-\*]\s*/, '').trim())
+      .filter(Boolean);
+  }
+
+  // 2. If legacy semicolon-separated list (e.g., "RVxis v0.1.15 — Item 1; Item 2; Item 3")
+  if (trimmed.includes(';')) {
+    const stripped = trimmed.replace(/^RVxis\s+v[\d.]+\s*[-—]\s*/i, '');
+    return stripped
+      .split(';')
+      .map((item) => item.trim())
+      .map((item) => item.replace(/^[•\-\*]\s*/, '').trim())
+      .filter(Boolean);
+  }
+
+  // 3. Single sentence
+  const single = trimmed.replace(/^RVxis\s+v[\d.]+\s*[-—]\s*/i, '').replace(/^[•\-\*]\s*/, '').trim();
+  return single ? [single] : [];
+}

@@ -104,55 +104,58 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates,
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
       onDoubleClick={() => handleToggleMaximize()}
-      className="h-[34px] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between select-none z-50 flex-shrink-0 text-xs font-sans cursor-default"
+      className="relative h-[34px] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between select-none z-50 flex-shrink-0 text-xs font-sans cursor-default"
     >
       {/* Left: App Logo, Name & Room Badge */}
       <div
         data-tauri-drag-region
-        className="flex items-center gap-2 px-3 h-full cursor-default"
+        className="flex items-center gap-2 px-3 h-full cursor-default z-10"
       >
         <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-blue-700 via-blue-500 to-sky-400 flex items-center justify-center shadow-sm shadow-blue-500/40 flex-shrink-0">
           <Mic className="w-2.5 h-2.5 text-white" />
         </div>
-        <span className="font-semibold text-white/90 text-xs tracking-tight">RVxis</span>
 
-        {hasUpdate && updateVersion ? (
-          <UpdateBadge
-            version={updateVersion}
-            onClick={onCheckUpdates || (() => { })}
-          />
-        ) : onCheckUpdates ? (
-          <Tooltip
-            content="Проверить обновления"
-            description="Нажмите, чтобы проверить наличие новой версии"
-            position="bottom"
-          >
-            <button
-              type="button"
-              onClick={onCheckUpdates}
-              className="text-[10px] text-gray-500 hover:text-blue-400 font-mono transition-colors cursor-pointer"
+        <div className="flex items-baseline gap-1.5 leading-none">
+          <span className="font-semibold text-white/90 text-xs tracking-tight leading-none">RVxis</span>
+
+          {hasUpdate && updateVersion ? (
+            <UpdateBadge
+              version={updateVersion}
+              onClick={onCheckUpdates || (() => { })}
+            />
+          ) : onCheckUpdates ? (
+            <Tooltip
+              content="Проверить обновления"
+              description="Нажмите, чтобы проверить наличие новой версии"
+              position="bottom"
             >
-              v{APP_VERSION}
-            </button>
-          </Tooltip>
-        ) : null}
+              <button
+                type="button"
+                onClick={onCheckUpdates}
+                className="text-[10px] text-gray-500 hover:text-blue-400 font-mono leading-none transition-colors cursor-pointer"
+              >
+                v{APP_VERSION}
+              </button>
+            </Tooltip>
+          ) : null}
+        </div>
       </div>
 
-      {/* Middle: Draggable title space */}
+      {/* Middle: Mathematically centered title */}
       <div
         data-tauri-drag-region
-        className="flex-1 h-full flex items-center justify-center cursor-default min-w-0 px-2"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center cursor-default z-0 px-32"
       >
         <span
           data-tauri-drag-region
-          className="text-[11px] text-gray-400/80 font-medium truncate"
+          className="text-[11px] text-gray-400/80 font-medium leading-none truncate select-none"
         >
           {roomId ? `RVxis — Комната #${roomId}` : 'RVxis — Голосовой чат'}
         </span>
       </div>
 
       {/* Right: Window Controls */}
-      <div className="flex items-center h-full flex-shrink-0">
+      <div className="flex items-center h-full flex-shrink-0 z-10">
         {/* Minimize Button */}
         <Tooltip content="Свернуть" position="bottom">
           <button

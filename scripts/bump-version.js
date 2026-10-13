@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { extractReleaseNotes } from './generate-latest-json.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -103,7 +104,7 @@ function main() {
     let history = fs.readFileSync(historyPath, 'utf8');
     if (!history.includes(`## [${cleanVersion}]`)) {
       const today = new Date().toISOString().split('T')[0];
-      const template = `\n### ## [${cleanVersion}] — ${today}\n\n#### 🚀 Обновления и улучшения (Updates & Improvements)\n- Обновление компонентов приложения до версии ${cleanVersion}.\n\n---`;
+      const template = `\n### ## [${cleanVersion}] — ${today}\n\n> **Что нового:**\n> • Обновление компонентов приложения и повышение стабильности.\n\n#### 🚀 Обновления и улучшения (Updates & Improvements)\n- Обновление компонентов приложения до версии ${cleanVersion}.\n\n---`;
       history = history.replace(/^---\r?\n/m, `---${template}\n`);
       fs.writeFileSync(historyPath, history, 'utf8');
       console.log(`  ✓ ${path.basename(historyPath)}: Added entry for [${cleanVersion}]`);
@@ -118,11 +119,15 @@ function main() {
     path.join(rootDir, 'public', 'api', 'updater', 'latest.json'),
     path.join(rootDir, 'server', 'latest.json'),
   ];
+  const historyText = fs.existsSync(historyPath) ? fs.readFileSync(historyPath, 'utf8') : '';
+  const releaseNotes = extractReleaseNotes(cleanVersion, historyText);
+
   for (const mPath of manifestDestinations) {
     if (fs.existsSync(mPath)) {
       try {
         const m = JSON.parse(fs.readFileSync(mPath, 'utf8'));
         m.version = cleanVersion;
+        m.notes = releaseNotes;
         m.pub_date = new Date().toISOString();
         m.portable_url = `https://github.com/railenine/voice-chat/releases/download/v${cleanVersion}/RVxis.exe`;
         if (m.portable?.['windows-x86_64']) {

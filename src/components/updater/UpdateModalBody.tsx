@@ -1,6 +1,7 @@
-import React, { forwardRef, memo } from 'react';
+import React, { forwardRef, memo, useMemo } from 'react';
 import { Sparkles, CheckCircle2, AlertTriangle, WifiOff, PhoneCall } from 'lucide-react';
 import { UpdateInfo, UpdateStatus } from '../../utils/updaterTypes';
+import { parseUpdateNotes } from '../../utils/updaterPolicy';
 
 interface UpdateModalBodyProps {
   status: UpdateStatus;
@@ -28,6 +29,11 @@ export const UpdateModalBody = memo(
     isPortable,
     isInRoom = false,
   }, ref) => {
+    const notesList = useMemo(
+      () => parseUpdateNotes(updateInfo?.notes),
+      [updateInfo?.notes]
+    );
+
     return (
       <div
         ref={ref}
@@ -56,7 +62,7 @@ export const UpdateModalBody = memo(
           <div className="space-y-3 pt-1">
             {isInRoom && (
               <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-amber-300">
-                <PhoneCall className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <PhoneCall className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                 <p className="leading-relaxed text-[11px]">
                   <strong>Внимание:</strong> Вы находитесь в голосовом канале. Установка обновления разорвёт активное соединение и перезапустит приложение.
                 </p>
@@ -64,7 +70,7 @@ export const UpdateModalBody = memo(
             )}
 
             <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2.5">
-              <Sparkles className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+              <Sparkles className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
               <p className="leading-relaxed text-gray-200 text-xs">
                 {!isDesktop
                   ? 'На сервере доступна новая версия RVxis. Нажмите кнопку ниже, чтобы обновить страницу.'
@@ -74,14 +80,19 @@ export const UpdateModalBody = memo(
               </p>
             </div>
 
-            {updateInfo?.notes && (
-              <div className="p-3 bg-white/[0.04] border border-white/10 rounded-xl leading-relaxed max-h-36 overflow-y-auto custom-scrollbar">
-                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+            {notesList.length > 0 && (
+              <div className="p-3 bg-white/4 border border-white/10 rounded-xl max-h-36 overflow-y-auto custom-scrollbar">
+                <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-2">
                   Что нового:
                 </div>
-                <div className="whitespace-pre-line text-gray-200 text-xs">
-                  {updateInfo.notes}
-                </div>
+                <ul className="space-y-1.5 text-gray-200 text-xs">
+                  {notesList.map((note, idx) => (
+                    <li key={idx} className="flex items-start gap-2 leading-relaxed">
+                      <span className="text-blue-400 text-xs leading-none mt-1 select-none shrink-0">•</span>
+                      <span>{note}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
@@ -99,7 +110,7 @@ export const UpdateModalBody = memo(
 
             <div className="w-full h-2.5 bg-white/10 rounded-full overflow-hidden p-0.5">
               <div
-                className="h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 transition-all duration-300 rounded-full shadow-md shadow-blue-500/50"
+                className="h-full bg-linear-to-r from-blue-500 via-indigo-500 to-purple-500 transition-all duration-300 rounded-full shadow-md shadow-blue-500/50"
                 style={{ width: `${Math.max(4, downloadProgress)}%` }}
               />
             </div>
@@ -114,7 +125,7 @@ export const UpdateModalBody = memo(
 
         {status === 'downloaded' && (
           <div className="p-3.5 bg-green-500/10 border border-green-500/30 rounded-xl text-green-300 leading-relaxed flex items-center gap-2.5">
-            <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
             <span>Обновление успешно загружено и проверено. Готово к завершению установки.</span>
           </div>
         )}
@@ -133,7 +144,7 @@ export const UpdateModalBody = memo(
 
         {status === 'restart-required' && (
           <div className="p-3.5 bg-blue-500/10 border border-blue-500/30 rounded-xl text-blue-300 leading-relaxed flex items-center gap-2.5">
-            <CheckCircle2 className="w-5 h-5 text-blue-400 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-blue-400 shrink-0" />
             <span>Файл заменён. Запуск обновлённого приложения...</span>
           </div>
         )}
@@ -168,7 +179,7 @@ export const UpdateModalBody = memo(
 
         {status === 'error' && (
           <div className="p-3.5 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-300 leading-relaxed flex items-center gap-2.5">
-            <AlertTriangle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0" />
             <span>{error || 'Произошла ошибка при проверке или загрузке обновления.'}</span>
           </div>
         )}

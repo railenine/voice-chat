@@ -1,5 +1,11 @@
 import { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import { generateNickname, generateRoomId, extractRoomId } from './utils/nicknames';
+import {
+  generateRoomId,
+  extractRoomId,
+  getStoredNickname,
+  saveStoredNickname,
+} from './utils/nicknames';
+import { addRecentRoom } from './utils/recentRoomsPolicy';
 import { LobbyScreen } from './components/LobbyScreen';
 import { TitleBar } from './components/TitleBar';
 import { ChunkErrorBoundary, RoomLoadingFallback } from './components/ChunkErrorBoundary';
@@ -15,33 +21,17 @@ const UpdateModal = lazy(() =>
   import('./components/UpdateModal').then((m) => ({ default: m.UpdateModal }))
 );
 
-const safeStorage = {
-  getItem: (key: string): string | null => {
-    try {
-      return sessionStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  },
-  setItem: (key: string, val: string): void => {
-    try {
-      sessionStorage.setItem(key, val);
-    } catch {}
-  },
-};
-
 function App() {
-  const [nickname, setNickname] = useState<string>(() => {
-    const saved = safeStorage.getItem('voicechat-nickname');
-    if (saved) return saved;
-    const newNick = generateNickname();
-    safeStorage.setItem('voicechat-nickname', newNick);
-    return newNick;
-  });
+  const [nickname, setNickname] = useState<string>(() => getStoredNickname());
   const [roomId, setRoomId] = useState<string>('');
   const [joined, setJoined] = useState(false);
   const [mode, setMode] = useState<'create' | 'join'>('create');
   const [joinRoomId, setJoinRoomId] = useState('');
+
+  const handleSetNickname = useCallback((newNick: string) => {
+    setNickname(newNick);
+    saveStoredNickname(newNick);
+  }, []);
 
   const {
     status: updateStatus,
@@ -159,15 +149,17 @@ function App() {
   const handleCreateRoom = useCallback(() => {
     primeAudioEngine();
     const newRoomId = generateRoomId();
+    addRecentRoom(newRoomId);
     setRoomId(newRoomId);
     setJoined(true);
     window.history.replaceState({}, '', `?room=${newRoomId}`);
   }, [primeAudioEngine]);
 
-  const handleJoinRoom = useCallback(() => {
+  const handleJoinRoom = useCallback((targetRoomId?: string) => {
     primeAudioEngine();
-    const cleanId = extractRoomId(joinRoomId);
+    const cleanId = extractRoomId(targetRoomId || joinRoomId);
     if (cleanId.length >= 3) {
+      addRecentRoom(cleanId);
       setRoomId(cleanId);
       setJoined(true);
       window.history.replaceState({}, '', `?room=${cleanId}`);
@@ -179,6 +171,10 @@ function App() {
     setMode('join');
     setJoinRoomId(roomId);
     window.history.replaceState({}, '', window.location.pathname);
+    const savedNick = getStoredNickname();
+    if (savedNick) {
+      setNickname(savedNick);
+    }
   }, [roomId]);
 
   const audioDevices = useAudioDevices();
@@ -232,7 +228,7 @@ function App() {
         {!joined ? (
           <LobbyScreen
             nickname={nickname}
-            setNickname={setNickname}
+            setNickname={handleSetNickname}
             mode={mode}
             setMode={setMode}
             joinRoomId={joinRoomId}
