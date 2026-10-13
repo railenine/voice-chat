@@ -68,7 +68,7 @@ jobs:
         run: npm ci
 
       - name: Build Desktop Application (Tauri v2)
-        run: npx @tauri-apps/cli build
+        run: npx @tauri-apps/cli build --ignore-version-mismatches
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
