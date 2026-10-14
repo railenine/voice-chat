@@ -94,7 +94,7 @@ app.use(corsMiddleware);
 // Body parser: strictly limit payload size to 10kb to prevent memory DoS attacks
 app.use(express.json({ limit: '10kb' }));
 
-const APP_VERSION = '0.1.16';
+const APP_VERSION = '0.1.17';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -117,6 +117,274 @@ app.get(['/api/info', '/peerjs/info'], (req, res) => {
     path: '/peerjs/ws',
     status: 'running'
   });
+});
+
+// In-memory RAM storage for ephemeral room uploads (images, gifs, videos)
+// Map<fileId, { data: Buffer, contentType: string, filename: string, roomId: string, createdAt: number, size: number }>
+const ephemeralUploads = new Map();
+let totalUploadsBytes = 0;
+const MAX_TOTAL_RAM_UPLOADS = 150 * 1024 * 1024; // 150 MB safety cap
+
+function clearRoomUploads(roomId) {
+  for (const [fileId, upload] of ephemeralUploads.entries()) {
+    if (upload.roomId === roomId) {
+      totalUploadsBytes -= upload.size;
+      ephemeralUploads.delete(fileId);
+    }
+  }
+}
+
+// Periodic cleanup: delete uploads older than 2 hours
+setInterval(() => {
+  const twoHoursAgo = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [fileId, upload] of ephemeralUploads.entries()) {
+    if (upload.createdAt < twoHoursAgo) {
+      totalUploadsBytes -= upload.size;
+      ephemeralUploads.delete(fileId);
+    }
+  }
+}, 30 * 60 * 1000).unref();
+
+// Upload rate limiter: max 15 uploads per minute per IP
+const uploadRateLimiter = new Map(); // Map<ip, { count: number, resetAt: number }>
+const UPLOAD_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MAX_UPLOADS_PER_WINDOW = 15;
+
+function checkUploadRateLimit(ip) {
+  const now = Date.now();
+  const record = uploadRateLimiter.get(ip);
+  if (!record || now > record.resetAt) {
+    uploadRateLimiter.set(ip, { count: 1, resetAt: now + UPLOAD_RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+  if (record.count >= MAX_UPLOADS_PER_WINDOW) {
+    return false;
+  }
+  record.count += 1;
+  return true;
+}
+
+// Periodic cleanup of rate limiter entries every 5 mins
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of uploadRateLimiter.entries()) {
+    if (now > record.resetAt) {
+      uploadRateLimiter.delete(ip);
+    }
+  }
+}, 5 * 60 * 1000).unref();
+
+/**
+ * Validates the binary file header (Magic Bytes) to verify true file format.
+ * Completely prohibits SVG and unverified executables / scripts.
+ */
+function validateMediaBuffer(buffer) {
+  if (!buffer || buffer.length < 12) {
+    return { valid: false, error: 'Файл не отправлен: файл повреждён или имеет нулевой размер' };
+  }
+
+  // 1. Explicitly check and block SVG (XML declaration or <svg root tag)
+  const headerText = buffer.subarray(0, 120).toString('utf8').trim().toLowerCase();
+  if (
+    headerText.startsWith('<?xml') ||
+    headerText.startsWith('<svg') ||
+    headerText.includes('<svg') ||
+    headerText.includes('xmlns="http://www.w3.org/2000/svg"')
+  ) {
+    return { valid: false, error: 'Файл не отправлен: загрузка SVG-файлов запрещена в целях безопасности' };
+  }
+
+  // 2. PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4E &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0D &&
+    buffer[5] === 0x0A &&
+    buffer[6] === 0x1A &&
+    buffer[7] === 0x0A
+  ) {
+    return { valid: true, mime: 'image/png', type: 'image' };
+  }
+
+  // 3. JPEG: FF D8 FF
+  if (buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF) {
+    return { valid: true, mime: 'image/jpeg', type: 'image' };
+  }
+
+  // 4. GIF: "GIF87a" (47 49 46 38 37 61) or "GIF89a" (47 49 46 38 39 61)
+  if (
+    buffer[0] === 0x47 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x38 &&
+    (buffer[4] === 0x37 || buffer[4] === 0x39) &&
+    buffer[5] === 0x61
+  ) {
+    return { valid: true, mime: 'image/gif', type: 'gif' };
+  }
+
+  // 5. WEBP: "RIFF" .... "WEBP"
+  if (
+    buffer[0] === 0x52 &&
+    buffer[1] === 0x49 &&
+    buffer[2] === 0x46 &&
+    buffer[3] === 0x46 &&
+    buffer[8] === 0x57 &&
+    buffer[9] === 0x45 &&
+    buffer[10] === 0x42 &&
+    buffer[11] === 0x50
+  ) {
+    return { valid: true, mime: 'image/webp', type: 'image' };
+  }
+
+  // 6. MP4: bytes 4-7 are "ftyp" (66 74 79 70)
+  if (
+    buffer[4] === 0x66 &&
+    buffer[5] === 0x74 &&
+    buffer[6] === 0x79 &&
+    buffer[7] === 0x70
+  ) {
+    return { valid: true, mime: 'video/mp4', type: 'video' };
+  }
+
+  // 7. WebM / Matroska: 1A 45 DF A3
+  if (
+    buffer[0] === 0x1A &&
+    buffer[1] === 0x45 &&
+    buffer[2] === 0xDF &&
+    buffer[3] === 0xA3
+  ) {
+    return { valid: true, mime: 'video/webm', type: 'video' };
+  }
+
+  return {
+    valid: false,
+    error: 'Файл не отправлен: неподдерживаемый или повреждённый формат файла (разрешены PNG, JPG, GIF, WebP, MP4, WebM)',
+  };
+}
+
+// Ephemeral Media Upload API (In-RAM only)
+app.post(
+  '/api/upload',
+  express.raw({
+    type: ['image/*', 'video/*'],
+    limit: '25mb',
+  }),
+  (req, res) => {
+    try {
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      if (!checkUploadRateLimit(clientIp)) {
+        return res.status(429).json({
+          error: 'Файл не отправлен: превышен лимит загрузок (не более 15 файлов в минуту). Попробуйте позже.',
+        });
+      }
+
+      const roomId = req.headers['x-room-id'];
+      if (!roomId || !rooms.has(roomId)) {
+        return res.status(400).json({ error: 'Файл не отправлен: активная комната не найдена или закрыта' });
+      }
+
+      const room = rooms.get(roomId);
+      const peerId = req.headers['x-peer-id'];
+      if (!peerId || !room.has(peerId)) {
+        return res.status(403).json({ error: 'Файл не отправлен: вы не являетесь участником этой комнаты' });
+      }
+
+      if (!req.body || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ error: 'Файл не отправлен: получен пустой файл' });
+      }
+
+      const rawFilename = req.headers['x-filename']
+        ? decodeURIComponent(String(req.headers['x-filename']))
+        : 'file';
+
+      const safeFilename = path.basename(rawFilename)
+        .replace(/[^a-zA-Z0-9_\-. \u0400-\u04FF]/g, '_')
+        .trim()
+        .slice(0, 100) || 'file';
+
+      // Disallow SVG by filename or MIME
+      const headerContentType = String(req.headers['content-type'] || '').toLowerCase();
+      if (
+        headerContentType.includes('svg') ||
+        safeFilename.toLowerCase().endsWith('.svg')
+      ) {
+        return res.status(400).json({
+          error: 'Файл не отправлен: загрузка SVG-файлов запрещена в целях безопасности',
+        });
+      }
+
+      // 4-12 bytes binary inspection (Magic Bytes)
+      const inspection = validateMediaBuffer(req.body);
+      if (!inspection.valid) {
+        return res.status(400).json({ error: inspection.error });
+      }
+
+      const isVideo = inspection.type === 'video';
+      const size = req.body.length;
+      const maxAllowed = isVideo ? 25 * 1024 * 1024 : 10 * 1024 * 1024;
+
+      if (size > maxAllowed) {
+        return res.status(413).json({
+          error: `Файл не отправлен: размер превышает лимит (${isVideo ? '25 МБ для видео' : '10 МБ для фото'})`,
+        });
+      }
+
+      if (totalUploadsBytes + size > MAX_TOTAL_RAM_UPLOADS) {
+        const sorted = Array.from(ephemeralUploads.entries()).sort((a, b) => a[1].createdAt - b[1].createdAt);
+        for (const [oldId, oldUpload] of sorted) {
+          totalUploadsBytes -= oldUpload.size;
+          ephemeralUploads.delete(oldId);
+          if (totalUploadsBytes + size <= MAX_TOTAL_RAM_UPLOADS) break;
+        }
+      }
+
+      const fileId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      ephemeralUploads.set(fileId, {
+        data: req.body,
+        contentType: inspection.mime,
+        filename: safeFilename,
+        roomId,
+        createdAt: Date.now(),
+        size,
+      });
+      totalUploadsBytes += size;
+
+      const mediaUrl = `/api/media/${fileId}/${encodeURIComponent(safeFilename)}`;
+      return res.json({
+        id: fileId,
+        url: mediaUrl,
+        name: safeFilename,
+        type: inspection.type,
+        size,
+      });
+    } catch (err) {
+      console.error('[Upload] Error processing file:', err);
+      return res.status(500).json({ error: 'Файл не отправлен: внутренняя ошибка сервера при обработке' });
+    }
+  }
+);
+
+app.get('/api/media/:fileId/:filename?', (req, res) => {
+  const { fileId } = req.params;
+  const upload = ephemeralUploads.get(fileId);
+  if (!upload) {
+    return res.status(404).send('Медиафайл не найден или срок его хранения истёк');
+  }
+
+  // Security headers: isolate media from origin script execution and block MIME confusion
+  res.setHeader('Content-Type', upload.contentType);
+  res.setHeader('Content-Length', upload.size);
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+
+  const encodedName = encodeURIComponent(upload.filename);
+  res.setHeader('Content-Disposition', `inline; filename="${encodedName}"; filename*=UTF-8''${encodedName}`);
+  res.send(upload.data);
 });
 
 // Tauri updater endpoint: serves latest.json manifest for desktop clients
@@ -500,7 +768,8 @@ function removeClientFromRoom(ws) {
 
     if (room.size === 0) {
       rooms.delete(roomId);
-      console.log(`[Room ${roomId}] Room closed (empty, all in-memory messages cleared)`);
+      clearRoomUploads(roomId);
+      console.log(`[Room ${roomId}] Room closed (empty, all in-memory messages and uploads cleared)`);
     }
   }
 }
@@ -789,7 +1058,8 @@ wss.on('connection', (ws) => {
         id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         peerId: meta.peerId,
         nickname: client.nickname || 'Аноним',
-        text: msg.text,
+        text: msg.text || '',
+        attachments: Array.isArray(msg.attachments) ? msg.attachments : undefined,
         timestamp: Date.now(),
       };
 

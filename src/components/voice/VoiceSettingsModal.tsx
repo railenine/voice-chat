@@ -15,6 +15,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Modal } from '../Modal';
+import { Button } from '../ui';
 import { Tooltip } from '../Tooltip';
 import { AudioDeviceSettings } from '../AudioDeviceSettings';
 import { useAudioDevices } from '../../hooks/useAudioDevices';
@@ -102,7 +103,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
       {hotkeyConflictNotice && (
         <div className="p-3 bg-blue-500/15 border border-blue-500/30 rounded-xl text-blue-200 text-xs flex items-start justify-between gap-2.5 animate-fadeIn">
           <div className="flex items-start gap-2">
-            <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+            <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
             <span className="leading-snug">{hotkeyConflictNotice}</span>
           </div>
           <Tooltip content="Закрыть" position="left">
@@ -127,7 +128,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
           </span>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-white/[0.04] border border-white/10 rounded-xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-white/4 border border-white/10 rounded-xl">
           <div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
               Текущая клавиша:
@@ -165,7 +166,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
               <button
                 type="button"
                 onClick={resetMuteHotkey}
-                className="px-2.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white rounded-lg text-xs transition-all cursor-pointer"
+                className="px-2.5 py-1.5 bg-white/6 hover:bg-white/12 text-gray-300 hover:text-white rounded-lg text-xs transition-all cursor-pointer"
               >
                 Сброс (Ё)
               </button>
@@ -185,7 +186,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
               className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all truncate text-center cursor-pointer ${
                 muteHotkey.type === 'mouse' && muteHotkey.code === opt.code
                   ? 'bg-blue-600/30 border-blue-500 text-blue-300 font-semibold shadow-sm'
-                  : 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] text-gray-300'
+                  : 'bg-white/4 border-white/10 hover:bg-white/8 text-gray-300'
               }`}
             >
               {opt.label}
@@ -212,7 +213,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
           Мгновенно заглушает ваш микрофон и весь входящий звук от участников в комнате.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-white/[0.04] border border-white/10 rounded-xl">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 p-3 bg-white/4 border border-white/10 rounded-xl">
           <div>
             <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
               Текущая клавиша:
@@ -250,7 +251,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
               <button
                 type="button"
                 onClick={resetDeafenHotkey}
-                className="px-2.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white rounded-lg text-xs transition-all cursor-pointer"
+                className="px-2.5 py-1.5 bg-white/6 hover:bg-white/12 text-gray-300 hover:text-white rounded-lg text-xs transition-all cursor-pointer"
               >
                 Сброс (\)
               </button>
@@ -270,7 +271,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
               className={`px-2 py-1 rounded-lg text-[11px] font-medium border transition-all truncate text-center cursor-pointer ${
                 deafenHotkey.type === 'mouse' && deafenHotkey.code === opt.code
                   ? 'bg-rose-600/30 border-rose-500 text-rose-300 font-semibold shadow-sm'
-                  : 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08] text-gray-300'
+                  : 'bg-white/4 border-white/10 hover:bg-white/8 text-gray-300'
               }`}
             >
               {opt.label}
@@ -289,7 +290,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
       {isDesktop ? (
         <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-200 text-xs space-y-1">
           <div className="flex items-center gap-2 font-semibold text-emerald-300 text-xs">
-            <Monitor className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <Monitor className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>Десктоп-режим активен (Tauri)</span>
           </div>
           <p className="text-gray-300 text-[11px] leading-relaxed">
@@ -297,9 +298,9 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
           </p>
         </div>
       ) : (
-        <div className="p-2.5 bg-white/[0.04] border border-white/10 rounded-xl text-gray-300 text-xs space-y-1">
+        <div className="p-2.5 bg-white/4 border border-white/10 rounded-xl text-gray-300 text-xs space-y-1">
           <p className="font-semibold text-white flex items-center gap-1.5 text-xs">
-            <Shield className="w-4 h-4 text-blue-400 flex-shrink-0" />
+            <Shield className="w-4 h-4 text-blue-400 shrink-0" />
             <span>Фоновый режим:</span>
           </p>
           <p className="text-gray-400 text-[11px] leading-relaxed">
@@ -313,7 +314,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
   const renderAboutContent = () => (
     <div key="about-tab" className="animate-tab-fade space-y-4">
       {/* 1. App Header & Version */}
-      <div className="p-4 bg-gradient-to-br from-blue-900/20 via-slate-900/40 to-indigo-900/10 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="p-4 bg-linear-to-br from-blue-900/20 via-slate-900/40 to-indigo-900/10 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <div className="w-11 h-11 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-inner shrink-0">
             <Radio className="w-6 h-6" />
@@ -342,17 +343,17 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
               }}
             />
           ) : onCheckUpdates ? (
-            <button
-              type="button"
+            <Button
+              variant="glass"
+              size="sm"
               onClick={() => {
                 onClose();
                 onCheckUpdates();
               }}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 hover:text-white transition-all flex items-center gap-1.5 cursor-pointer shadow-sm active:scale-95"
+              icon={<RefreshCw className="w-3.5 h-3.5 text-blue-400" />}
             >
-              <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
-              <span>Проверить обновления</span>
-            </button>
+              Проверить обновления
+            </Button>
           ) : (
             <div className="flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
               <CheckCircle2 className="w-3.5 h-3.5" />
@@ -365,7 +366,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
       {/* 2. Platform & Engine Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {/* Platform Card */}
-        <div className="p-3.5 bg-white/[0.03] border border-white/10 rounded-xl space-y-1.5">
+        <div className="p-3.5 bg-white/3 border border-white/10 rounded-xl space-y-1.5">
           <div className="flex items-center gap-2">
             {isDesktop ? (
               <div className="w-6 h-6 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -388,7 +389,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
         </div>
 
         {/* Audio Engine Card */}
-        <div className="p-3.5 bg-white/[0.03] border border-white/10 rounded-xl space-y-1.5">
+        <div className="p-3.5 bg-white/3 border border-white/10 rounded-xl space-y-1.5">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400">
               <Headphones className="w-3.5 h-3.5" />
@@ -402,7 +403,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
       </div>
 
       {/* 3. Security & Privacy Card */}
-      <div className="p-3.5 bg-white/[0.03] border border-white/10 rounded-xl space-y-1.5">
+      <div className="p-3.5 bg-white/3 border border-white/10 rounded-xl space-y-1.5">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
             <Shield className="w-3.5 h-3.5" />
@@ -420,7 +421,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
   if (isSmartphone) {
     return (
       <Modal isOpen={isOpen} onClose={handleClose} className="max-w-lg">
-        <div className="border-b border-white/10 p-4 sm:p-5 flex-shrink-0 bg-white/[0.02]">
+        <div className="border-b border-white/10 p-4 sm:p-5 shrink-0 bg-white/2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
@@ -452,15 +453,11 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
           {renderAudioContent()}
         </div>
 
-        <div className="flex items-center justify-between p-3 sm:p-4 border-t border-white/10 flex-shrink-0 bg-slate-950/50 rounded-b-2xl">
+        <div className="flex items-center justify-between p-3 sm:p-4 border-t border-white/10 shrink-0 bg-slate-950/50 rounded-b-2xl">
           <span className="text-[11px] text-gray-500 font-mono">v{APP_VERSION}</span>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs sm:text-sm font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95 cursor-pointer"
-          >
+          <Button variant="primary" size="md" onClick={handleClose}>
             Готово
-          </button>
+          </Button>
         </div>
       </Modal>
     );
@@ -474,7 +471,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
       className="max-w-3xl w-full h-[min(560px,calc(100vh-2.5rem))] p-0 overflow-hidden flex flex-col"
     >
       {/* Mobile / Narrow Desktop Header (<sm only): Title + Close + Top Tabs */}
-      <div className="sm:hidden border-b border-white/10 p-3.5 bg-white/[0.02] shrink-0">
+      <div className="sm:hidden border-b border-white/10 p-3.5 bg-white/2 shrink-0">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
@@ -504,7 +501,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
         </div>
 
         {/* Top Segmented Tab Switcher for <sm */}
-        <div className="flex items-center p-1 bg-white/[0.04] border border-white/10 rounded-xl gap-1">
+        <div className="flex items-center p-1 bg-white/4 border border-white/10 rounded-xl gap-1">
           <button
             type="button"
             onClick={() => {
@@ -515,7 +512,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
             className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               settingsTab === 'audio'
                 ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-600/30'
-                : 'text-gray-400 hover:text-white hover:bg-white/[0.06]'
+                : 'text-gray-400 hover:text-white hover:bg-white/6'
             }`}
           >
             <Headphones className="w-3.5 h-3.5" />
@@ -531,7 +528,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
             className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               settingsTab === 'hotkeys'
                 ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-600/30'
-                : 'text-gray-400 hover:text-white hover:bg-white/[0.06]'
+                : 'text-gray-400 hover:text-white hover:bg-white/6'
             }`}
           >
             <Keyboard className="w-3.5 h-3.5" />
@@ -547,7 +544,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
             className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all cursor-pointer relative ${
               settingsTab === 'about'
                 ? 'bg-blue-600 text-white font-semibold shadow-md shadow-blue-600/30'
-                : 'text-gray-400 hover:text-white hover:bg-white/[0.06]'
+                : 'text-gray-400 hover:text-white hover:bg-white/6'
             }`}
           >
             <Info className="w-3.5 h-3.5" />
@@ -675,13 +672,9 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
 
           {/* Footer of Content Area */}
           <div className="flex items-center justify-end px-4 sm:px-6 py-3 border-t border-white/10 shrink-0 bg-slate-950/40">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold transition-all shadow-lg shadow-blue-600/30 active:scale-95 cursor-pointer"
-            >
+            <Button variant="primary" size="md" onClick={handleClose}>
               Готово
-            </button>
+            </Button>
           </div>
         </div>
       </div>

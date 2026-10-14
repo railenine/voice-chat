@@ -30,16 +30,16 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
   return (
     <header
       style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
-      className="lg:hidden px-3.5 pb-2.5 pt-2 border-b border-white/10 backdrop-blur-xl bg-slate-950/60 flex items-center justify-between gap-2.5 flex-shrink-0 z-20"
+      className="lg:hidden px-3.5 pb-2.5 pt-2 border-b border-white/10 backdrop-blur-xl bg-slate-950/60 flex items-center justify-between gap-2.5 shrink-0 z-20"
     >
       {/* Left: Branding & Room Info */}
       <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white shadow-md flex-shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-linear-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white shadow-md shrink-0">
           <Volume2 className="w-4 h-4" />
         </div>
 
-        <div className="min-w-0 flex items-center gap-2 flex-shrink-0">
-          <span className="text-sm font-bold text-white tracking-tight flex-shrink-0">RVxis</span>
+        <div className="min-w-0 flex items-center gap-2 shrink-0">
+          <span className="text-sm font-bold text-white tracking-tight shrink-0">RVxis</span>
           <Tooltip
             content={copied ? 'Скопировано!' : 'Скопировать ссылку'}
             description="Скопировать ссылку на комнату в буфер"
@@ -48,25 +48,25 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
             <button
               type="button"
               onClick={copyRoomId}
-              className="text-xs text-gray-400 hover:text-blue-300 font-mono transition-colors flex items-center gap-1.5 flex-shrink-0 cursor-pointer py-1 px-1.5 rounded-lg hover:bg-white/5 active:scale-95"
+              className="text-xs text-gray-400 hover:text-blue-300 font-mono transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer py-1 px-1.5 rounded-lg hover:bg-white/5 active:scale-95"
             >
               <span className="font-semibold">#{roomId}</span>
               {copied ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0 animate-scale-up" />
+                <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-scale-up" />
               ) : (
-                <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white flex-shrink-0 transition-colors" />
+                <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white shrink-0 transition-colors" />
               )}
             </button>
           </Tooltip>
 
           {typeof participantCount === 'number' && (
             <span
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full flex-shrink-0 transition-colors ${
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full shrink-0 transition-colors ${
                 participantCount >= maxParticipants
                   ? 'bg-rose-500/20 border border-rose-500/40 text-rose-300 font-semibold'
                   : participantCount >= 8
                   ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
-                  : 'bg-white/[0.06] border border-white/10 text-gray-400'
+                  : 'bg-white/6 border border-white/10 text-gray-400'
               }`}
               title={
                 participantCount >= maxParticipants
@@ -83,7 +83,7 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
       </div>
 
       {/* Right: Quick Actions */}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+      <div className="flex items-center gap-1.5 shrink-0">
         <Tooltip
           content={isSmartphone ? 'Настройки звука' : 'Настройки'}
           description={isSmartphone ? 'Выбор микрофона и динамиков' : 'Звук, микрофон и горячие клавиши'}
@@ -92,7 +92,7 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
           <button
             type="button"
             onClick={onOpenSettings}
-            className="p-2 text-gray-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 rounded-xl border border-white/10 text-xs transition-all flex items-center justify-center cursor-pointer"
+            className="p-2 text-gray-300 hover:text-white bg-white/6 hover:bg-white/12 active:scale-95 rounded-xl border border-white/10 text-xs transition-all flex items-center justify-center cursor-pointer"
           >
             <Settings className="w-4 h-4" />
           </button>
@@ -104,7 +104,7 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
             className={`p-2 active:scale-95 rounded-xl border text-xs transition-all flex items-center justify-center cursor-pointer ${
               showShare
                 ? 'bg-blue-600/30 border-blue-500 text-blue-300'
-                : 'text-gray-300 hover:text-white bg-white/[0.06] hover:bg-white/[0.12] border-white/10'
+                : 'text-gray-300 hover:text-white bg-white/6 hover:bg-white/12 border-white/10'
             }`}
           >
             <Share2 className="w-4 h-4" />

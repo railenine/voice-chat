@@ -2,14 +2,6 @@ import React, { memo, useCallback, type MutableRefObject } from 'react';
 import {
   Settings,
   Share2,
-  Mic,
-  MicOff,
-  Headphones,
-  VolumeX,
-  Sparkles,
-  ScreenShare,
-  ScreenShareOff,
-  PhoneOff,
   RefreshCw,
 } from 'lucide-react';
 import type { PeerInfo } from '../../types/protocol';
@@ -19,6 +11,7 @@ import { VoiceCapacityBadge } from './VoiceCapacityBadge';
 import { VoiceSelfCard } from './VoiceSelfCard';
 import { VoicePeerCard } from './VoicePeerCard';
 import { VoiceEmptySlot } from './VoiceEmptySlot';
+import { VoiceControlBar } from './VoiceControlBar';
 
 export interface VoiceSidebarProps {
   roomId: string;
@@ -117,11 +110,11 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(({
   }, [peerVolumes, prevVolumesRef, setPeerVolume]);
 
   return (
-    <aside className="hidden lg:flex flex-col w-80 xl:w-84 2xl:w-96 border-r border-white/10 bg-slate-950/45 backdrop-blur-xl flex-shrink-0 select-none">
+    <aside className="hidden lg:flex flex-col w-80 xl:w-84 2xl:w-96 border-r border-white/10 bg-slate-950/45 backdrop-blur-xl shrink-0 select-none">
       {/* Sidebar Top: Logo & Room info */}
       <div className="p-3.5 px-4 border-b border-white/10 flex items-center justify-between bg-slate-950/60 backdrop-blur-xl">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-700 to-blue-900 flex items-center justify-center shadow-md flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-linear-to-r from-blue-700 to-blue-900 flex items-center justify-center shadow-md shrink-0">
             <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             </svg>
@@ -132,7 +125,7 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <Tooltip content="Настройки" description="Звук, микрофон и горячие клавиши" position="bottom">
             <button
               type="button"
@@ -200,118 +193,30 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(({
       </div>
 
       {/* Desktop Sidebar Bottom Dock: Mic, Deafen, Noise Suppression, Status */}
-      <div className="p-3 border-t border-white/10 bg-slate-950/60 backdrop-blur-xl space-y-2.5 flex-shrink-0">
-        <div className="flex items-center justify-start gap-2">
-          {/* Mute toggle button */}
-          <Tooltip
-            content={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
-            description={isMuted ? 'Включить передачу вашего голоса' : 'Отключить передачу звука'}
-            hotkey={muteHotkeyLabel}
-            position="top"
-          >
-            <button
-              onClick={toggleMute}
-              className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
-                isMuted
-                  ? 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 shadow-sm shadow-red-950/40'
-                  : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
-              }`}
-            >
-              {isMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5 text-white" />}
-            </button>
-          </Tooltip>
-
-          {/* Deafen toggle button */}
-          <Tooltip
-            content={isDeafened ? 'Включить звук (Deafen)' : 'Заглушить всё (Deafen)'}
-            description={
-              isDeafened
-                ? 'Вернуть звук собеседников и включить микрофон'
-                : 'Полностью отключить весь входящий звук и микрофон'
-            }
-            hotkey={deafenHotkeyLabel}
-            position="top"
-          >
-            <button
-              onClick={toggleDeafen}
-              className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
-                isDeafened
-                  ? 'bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-300 shadow-sm shadow-red-950/40'
-                  : 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
-              }`}
-            >
-              {isDeafened ? <VolumeX className="w-5 h-5 text-red-400" /> : <Headphones className="w-5 h-5 text-white" />}
-            </button>
-          </Tooltip>
-
-          {/* RNNoise Toggle */}
-          <Tooltip
-            content="Шумоподавление"
-            description={
-              isNoiseSuppression
-                ? 'AI-фильтрация шумов активна (RNNoise)'
-                : 'Включить нейросетевую очистку шума'
-            }
-            position="top"
-          >
-            <button
-              onClick={toggleNoiseSuppression}
-              className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
-                isNoiseSuppression
-                  ? 'bg-white/[0.08] hover:bg-white/[0.14] border border-white/15 text-white'
-                  : 'bg-white/[0.04] border border-white/10 text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              <Sparkles className="w-5 h-5" />
-            </button>
-          </Tooltip>
-
-          {/* Screen Share Toggle */}
-          {canShareScreen && (
-            <Tooltip
-              content={isSharingScreen ? 'Остановить показ экрана' : 'Поделиться экраном'}
-              description={
-                isSharingScreen
-                  ? 'Прекратить демонстрацию экрана'
-                  : 'Трансляция экрана и звука системы через LiveKit'
-              }
-              position="top"
-            >
-              <button
-                onClick={onScreenShareClick}
-                disabled={isConnectingScreen}
-                className={`w-11 h-11 rounded-xl border transition-all duration-200 active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md ${
-                  isSharingScreen
-                    ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/40'
-                    : 'bg-white/[0.08] hover:bg-white/[0.14] hover:border-white/25 hover:shadow-lg hover:shadow-blue-500/10 border-white/15 text-white'
-                }`}
-              >
-                {isSharingScreen ? (
-                  <ScreenShareOff className="w-5 h-5 text-emerald-400" />
-                ) : (
-                  <ScreenShare className="w-5 h-5 transition-transform duration-200 hover:scale-110" />
-                )}
-              </button>
-            </Tooltip>
-          )}
-
-          {/* Leave Button */}
-          <Tooltip content="Выйти из комнаты" description="Отключиться и вернуться на главный экран" position="top">
-            <button
-              onClick={handleLeave}
-              className="w-11 h-11 rounded-xl bg-red-500/10 hover:bg-red-600/30 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 transition-all active:scale-95 flex items-center justify-center flex-shrink-0 shadow-md"
-            >
-              <PhoneOff className="w-5 h-5 text-red-400" />
-            </button>
-          </Tooltip>
-        </div>
+      <div className="p-3 border-t border-white/10 bg-slate-950/60 backdrop-blur-xl space-y-2.5 shrink-0">
+        <VoiceControlBar
+          isMuted={isMuted}
+          isDeafened={isDeafened}
+          isNoiseSuppression={isNoiseSuppression}
+          canShareScreen={canShareScreen}
+          isSharingScreen={isSharingScreen}
+          isConnectingScreen={isConnectingScreen}
+          muteHotkeyLabel={muteHotkeyLabel}
+          deafenHotkeyLabel={deafenHotkeyLabel}
+          toggleMute={toggleMute}
+          toggleDeafen={toggleDeafen}
+          toggleNoiseSuppression={toggleNoiseSuppression}
+          onScreenShareClick={onScreenShareClick}
+          handleLeave={handleLeave}
+          className="flex items-center justify-start gap-2"
+        />
 
         {/* Status Wave & Connection Status (Desktop) */}
-        <div className="flex items-center justify-between text-[11px] text-gray-400 px-0.5 min-h-[22px]">
+        <div className="flex items-center justify-between text-[11px] text-gray-400 px-0.5 min-h-5.5">
           {error ? (
             <div className="flex items-center justify-between w-full min-w-0 gap-1.5 animate-fade-in">
               <div className="flex items-center gap-1.5 min-w-0 text-rose-400">
-                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse flex-shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
                 <span className="truncate font-medium" title={error}>
                   {error}
                 </span>
@@ -320,7 +225,7 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(({
                 type="button"
                 onClick={handleRetry}
                 disabled={isRetrying}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[10px] font-medium transition-all cursor-pointer flex-shrink-0 active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 text-[10px] font-medium transition-all cursor-pointer shrink-0 active:scale-95 disabled:opacity-50"
               >
                 <RefreshCw className={`w-2.5 h-2.5 ${isRetrying ? 'animate-spin' : ''}`} />
                 <span>{isRetrying ? '...' : 'Повторить'}</span>
@@ -329,24 +234,24 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(({
           ) : !isConnected ? (
             <div className="flex items-center justify-between w-full min-w-0 gap-1.5 text-yellow-300 animate-fade-in">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse flex-shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse shrink-0" />
                 <span className="truncate font-medium">{connectionStatus}</span>
               </div>
               {reconnectAttempts > 0 && (
-                <span className="text-[10px] text-yellow-400/80 font-mono flex-shrink-0 px-1.5 py-0.2 rounded bg-yellow-500/10 border border-yellow-500/20">
+                <span className="text-[10px] text-yellow-400/80 font-mono shrink-0 px-1.5 py-0.2 rounded bg-yellow-500/10 border border-yellow-500/20">
                   попытка {reconnectAttempts}
                 </span>
               )}
             </div>
           ) : showConnectedToast && !isSpeaking ? (
             <div className="flex items-center gap-1.5 text-emerald-400 animate-fade-in min-w-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
               <span className="font-medium text-emerald-300">Подключено ✓</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 min-w-0">
               {!isMuted && isConnected && (
-                <div className="flex items-center gap-0.5 h-3 flex-shrink-0">
+                <div className="flex items-center gap-0.5 h-3 shrink-0">
                   {[...Array(4)].map((_, i) => (
                     <div
                       key={i}

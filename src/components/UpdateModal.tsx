@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, memo } from 'react';
 import { isTauri } from '../config';
 import { UpdateInfo, UpdateStatus } from '../utils/updaterTypes';
+import { Modal } from './Modal';
 import { UpdateModalHeader } from './updater/UpdateModalHeader';
 import { UpdateModalBody } from './updater/UpdateModalBody';
 import { UpdateModalFooter } from './updater/UpdateModalFooter';
@@ -34,28 +35,18 @@ export const UpdateModal: React.FC<UpdateModalProps> = memo(({
   onInstall,
   onCheckAgain,
 }) => {
-  const [isRendered, setIsRendered] = useState(isOpen);
-  const [isClosing, setIsClosing] = useState(false);
   const [renderedStatus, setRenderedStatus] = useState<UpdateStatus>(status);
   const [fadeState, setFadeState] = useState<'visible' | 'fading-out' | 'fading-in'>('visible');
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
 
+  // Sync renderedStatus on open
   useEffect(() => {
     if (isOpen) {
-      setIsRendered(true);
-      setIsClosing(false);
       setRenderedStatus(status);
       setFadeState('visible');
-    } else if (isRendered) {
-      setIsClosing(true);
-      const timer = setTimeout(() => {
-        setIsRendered(false);
-        setIsClosing(false);
-      }, 180);
-      return () => clearTimeout(timer);
     }
-  }, [isOpen, isRendered]);
+  }, [isOpen]);
 
   // Smooth cross-fade when status changes while modal is open
   useEffect(() => {
@@ -88,68 +79,61 @@ export const UpdateModal: React.FC<UpdateModalProps> = memo(({
     });
     ro.observe(contentRef.current);
     return () => ro.disconnect();
-  }, [renderedStatus, isRendered]);
-
-  if (!isRendered) return null;
+  }, [renderedStatus, isOpen]);
 
   const isDesktop = isTauri();
   const isLockedProgress = renderedStatus === 'downloading' || renderedStatus === 'installing';
 
   return (
-    <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md ${
-        isClosing ? 'animate-backdrop-out pointer-events-none' : 'animate-backdrop-in'
-      }`}
-      onClick={isLockedProgress ? undefined : onClose}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      closeOnOverlayClick={!isLockedProgress}
+      closeOnEsc={!isLockedProgress}
+      className="max-w-md w-full p-5 sm:p-6 select-none"
     >
+      <UpdateModalHeader
+        status={renderedStatus}
+        fadeState={fadeState}
+        updateInfo={updateInfo}
+        isDesktop={isDesktop}
+        isPortable={isPortable}
+        onClose={onClose}
+      />
+
+      {/* Dynamic Content Body with Smooth Height Transition */}
       <div
-        className={`bg-slate-950/90 backdrop-blur-2xl border border-white/15 rounded-2xl max-w-md w-full shadow-2xl shadow-black/80 p-5 sm:p-6 text-white select-none modal-wrapper ${
-          isClosing ? 'animate-modal-out' : 'animate-modal-in'
-        }`}
-        onClick={(e) => e.stopPropagation()}
+        className="overflow-hidden transition-[height] duration-300 ease-out mb-5"
+        style={{ height: contentHeight !== undefined ? `${contentHeight}px` : 'auto' }}
       >
-        <UpdateModalHeader
+        <UpdateModalBody
+          ref={contentRef}
           status={renderedStatus}
           fadeState={fadeState}
           updateInfo={updateInfo}
+          downloadProgress={downloadProgress}
+          downloadedBytes={downloadedBytes}
+          totalBytes={totalBytes}
+          error={error}
           isDesktop={isDesktop}
           isPortable={isPortable}
-          onClose={onClose}
-        />
-
-        {/* Dynamic Content Body with Smooth Height Transition */}
-        <div
-          className="overflow-hidden transition-[height] duration-300 ease-out mb-5"
-          style={{ height: contentHeight !== undefined ? `${contentHeight}px` : 'auto' }}
-        >
-          <UpdateModalBody
-            ref={contentRef}
-            status={renderedStatus}
-            fadeState={fadeState}
-            updateInfo={updateInfo}
-            downloadProgress={downloadProgress}
-            downloadedBytes={downloadedBytes}
-            totalBytes={totalBytes}
-            error={error}
-            isDesktop={isDesktop}
-            isPortable={isPortable}
-            isInRoom={isInRoom}
-          />
-        </div>
-
-        <UpdateModalFooter
-          status={renderedStatus}
-          fadeState={fadeState}
-          isDesktop={isDesktop}
-          isPortable={isPortable}
-          onClose={onClose}
-          onInstall={onInstall}
-          onCheckAgain={onCheckAgain}
+          isInRoom={isInRoom}
         />
       </div>
-    </div>
+
+      <UpdateModalFooter
+        status={renderedStatus}
+        fadeState={fadeState}
+        isDesktop={isDesktop}
+        isPortable={isPortable}
+        onClose={onClose}
+        onInstall={onInstall}
+        onCheckAgain={onCheckAgain}
+      />
+    </Modal>
   );
 });
 
 UpdateModal.displayName = 'UpdateModal';
 export default UpdateModal;
+

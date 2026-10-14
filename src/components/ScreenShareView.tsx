@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { RemoteScreenShare } from '../hooks/useScreenShare';
 import { normalizeSinkId } from '../utils/device';
+import { Button } from './ui';
 
 interface ScreenShareViewProps {
   activeStreams: RemoteScreenShare[];
@@ -323,39 +324,43 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
             )}
 
             {isLocalFocused ? (
-              <button
-                type="button"
+              <Button
+                variant="danger"
+                size="sm"
                 onClick={onStopSharing}
-                className="btn-compact min-w-0! min-h-0! h-8 px-2.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-500/40 text-rose-300 hover:text-rose-200 text-xs font-medium transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-sm shrink-0 cursor-pointer"
+                icon={<ScreenShareOff className="w-3.5 h-3.5 shrink-0" />}
+                className="h-8 px-2.5 text-xs rounded-lg shadow-sm shrink-0"
                 title="Остановить показ экрана"
               >
-                <ScreenShareOff className="w-3.5 h-3.5 shrink-0" />
                 <span className="hidden sm:inline">Остановить показ</span>
-              </button>
+              </Button>
             ) : (
-              <button
-                type="button"
+              <Button
+                variant="glass"
+                size="sm"
                 onClick={onCloseView}
-                className="btn-compact min-w-0! min-h-0! h-8 px-2 sm:px-2.5 rounded-lg bg-white/10 hover:bg-rose-500/20 border border-white/15 hover:border-rose-500/40 text-gray-300 hover:text-rose-200 text-xs font-medium transition-all flex items-center justify-center gap-1.5 active:scale-95 shadow-sm shrink-0 cursor-pointer"
+                icon={<X className="w-3.5 h-3.5 shrink-0" />}
+                className="h-8 px-2 sm:px-2.5 text-xs rounded-lg shadow-sm shrink-0"
                 title="Закрыть окно просмотра"
               >
-                <X className="w-3.5 h-3.5 shrink-0" />
                 <span className="hidden sm:inline">Закрыть просмотр</span>
-              </button>
+              </Button>
             )}
 
-            <button
-              type="button"
+            <Button
+              variant="glass"
+              size="sm"
               onClick={toggleFullscreen}
-              className="btn-compact min-w-0! min-h-0! w-8 h-8 rounded-lg bg-black/60 hover:bg-black/80 border border-white/15 hover:border-white/30 text-white transition-all active:scale-95 shadow-sm flex items-center justify-center shrink-0 cursor-pointer"
+              icon={
+                isFullscreen ? (
+                  <Minimize2 className="w-4 h-4 shrink-0 block" />
+                ) : (
+                  <Maximize2 className="w-4 h-4 shrink-0 block" />
+                )
+              }
+              className="w-8 h-8 px-0 rounded-lg shadow-sm shrink-0"
               title={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}
-            >
-              {isFullscreen ? (
-                <Minimize2 className="w-4 h-4 shrink-0 block" />
-              ) : (
-                <Maximize2 className="w-4 h-4 shrink-0 block" />
-              )}
-            </button>
+            />
           </div>
         </div>
       </div>

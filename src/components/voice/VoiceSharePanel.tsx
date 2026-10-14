@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Share2, Check, Copy, X } from 'lucide-react';
 import { Tooltip } from '../Tooltip';
+import { Button } from '../ui';
 
 export interface VoiceSharePanelProps {
   showShare: boolean;
@@ -21,7 +22,7 @@ export const VoiceSharePanel: React.FC<VoiceSharePanelProps> = memo(({
 }) => {
   return (
     <div
-      className={`grid-accordion flex-shrink-0 z-30 ${
+      className={`grid-accordion shrink-0 z-30 ${
         showShare ? 'grid-accordion-expanded' : 'grid-accordion-collapsed'
       }`}
     >
@@ -33,8 +34,8 @@ export const VoiceSharePanel: React.FC<VoiceSharePanelProps> = memo(({
         >
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-2 sm:gap-3">
             {/* Desktop Left Info: Share icon & title (hidden on < 640px) */}
-            <div className="hidden sm:flex items-center gap-2.5 min-w-0 flex-shrink-0">
-              <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-sm flex-shrink-0">
+            <div className="hidden sm:flex items-center gap-2.5 min-w-0 shrink-0">
+              <div className="w-8 h-8 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-sm shrink-0">
                 <Share2 className="w-4 h-4" />
               </div>
               <div className="flex flex-col min-w-0">
@@ -46,7 +47,7 @@ export const VoiceSharePanel: React.FC<VoiceSharePanelProps> = memo(({
             {/* Unified Link & Action Row: single streamlined row on mobile and desktop */}
             <div className="flex-1 min-w-0 flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
               {/* On mobile: compact share icon */}
-              <div className="sm:hidden w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
+              <div className="sm:hidden w-7 h-7 rounded-lg bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
                 <Share2 className="w-3.5 h-3.5" />
               </div>
 
@@ -66,29 +67,28 @@ export const VoiceSharePanel: React.FC<VoiceSharePanelProps> = memo(({
 
               {/* Copy Button */}
               <Tooltip content={copied ? 'Скопировано!' : 'Скопировать ссылку'} description="Скопировать ссылку в буфер обмена" position="bottom">
-                <button
-                  type="button"
+                <Button
+                  variant={copied ? 'emerald' : 'primary'}
+                  size="sm"
                   onClick={copyRoomId}
-                  className={`px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl font-medium transition-all text-xs flex items-center justify-center gap-1.5 flex-shrink-0 shadow-sm active:scale-95 whitespace-nowrap cursor-pointer ${
-                    copied
-                      ? 'bg-emerald-600 text-white shadow-emerald-600/30'
-                      : 'bg-gradient-to-r from-blue-700 to-blue-900 hover:from-blue-600 hover:to-blue-800 text-white shadow-blue-900/40'
-                  }`}
+                  icon={
+                    copied ? (
+                      <Check className="w-3.5 h-3.5 shrink-0 text-white animate-scale-up" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5 shrink-0 text-white" />
+                    )
+                  }
+                  className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs rounded-xl shrink-0 whitespace-nowrap"
                 >
-                  {copied ? (
-                    <Check className="w-3.5 h-3.5 flex-shrink-0 text-white animate-scale-up" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5 flex-shrink-0 text-white" />
-                  )}
                   <span className="share-btn-text">{copied ? 'Скопировано!' : 'Копировать'}</span>
-                </button>
+                </Button>
               </Tooltip>
 
               {/* Single Close Button */}
               <Tooltip content="Закрыть" description="Скрыть панель ссылки" position="bottom">
                 <button
                   onClick={closeShare}
-                  className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center flex-shrink-0 cursor-pointer"
+                  className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center shrink-0 cursor-pointer"
                   aria-label="Закрыть"
                 >
                   <X className="w-4 h-4" />
@@ -98,10 +98,10 @@ export const VoiceSharePanel: React.FC<VoiceSharePanelProps> = memo(({
           </div>
 
           {/* 10-second animated progress line */}
-          <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/5 overflow-hidden">
+          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white/5 overflow-hidden">
             <div
               key={shareKey}
-              className={`h-full bg-gradient-to-r from-blue-500 via-indigo-500 to-sky-400 ${
+              className={`h-full bg-linear-to-r from-blue-500 via-indigo-500 to-sky-400 ${
                 showShare ? 'animate-countdown-10s' : 'opacity-0'
               }`}
             />

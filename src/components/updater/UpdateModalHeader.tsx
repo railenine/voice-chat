@@ -24,21 +24,21 @@ export const UpdateModalHeader: React.FC<UpdateModalHeaderProps> = memo(({
   const getIconContainerStyle = () => {
     switch (status) {
       case 'checking':
-        return 'bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-blue-500/30';
+        return 'bg-linear-to-tr from-blue-600 to-indigo-600 shadow-blue-500/30';
       case 'up-to-date':
-        return 'bg-gradient-to-tr from-emerald-600 to-teal-600 shadow-emerald-500/30';
+        return 'bg-linear-to-tr from-emerald-600 to-teal-600 shadow-emerald-500/30';
       case 'error':
-        return 'bg-gradient-to-tr from-amber-600 to-rose-600 shadow-rose-500/30';
+        return 'bg-linear-to-tr from-amber-600 to-rose-600 shadow-rose-500/30';
       case 'offline':
-        return 'bg-gradient-to-tr from-slate-600 to-zinc-600 shadow-slate-500/30';
+        return 'bg-linear-to-tr from-slate-600 to-zinc-600 shadow-slate-500/30';
       case 'downloading':
       case 'installing':
-        return 'bg-gradient-to-tr from-cyan-600 to-blue-600 shadow-cyan-500/30';
+        return 'bg-linear-to-tr from-cyan-600 to-blue-600 shadow-cyan-500/30';
       case 'downloaded':
       case 'restart-required':
-        return 'bg-gradient-to-tr from-emerald-600 to-cyan-600 shadow-emerald-500/30';
+        return 'bg-linear-to-tr from-emerald-600 to-cyan-600 shadow-emerald-500/30';
       default:
-        return 'bg-gradient-to-tr from-indigo-600 to-purple-600 shadow-purple-500/30';
+        return 'bg-linear-to-tr from-indigo-600 to-purple-600 shadow-purple-500/30';
     }
   };
 
@@ -74,7 +74,7 @@ export const UpdateModalHeader: React.FC<UpdateModalHeaderProps> = memo(({
       <div className="flex items-center gap-3">
         {/* Status Icon with Glowing Gradient */}
         <div
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ring-1 ring-white/20 flex-shrink-0 transition-all duration-500 ease-out ${getIconContainerStyle()}`}
+          className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg ring-1 ring-white/20 shrink-0 transition-all duration-500 ease-out ${getIconContainerStyle()}`}
         >
           <div
             className={`transition-all duration-200 ease-out flex items-center justify-center ${

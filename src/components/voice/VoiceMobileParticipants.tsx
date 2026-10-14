@@ -38,7 +38,7 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
   onToggleWatchPeer,
 }) => {
   return (
-    <div className="lg:hidden px-2 pt-2 sm:px-4 sm:pt-4 flex-shrink-0 z-10">
+    <div className="lg:hidden px-2 pt-2 sm:px-4 sm:pt-4 shrink-0 z-10">
       <div className="bg-slate-950/45 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl shadow-black/40 px-3 py-2 sm:px-4 sm:py-2.5 overflow-hidden">
         <div className="flex items-center gap-3 sm:gap-4 overflow-x-auto no-scrollbar py-2.5 px-1">
           {/* 1. Self Participant Circle */}
@@ -49,18 +49,18 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
           >
             <div
               onClick={onOpenMobileNickEdit}
-              className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform"
+              className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group active:scale-95 transition-transform"
             >
               <div className="relative">
                 <div
                   className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-md transition-all ${
                     isSpeaking && !isMuted
-                      ? 'bg-gradient-to-br from-emerald-600 to-teal-800 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 shadow-emerald-500/40 animate-pulse scale-105 text-white'
+                      ? 'bg-linear-to-br from-emerald-600 to-teal-800 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 shadow-emerald-500/40 animate-pulse scale-105 text-white'
                       : isDeafened
                       ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
                       : isMuted
                       ? 'bg-white/10 border border-white/15 text-gray-400'
-                      : 'bg-gradient-to-br from-blue-600 to-indigo-800 border border-blue-400/30 text-white'
+                      : 'bg-linear-to-br from-blue-600 to-indigo-800 border border-blue-400/30 text-white'
                   }`}
                 >
                   {getInitials(myNickname)}
@@ -92,7 +92,7 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
 
               <div className="flex flex-col items-center gap-0.5 mt-0.5">
                 <span
-                  className={`text-[11px] font-semibold truncate max-w-[68px] text-center ${
+                  className={`text-[11px] font-semibold truncate max-w-17 text-center ${
                     isSpeaking && !isMuted ? 'text-emerald-400' : 'text-blue-300'
                   }`}
                 >
@@ -131,18 +131,18 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
               >
                 <div
                   onClick={() => onSelectPeer(peer)}
-                  className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform animate-fade-in"
+                  className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group active:scale-95 transition-transform animate-fade-in"
                 >
                   <div className="relative">
                     <div
                       className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-sm shadow-md transition-all ${
                         isPeerSpeaking
-                          ? 'bg-gradient-to-br from-emerald-600 to-teal-800 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 shadow-emerald-500/40 animate-pulse scale-105 text-white'
+                          ? 'bg-linear-to-br from-emerald-600 to-teal-800 ring-2 ring-emerald-400 ring-offset-2 ring-offset-slate-950 shadow-emerald-500/40 animate-pulse scale-105 text-white'
                           : peer.isDeafened
                           ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
                           : peer.isMuted
                           ? 'bg-white/10 border border-white/15 text-gray-400'
-                          : `bg-gradient-to-br ${gradient} border border-white/20 text-white`
+                          : `bg-linear-to-br ${gradient} border border-white/20 text-white`
                       }`}
                     >
                       {getInitials(peer.nickname)}
@@ -174,7 +174,7 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
 
                   <div className="flex flex-col items-center gap-0.5 mt-0.5">
                     <span
-                      className={`text-[11px] font-medium truncate max-w-[68px] text-center ${
+                      className={`text-[11px] font-medium truncate max-w-17 text-center ${
                         isPeerSpeaking ? 'text-emerald-400 font-semibold' : 'text-gray-200'
                       }`}
                     >
@@ -199,7 +199,7 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
                             e.stopPropagation();
                             onToggleWatchPeer(peer.peerId);
                           }}
-                          className={`btn-compact !min-w-0 !min-h-0 h-[18px] px-1.5 py-0 rounded-full text-[9px] font-semibold inline-flex items-center gap-1 border transition-all cursor-pointer select-none shrink-0 ${
+                          className={`btn-compact min-w-0! min-h-0! h-4.5 px-1.5 py-0 rounded-full text-[9px] font-semibold inline-flex items-center gap-1 border transition-all cursor-pointer select-none shrink-0 ${
                             watchedPeerId === peer.peerId
                               ? 'bg-blue-500/30 border-blue-400 text-blue-200'
                               : 'bg-emerald-500/25 border-emerald-400/50 text-emerald-300 active:scale-95'
@@ -226,7 +226,7 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
           >
             <div
               onClick={copyRoomId}
-              className="flex flex-col items-center gap-1 flex-shrink-0 cursor-pointer group active:scale-95 transition-transform"
+              className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group active:scale-95 transition-transform"
             >
               <div
                 className={`w-12 h-12 rounded-full border transition-all duration-300 ease-out flex items-center justify-center shadow-md ${
@@ -238,7 +238,7 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
                 <div className="relative w-5 h-5 flex items-center justify-center">
                   <Check
                     className={`w-5 h-5 text-emerald-400 absolute transition-all duration-300 ease-out ${
-                      copied ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 rotate-[-45deg] pointer-events-none'
+                      copied ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 -rotate-45 pointer-events-none'
                     }`}
                   />
                   <UserPlus

@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import {
   Monitor,
   Info,
-  X,
   Check,
   Sparkles,
-  Loader2,
 } from 'lucide-react';
 import {
   ScreenShareQualityPreset,
@@ -13,6 +11,7 @@ import {
   SCREEN_SHARE_PRESETS,
 } from '../hooks/useScreenShare';
 import { Modal } from './Modal';
+import { Button } from './ui';
 
 interface ScreenShareModalProps {
   isOpen: boolean;
@@ -30,7 +29,7 @@ const PRESET_ORDER: ScreenShareQualityPreset[] = [
   '720p30',
 ];
 
-export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
+export const ScreenShareModal: React.FC<ScreenShareModalProps> = memo(({
   isOpen,
   onClose,
   onConfirm,
@@ -71,33 +70,19 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} className="max-w-lg p-0 overflow-hidden">
-      <div className="p-5 sm:p-6 space-y-5">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 flex-shrink-0">
-              <Monitor className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                Параметры трансляции
-              </h2>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Выберите качество видео и частоту кадров
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors flex items-center justify-center cursor-pointer -mr-1 -mt-1"
-            title="Закрыть"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      className="max-w-lg w-full flex flex-col overflow-hidden"
+    >
+      <Modal.Header
+        title="Параметры трансляции"
+        subtitle="Выберите качество видео и частоту кадров"
+        icon={<Monitor className="w-5 h-5 text-blue-400" />}
+        onClose={onClose}
+      />
 
+      <Modal.Body className="p-4 sm:p-5 space-y-4">
         {/* Section 1: Resolution & FPS Presets */}
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
@@ -122,23 +107,26 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
                   key={key}
                   type="button"
                   onClick={() => setSelectedQuality(key)}
-                  className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col justify-between gap-1.5 active:scale-[0.98] ${isSelected
-                    ? 'bg-blue-600/20 border-blue-500/70 ring-1 ring-blue-500/40 shadow-lg shadow-blue-950/40'
-                    : 'bg-white/[0.04] hover:bg-white/[0.08] hover:border-white/20 hover:shadow-md hover:shadow-black/20 border-white/10'
-                    }`}
+                  className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col justify-between gap-1.5 active:scale-[0.98] ${
+                    isSelected
+                      ? 'bg-blue-600/20 border-blue-500/70 ring-1 ring-blue-500/40 shadow-lg shadow-blue-950/40'
+                      : 'bg-white/4 hover:bg-white/8 hover:border-white/20 hover:shadow-md hover:shadow-black/20 border-white/10'
+                  }`}
                 >
                   <div className="flex items-center justify-between w-full">
                     <span
-                      className={`text-xs font-bold tracking-tight transition-colors duration-200 ${isSelected ? 'text-white' : 'text-gray-200'
-                        }`}
+                      className={`text-xs font-bold tracking-tight transition-colors duration-200 ${
+                        isSelected ? 'text-white' : 'text-gray-200'
+                      }`}
                     >
                       {preset.label}
                     </span>
                     <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all duration-200 ${isSelected
-                        ? 'bg-blue-500/30 border-blue-400/50 text-blue-200 font-bold shadow-sm shadow-blue-500/20'
-                        : 'bg-white/5 border-white/10 text-gray-400'
-                        }`}
+                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all duration-200 ${
+                        isSelected
+                          ? 'bg-blue-500/30 border-blue-400/50 text-blue-200 font-bold shadow-sm shadow-blue-500/20'
+                          : 'bg-white/5 border-white/10 text-gray-400'
+                      }`}
                     >
                       {preset.badge}
                     </span>
@@ -148,14 +136,15 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
                     {preset.desc}
                   </p>
 
-                  {/* Selected Indicator Checkmark with Spring Animation */}
+                  {/* Selected Indicator Checkmark */}
                   <div
-                    className={`absolute bottom-2.5 right-2.5 w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md shadow-blue-500/50 transition-all duration-200 pointer-events-none ${isSelected
-                      ? 'opacity-100 scale-100 rotate-0'
-                      : 'opacity-0 scale-50 -rotate-45'
-                      }`}
+                    className={`absolute bottom-2.5 right-2.5 w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md shadow-blue-500/50 transition-all duration-200 pointer-events-none ${
+                      isSelected
+                        ? 'opacity-100 scale-100 rotate-0'
+                        : 'opacity-0 scale-50 -rotate-45'
+                    }`}
                   >
-                    <Check className="w-2.5 h-2.5 stroke-[3]" />
+                    <Check className="w-2.5 h-2.5 stroke-3" />
                   </div>
                 </button>
               );
@@ -166,50 +155,43 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = ({
         {/* Section 2: Informative Notice & Audio Guidance */}
         <div className="space-y-2 animate-tab-fade">
           <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2.5 text-xs text-amber-200/90 leading-relaxed">
-            <Info className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+            <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
             <span>
               <strong className="font-semibold text-amber-300">Звук трансляции:</strong> если требуется передавать звук, отметьте галочку общего доступа к аудио в следующем окне выбора. Для изоляции звука видео или музыки выбирайте вкладку браузера.
             </span>
           </div>
           <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2.5 text-[11px] text-blue-200/90 leading-relaxed">
-            <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 flex-shrink-0" />
+            <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0" />
             <span>
               На следующем шаге подтвердите выбор конкретного окна, вкладки или всего экрана в системном диалоге.
             </span>
           </div>
         </div>
+      </Modal.Body>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-white/10">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isConnecting}
-            className="px-4 py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-gray-300 hover:text-white text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
-          >
-            Отмена
-          </button>
+      <Modal.Footer className="justify-end gap-2.5">
+        <Button
+          variant="glass"
+          size="md"
+          onClick={onClose}
+          disabled={isConnecting}
+        >
+          Отмена
+        </Button>
 
-          <button
-            type="button"
-            onClick={handleConfirm}
-            disabled={isConnecting}
-            className="group px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-500 hover:via-indigo-500 hover:to-blue-600 active:scale-[0.97] text-white text-xs font-bold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 border border-blue-400/40 flex items-center gap-2 transition-all duration-200 cursor-pointer disabled:opacity-50"
-          >
-            {isConnecting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-white" />
-                <span>Запуск...</span>
-              </>
-            ) : (
-              <>
-                <Monitor className="w-4 h-4 transition-transform duration-200 group-hover:scale-110" />
-                <span>Выбрать экран</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
+        <Button
+          variant="primary"
+          size="md"
+          onClick={handleConfirm}
+          isLoading={isConnecting}
+          icon={!isConnecting ? <Monitor className="w-4 h-4" /> : undefined}
+        >
+          {isConnecting ? 'Запуск...' : 'Выбрать экран'}
+        </Button>
+      </Modal.Footer>
     </Modal>
   );
-};
+});
+
+ScreenShareModal.displayName = 'ScreenShareModal';
+

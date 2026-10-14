@@ -762,7 +762,7 @@ body {
     padding-right: 1rem;
   }
   
-  button:not(.btn-compact) {
+  button:not(.btn-compact):not([data-tauri-drag-region] button) {
     min-height: 44px;
     min-width: 44px;
   }

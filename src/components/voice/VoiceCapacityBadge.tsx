@@ -49,7 +49,7 @@ export const VoiceCapacityBadge: React.FC<VoiceCapacityBadgeProps> = memo(({
         ) : null}
       </div>
 
-      <span className="text-[10px] text-blue-400 font-mono flex-shrink-0">
+      <span className="text-[10px] text-blue-400 font-mono shrink-0">
         {micCount} с микрофоном
       </span>
     </div>

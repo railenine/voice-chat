@@ -2,6 +2,7 @@ import React, { memo } from 'react';
 import { Mic, Volume2, Play, Square } from 'lucide-react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { Tooltip } from './Tooltip';
+import { Button } from './ui';
 
 interface AudioDeviceSettingsProps {
   deviceState: ReturnType<typeof useAudioDevices>;
@@ -80,29 +81,15 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
 
         {/* Mic test button & volume bar */}
         <div className="flex items-center gap-2 pt-0.5">
-          <button
-            type="button"
+          <Button
+            variant={isTestingMic ? 'danger' : 'glass'}
+            size="sm"
             onClick={toggleMicTest}
-            className={`rounded-lg text-[11px] font-medium transition-all shrink-0 active:scale-95 ${
-              compact ? 'px-2.5 py-1' : 'px-3 py-1.5'
-            } ${
-              isTestingMic
-                ? 'bg-red-500/20 text-red-300 border border-red-500/40 hover:bg-red-500/30'
-                : 'bg-white/6 hover:bg-white/12 text-gray-200 border border-white/10'
-            }`}
+            icon={isTestingMic ? <Square className="w-3 h-3 fill-current" /> : <Mic className="w-3 h-3" />}
+            className="text-[11px] h-7 px-2.5 rounded-lg shrink-0 font-medium"
           >
-            {isTestingMic ? (
-              <span className="flex items-center gap-1.5">
-                <Square className="w-3 h-3 fill-current" />
-                <span>Стоп тест</span>
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5">
-                <Mic className="w-3 h-3" />
-                <span>Тест микрофона</span>
-              </span>
-            )}
-          </button>
+            {isTestingMic ? 'Стоп тест' : 'Тест микрофона'}
+          </Button>
 
           {isTestingMic && (
             <div className="flex-1 bg-black/40 h-2.5 rounded-full overflow-hidden border border-white/10 p-0.5 animate-fade-in">

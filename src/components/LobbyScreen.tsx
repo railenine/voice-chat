@@ -13,6 +13,7 @@ import {
 import { APP_VERSION } from '../config';
 import { Tooltip } from './Tooltip';
 import { JellyBackground } from './JellyBackground';
+import { Button, Input, Card } from './ui';
 
 interface LobbyScreenProps {
   nickname: string;
@@ -91,12 +92,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
           </div>
 
           {/* Nickname Card */}
-          <div className="bg-slate-950/45 backdrop-blur-xl rounded-2xl p-4 sm:p-5 mb-3 sm:mb-4 border border-white/10 shadow-2xl shadow-black/40 compact-h-card animate-bounce-in">
+          <Card level={1} className="p-4 sm:p-5 mb-3 sm:mb-4 compact-h-card animate-bounce-in">
             <div className="text-center">
               <p className="text-gray-400 text-xs sm:text-sm mb-1.5">Ваш никнейм</p>
               <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
-                <input
-                  type="text"
+                <Input
+                  align="center"
                   value={nickname}
                   onChange={(e) => {
                     const val = e.target.value.substring(0, 24);
@@ -105,36 +106,35 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                   }}
                   placeholder="Введите никнейм"
                   maxLength={24}
-                  className="w-full py-2 px-3 compact-h-input bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl text-center text-white font-bold text-base sm:text-lg placeholder:text-gray-400 focus:outline-none transition-all"
+                  className="font-bold text-base sm:text-lg compact-h-input"
                 />
                 <Tooltip
                   content="Случайный никнейм"
                   description="Сгенерировать случайное имя"
                   position="top"
                 >
-                  <button
-                    type="button"
+                  <Button
+                    variant="glass"
                     onClick={() => {
                       const newNick = generateNickname();
                       setNickname(newNick);
                       saveStoredNickname(newNick);
                     }}
-                    className="p-2 sm:p-2.5 bg-white/6 hover:bg-white/12 active:scale-95 text-white rounded-xl transition-all border border-white/10 shrink-0 flex items-center justify-center"
-                  >
-                    <Dices className="w-4 h-4 text-blue-400" />
-                  </button>
+                    className="p-2 sm:p-2.5 h-auto rounded-xl shrink-0"
+                    icon={<Dices className="w-4 h-4 text-blue-400" />}
+                  />
                 </Tooltip>
               </div>
             </div>
-          </div>
+          </Card>
 
           {/* Audio Devices Collapsible Card */}
           {deviceState && (
-            <div className="bg-slate-950/45 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl shadow-black/40 compact-h-card p-3.5 sm:p-4 mb-3 sm:mb-4 transition-all animate-bounce-in">
+            <Card level={1} className="compact-h-card p-3.5 sm:p-4 mb-3 sm:mb-4 transition-all animate-bounce-in">
               <button
                 type="button"
                 onClick={() => setShowAudioSettings(!showAudioSettings)}
-                className="w-full flex items-center justify-between text-left group"
+                className="w-full flex items-center justify-between text-left group cursor-pointer"
               >
                 <div className="flex items-center gap-2">
                   <Settings2 className="w-4 h-4 text-blue-400" />
@@ -159,32 +159,26 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                   <AudioDeviceSettings deviceState={deviceState} compact />
                 </div>
               </div>
-            </div>
+            </Card>
           )}
 
           {/* Mode Selection */}
-          <div className="bg-slate-950/45 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border border-white/10 shadow-2xl shadow-black/40 compact-h-card animate-slide-up">
+          <Card level={1} className="p-4 sm:p-5 compact-h-card animate-slide-up">
             <div className="flex gap-2 mb-3 sm:mb-3.5">
-              <button
-                type="button"
+              <Button
+                variant={mode === 'create' ? 'primary' : 'glass'}
                 onClick={() => setMode('create')}
-                className={`flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-medium transition-all text-xs sm:text-sm cursor-pointer select-none active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${mode === 'create'
-                  ? 'bg-linear-to-r from-blue-700 to-blue-900 text-white shadow-lg shadow-blue-900/50 border border-blue-500/40'
-                  : 'bg-white/4 hover:bg-white/8 text-gray-400 hover:text-white border border-white/6'
-                  }`}
+                className="flex-1 py-2.5 sm:py-3 h-auto"
               >
                 Создать
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant={mode === 'join' ? 'primary' : 'glass'}
                 onClick={() => setMode('join')}
-                className={`flex-1 py-2.5 sm:py-3 px-4 rounded-xl font-medium transition-all text-xs sm:text-sm cursor-pointer select-none active:scale-[0.98] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${mode === 'join'
-                  ? 'bg-linear-to-r from-blue-700 to-blue-900 text-white shadow-lg shadow-blue-900/50 border border-blue-500/40'
-                  : 'bg-white/4 hover:bg-white/8 text-gray-400 hover:text-white border border-white/6'
-                  }`}
+                className="flex-1 py-2.5 sm:py-3 h-auto"
               >
                 Войти
-              </button>
+              </Button>
             </div>
 
             {mode === 'create' ? (
@@ -198,14 +192,15 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                   <Sparkles className="w-3.5 h-3.5 text-blue-400/90 shrink-0" />
                   <span className="truncate">Комната создается мгновенно с P2P шифрованием</span>
                 </div>
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="lg"
                   onClick={onCreateRoom}
-                  className="w-full py-2.5 sm:py-3.5 px-6 compact-h-btn bg-linear-to-r from-blue-700 to-blue-900 text-white font-bold rounded-xl hover:from-blue-800 hover:to-blue-950 transition-all shadow-lg shadow-blue-900/50 hover:shadow-blue-900/70 active:scale-[0.98] text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                  icon={<Mic className="w-4 h-4" />}
+                  className="w-full compact-h-btn"
                 >
-                  <Mic className="w-4 h-4" />
-                  <span>Создать комнату</span>
-                </button>
+                  Создать комнату
+                </Button>
               </div>
             ) : (
               <div key="join" className="animate-tab-fade mode-card-content flex flex-col justify-between">
@@ -214,8 +209,9 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                     Введите ID комнаты для присоединения
                   </p>
                 </div>
-                <input
-                  type="text"
+                <Input
+                  align="center"
+                  mono
                   value={joinRoomId}
                   onChange={(e) => setJoinRoomId(extractRoomId(e.target.value))}
                   onKeyDown={(e) => {
@@ -229,18 +225,19 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                     setJoinRoomId(extractRoomId(text));
                   }}
                   placeholder="ID КОМНАТЫ ИЛИ ССЫЛКА"
-                  className="w-full py-2 sm:py-2.5 px-3 sm:px-4 compact-h-input bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl text-white text-center text-xs sm:text-sm font-mono tracking-wider sm:tracking-widest placeholder:text-gray-500 placeholder:text-xs sm:placeholder:text-sm placeholder:font-sans placeholder:tracking-normal focus:outline-none transition-all"
                   maxLength={128}
+                  className="compact-h-input tracking-wider sm:tracking-widest placeholder:tracking-normal placeholder:font-sans"
                 />
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  size="lg"
                   onClick={() => onJoinRoom()}
                   disabled={joinRoomId.length < 3}
-                  className="w-full py-2.5 sm:py-3.5 px-6 compact-h-btn bg-linear-to-r from-blue-700 to-blue-900 text-white font-bold rounded-xl hover:from-blue-800 hover:to-blue-950 transition-all shadow-lg shadow-blue-900/50 hover:shadow-blue-900/70 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50"
+                  icon={<LogIn className="w-4 h-4" />}
+                  className="w-full compact-h-btn"
                 >
-                  <LogIn className="w-4 h-4" />
-                  <span>Присоединиться</span>
-                </button>
+                  Присоединиться
+                </Button>
               </div>
             )}
 
@@ -264,10 +261,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
 
                 <div className="w-full flex gap-1.5 sm:gap-2 py-1">
                   {recentRooms.map((room) => (
-                    <div
+                    <Card
                       key={room.roomId}
+                      level={2}
+                      interactive
                       onClick={() => handleQuickJoin(room.roomId)}
-                      className="group/chip flex-1 min-w-0 flex flex-col justify-between py-1.5 px-2 sm:px-2.5 rounded-xl bg-white/4 hover:bg-blue-600/15 border border-white/8 hover:border-blue-500/30 text-gray-200 hover:text-white transition-all cursor-pointer active:scale-98 select-none shadow-xs"
+                      className="group/chip flex-1 min-w-0 flex flex-col justify-between py-1.5 px-2 sm:px-2.5 hover:bg-blue-600/15 hover:border-blue-500/30 text-gray-200 hover:text-white"
                       title={`Войти в комнату ${room.roomId}`}
                     >
                       <div className="flex items-center justify-between gap-1 w-full min-w-0">
@@ -289,12 +288,12 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                         <Clock className="w-2.5 h-2.5 text-gray-500 group-hover/chip:text-blue-400/80 shrink-0" />
                         <span className="truncate">{formatRecentTime(room.lastVisited)}</span>
                       </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               </div>
             )}
-          </div>
+          </Card>
 
           {/* Info & Version */}
           <div className="mt-3 sm:mt-4 text-center ultra-compact-h-hide flex flex-col items-center gap-1">

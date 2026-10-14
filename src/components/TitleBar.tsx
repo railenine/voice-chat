@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { Mic } from 'lucide-react';
 import { isTauri, APP_VERSION } from '../config';
 import { Tooltip } from './Tooltip';
@@ -22,6 +22,33 @@ async function getTauriInvoke() {
 
 export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates, hasUpdate, updateVersion }) => {
   const [isMaximized, setIsMaximized] = useState(false);
+  const leftRef = useRef<HTMLDivElement>(null);
+  const titleRef = useRef<HTMLSpanElement>(null);
+  const [showRoomTitle, setShowRoomTitle] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth > 540;
+  });
+
+  // Calculate whether the centered room title fits without colliding with left badges or right window controls
+  const checkFits = useCallback(() => {
+    if (!roomId) {
+      setShowRoomTitle(false);
+      return;
+    }
+    if (!titleRef.current) return;
+
+    const leftRect = leftRef.current?.getBoundingClientRect();
+    const leftRight = leftRect ? leftRect.right : 180;
+    const windowWidth = window.innerWidth;
+    const rightLeft = windowWidth - 136; // Window controls (minimize, maximize, close) width is ~132-136px
+    const center = windowWidth / 2;
+
+    // Symmetric max half-width from center with 16px safety margin on each side
+    const maxHalfWidth = Math.min(center - leftRight - 16, rightLeft - center - 16);
+    const titleWidth = titleRef.current.scrollWidth;
+
+    setShowRoomTitle(maxHalfWidth > 0 && titleWidth / 2 < maxHalfWidth);
+  }, [roomId]);
 
   // Invoke helper with cached import and graceful fallback
   const invokeCommand = useCallback(async <T = any>(command: string, args?: Record<string, any>): Promise<T | null> => {
@@ -54,6 +81,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates,
             setIsMaximized(res);
           }
         });
+        checkFits();
       });
     };
 
@@ -62,7 +90,18 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates,
       window.removeEventListener('resize', handleResize);
       if (resizeRafId !== null) cancelAnimationFrame(resizeRafId);
     };
-  }, [invokeCommand]);
+  }, [invokeCommand, checkFits]);
+
+  // Dynamic layout observer: re-calculate fit when roomId, update status, or badge size changes
+  useEffect(() => {
+    checkFits();
+    if (!leftRef.current) return;
+    const observer = new ResizeObserver(() => {
+      checkFits();
+    });
+    observer.observe(leftRef.current);
+    return () => observer.disconnect();
+  }, [checkFits, hasUpdate, updateVersion]);
 
   const handleMinimize = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -104,18 +143,19 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates,
       data-tauri-drag-region
       onMouseDown={handleMouseDown}
       onDoubleClick={() => handleToggleMaximize()}
-      className="relative h-[34px] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between select-none z-50 flex-shrink-0 text-xs font-sans cursor-default"
+      className="relative h-8.5 w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between select-none z-50 shrink-0 text-xs font-sans cursor-default"
     >
       {/* Left: App Logo, Name & Room Badge */}
       <div
+        ref={leftRef}
         data-tauri-drag-region
         className="flex items-center gap-2 px-3 h-full cursor-default z-10"
       >
-        <div className="w-4 h-4 rounded-full bg-gradient-to-tr from-blue-700 via-blue-500 to-sky-400 flex items-center justify-center shadow-sm shadow-blue-500/40 flex-shrink-0">
+        <div className="w-4 h-4 rounded-full bg-linear-to-tr from-blue-700 via-blue-500 to-sky-400 flex items-center justify-center shadow-sm shadow-blue-500/40 shrink-0">
           <Mic className="w-2.5 h-2.5 text-white" />
         </div>
 
-        <div className="flex items-baseline gap-1.5 leading-none">
+        <div className={`flex ${hasUpdate && updateVersion ? 'items-center' : 'items-baseline'} gap-1.5 leading-none`}>
           <span className="font-semibold text-white/90 text-xs tracking-tight leading-none">RVxis</span>
 
           {hasUpdate && updateVersion ? (
@@ -141,27 +181,33 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates,
         </div>
       </div>
 
-      {/* Middle: Mathematically centered title */}
-      <div
-        data-tauri-drag-region
-        className="pointer-events-none absolute inset-0 flex items-center justify-center cursor-default z-0 px-32"
-      >
-        <span
+      {/* Middle: Mathematically centered room title (hidden completely without truncation if space is insufficient) */}
+      {roomId && (
+        <div
           data-tauri-drag-region
-          className="text-[11px] text-gray-400/80 font-medium leading-none truncate select-none"
+          className={`pointer-events-none absolute inset-0 flex items-center justify-center cursor-default z-0 transition-opacity duration-150 ${
+            showRoomTitle ? 'opacity-100' : 'opacity-0'
+          }`}
+          aria-hidden={!showRoomTitle}
         >
-          {roomId ? `RVxis — Комната #${roomId}` : 'RVxis — Голосовой чат'}
-        </span>
-      </div>
+          <span
+            ref={titleRef}
+            data-tauri-drag-region
+            className="text-[11px] text-gray-400/80 font-medium leading-none select-none whitespace-nowrap"
+          >
+            Комната #{roomId}
+          </span>
+        </div>
+      )}
 
       {/* Right: Window Controls */}
-      <div className="flex items-center h-full flex-shrink-0 z-10">
+      <div className="flex items-center h-full shrink-0 z-10">
         {/* Minimize Button */}
         <Tooltip content="Свернуть" position="bottom">
           <button
             type="button"
             onClick={handleMinimize}
-            className="h-full w-11 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors focus:outline-none"
+            className="btn-compact h-full w-11 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors focus:outline-none"
           >
             <svg width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
               <rect width="10" height="1" />
@@ -174,7 +220,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates,
           <button
             type="button"
             onClick={(e) => handleToggleMaximize(e)}
-            className="h-full w-11 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors focus:outline-none"
+            className="btn-compact h-full w-11 flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 active:bg-white/15 transition-colors focus:outline-none"
           >
             {isMaximized ? (
               // Restore icon (two overlapping squares)
@@ -196,7 +242,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(({ roomId, onCheckUpdates,
           <button
             type="button"
             onClick={handleClose}
-            className="h-full w-12 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 active:bg-red-700 transition-colors focus:outline-none"
+            className="btn-compact h-full w-12 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 active:bg-red-700 transition-colors focus:outline-none"
           >
             <svg width="10" height="10" viewBox="0 0 10 10" stroke="currentColor" strokeWidth="1.2">
               <line x1="1" y1="1" x2="9" y2="9" />

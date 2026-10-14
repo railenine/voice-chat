@@ -12,10 +12,20 @@ interface UseAppUpdaterOptions {
 
 const DISMISSED_VERSION_KEY = 'rvxis_dismissed_update_version';
 
+// ⚠️ TEMPORARY MOCK FOR UPDATE BUTTON TESTING
+const MOCK_UPDATE_ENABLED = false;
+
+const MOCK_UPDATE_INFO: UpdateInfo = {
+  version: '0.1.17',
+  currentVersion: APP_VERSION,
+  notes: '• Тестовое обновление v0.1.17 для проверки кнопки и интерфейса.\n• Проверка отображения бейджа обновления в TitleBar и вкладке настроек.\n• Новое двухколоночное окно настроек звонка.',
+  portableUrl: 'https://github.com/railenine/voice-chat/releases/download/v0.1.17/RVxis.exe',
+};
+
 export function useAppUpdater(options?: UseAppUpdaterOptions) {
   const isInRoom = !!options?.isInRoom;
-  const [status, setStatus] = useState<UpdateStatus>('idle');
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [status, setStatus] = useState<UpdateStatus>(MOCK_UPDATE_ENABLED ? 'available' : 'idle');
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(MOCK_UPDATE_ENABLED ? MOCK_UPDATE_INFO : null);
   const [isPortable, setIsPortable] = useState<boolean>(false);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [downloadedBytes, setDownloadedBytes] = useState<number>(0);
@@ -38,6 +48,15 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
   }, []);
 
   const checkForUpdates = useCallback(async (manual = false) => {
+    if (MOCK_UPDATE_ENABLED) {
+      setStatus('available');
+      setUpdateInfo(MOCK_UPDATE_INFO);
+      if (manual) {
+        setIsModalOpen(true);
+      }
+      return;
+    }
+
     // 1. Check offline status first
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
       setStatus('offline');
@@ -231,6 +250,16 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
 
   // Install update: supports both 'portable' in-place swap and 'installer' setup
   const installUpdate = useCallback(async (mode?: 'portable' | 'installer') => {
+    if (MOCK_UPDATE_ENABLED) {
+      setStatus('downloading');
+      setDownloadProgress(20);
+      setTimeout(() => setDownloadProgress(50), 300);
+      setTimeout(() => setDownloadProgress(85), 600);
+      setTimeout(() => setDownloadProgress(100), 900);
+      setTimeout(() => setStatus('restart-required'), 1100);
+      return;
+    }
+
     if (isTauri()) {
       const targetMode = mode || (isPortable ? 'portable' : 'installer');
 

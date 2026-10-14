@@ -280,17 +280,36 @@ export function validateClientMessage(msg, clientMeta = null) {
         };
       }
 
-      const { text } = msg;
-      if (!text || typeof text !== 'string') {
-        return {
-          valid: false,
-          code: 'invalid_message',
-          message: 'Chat text must be a string',
-        };
+      const { text, attachments } = msg;
+      const trimmedText = typeof text === 'string' ? text.trim() : '';
+
+      const validAttachments = [];
+      if (Array.isArray(attachments)) {
+        for (const att of attachments.slice(0, 4)) {
+          const cleanUrl = typeof att?.url === 'string' ? att.url.trim() : '';
+          const isSafeUrl = cleanUrl.startsWith('/api/media/') || /^https?:\/\//i.test(cleanUrl);
+          const isNotSvg = !cleanUrl.toLowerCase().endsWith('.svg');
+
+          if (
+            att &&
+            typeof att === 'object' &&
+            isSafeUrl &&
+            isNotSvg &&
+            cleanUrl.length <= 1000 &&
+            ['image', 'video', 'gif'].includes(att.type)
+          ) {
+            validAttachments.push({
+              id: typeof att.id === 'string' ? att.id.slice(0, 64) : String(Date.now()),
+              type: att.type,
+              url: cleanUrl,
+              name: typeof att.name === 'string' ? att.name.slice(0, 128).replace(/[<>"']/g, '') : 'file',
+              size: typeof att.size === 'number' ? att.size : undefined,
+            });
+          }
+        }
       }
 
-      const trimmedText = text.trim();
-      if (!trimmedText) {
+      if (!trimmedText && validAttachments.length === 0) {
         return {
           valid: false,
           code: 'invalid_message',
@@ -298,11 +317,11 @@ export function validateClientMessage(msg, clientMeta = null) {
         };
       }
 
-      if (trimmedText.length > 1000) {
+      if (trimmedText.length > 2000) {
         return {
           valid: false,
           code: 'invalid_message',
-          message: 'Chat message exceeds maximum length of 1000 characters',
+          message: 'Chat message exceeds maximum length of 2000 characters',
         };
       }
 
@@ -311,6 +330,7 @@ export function validateClientMessage(msg, clientMeta = null) {
         data: {
           type: 'chat-message',
           text: trimmedText,
+          attachments: validAttachments.length > 0 ? validAttachments : undefined,
         },
       };
     }

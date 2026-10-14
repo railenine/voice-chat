@@ -12,12 +12,21 @@ export interface PeerInfo {
   connectionState?: 'connected' | 'reconnecting' | 'disconnected';
 }
 
+export interface ChatAttachment {
+  id: string;
+  type: 'image' | 'video' | 'gif';
+  url: string;
+  name: string;
+  size?: number;
+}
+
 export interface ChatMessage {
   id: string;
   peerId: string;
   nickname: string;
   text: string;
   timestamp: number;
+  attachments?: ChatAttachment[];
 }
 
 export interface WebRTCSessionDescription {
@@ -83,6 +92,7 @@ export interface SpeakingMessage {
 export interface ChatClientMessage {
   type: 'chat-message';
   text: string;
+  attachments?: ChatAttachment[];
 }
 
 export interface LeaveMessage {
