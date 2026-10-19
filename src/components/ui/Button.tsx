@@ -1,7 +1,7 @@
 import React, { forwardRef, memo } from 'react';
 
 export type ButtonVariant = 'primary' | 'glass' | 'danger' | 'ghost' | 'emerald';
-export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -28,6 +28,8 @@ const sizeStyles: Record<ButtonSize, string> = {
   sm: 'btn-compact !min-h-0 !min-w-0 h-6 px-2 text-[11px] gap-1.5 rounded-md leading-none',
   md: 'h-9 px-3.5 text-xs sm:text-sm gap-2 rounded-xl',
   lg: 'h-11 sm:h-12 px-5 text-xs sm:text-sm gap-2.5 rounded-xl font-bold',
+  icon: 'w-8 h-8 !p-0 rounded-xl shrink-0',
+  'icon-sm': 'w-7 h-7 !p-0 rounded-lg shrink-0',
 };
 
 export const Button = memo(
@@ -48,13 +50,14 @@ export const Button = memo(
       ref
     ) => {
       const isDisabled = disabled || isLoading;
+      const isIconOnly = size === 'icon' || size === 'icon-sm';
 
       return (
         <button
           ref={ref}
           type={type}
           disabled={isDisabled}
-          className={`inline-flex items-center justify-center font-medium transition-all duration-150 select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100 ${
+          className={`inline-flex items-center justify-center font-medium whitespace-nowrap transition-all duration-150 select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100 ${
             variantStyles[variant]
           } ${sizeStyles[size]} ${className}`}
           {...props}
@@ -65,7 +68,13 @@ export const Button = memo(
             <span className="shrink-0 flex items-center justify-center">{icon}</span>
           ) : null}
 
-          {children && <span>{children}</span>}
+          {children && (
+            isIconOnly ? (
+              children
+            ) : (
+              <span>{children}</span>
+            )
+          )}
 
           {!isLoading && icon && iconPosition === 'right' ? (
             <span className="shrink-0 flex items-center justify-center">{icon}</span>

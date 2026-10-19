@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Volume2, Check, Copy, Settings, Share2 } from 'lucide-react';
 import { Tooltip } from '../Tooltip';
+import { Button } from '../ui';
 
 import { MAX_ROOM_PEERS } from '../../config';
 
@@ -9,7 +10,7 @@ export interface VoiceMobileHeaderProps {
   copied: boolean;
   copyRoomId: () => void;
   triggerShare: () => void;
-  showShare: boolean;
+  showShare?: boolean;
   onOpenSettings: () => void;
   isSmartphone: boolean;
   participantCount?: number;
@@ -89,26 +90,46 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
           description={isSmartphone ? 'Выбор микрофона и динамиков' : 'Звук, микрофон и горячие клавиши'}
           position="bottom"
         >
-          <button
-            type="button"
+          <Button
+            variant="glass"
+            size="icon"
             onClick={onOpenSettings}
-            className="p-2 text-gray-300 hover:text-white bg-white/6 hover:bg-white/12 active:scale-95 rounded-xl border border-white/10 text-xs transition-all flex items-center justify-center cursor-pointer"
+            aria-label="Настройки"
           >
-            <Settings className="w-4 h-4" />
-          </button>
+            <Settings className="w-4 h-4 text-gray-300" />
+          </Button>
         </Tooltip>
-        <Tooltip content="Поделиться ссылкой" description="Показать ссылку на комнату на 10 секунд" position="bottom">
-          <button
-            type="button"
+        <Tooltip
+          content={copied ? 'Скопировано!' : 'Поделиться'}
+          description={copied ? 'Ссылка в буфере обмена' : 'Скопировать ссылку на комнату'}
+          position="bottom"
+        >
+          <Button
+            variant={copied ? 'emerald' : 'glass'}
+            size="icon"
             onClick={triggerShare}
-            className={`p-2 active:scale-95 rounded-xl border text-xs transition-all flex items-center justify-center cursor-pointer ${
-              showShare
-                ? 'bg-blue-600/30 border-blue-500 text-blue-300'
-                : 'text-gray-300 hover:text-white bg-white/6 hover:bg-white/12 border-white/10'
+            aria-label={copied ? 'Ссылка скопирована' : 'Поделиться ссылкой'}
+            className={`transition-all duration-300 ${
+              copied ? 'shadow-xs shadow-emerald-500/20' : ''
             }`}
           >
-            <Share2 className="w-4 h-4" />
-          </button>
+            <div className="relative w-4 h-4 flex items-center justify-center">
+              <Share2
+                className={`w-4 h-4 transition-all duration-300 ${
+                  copied
+                    ? 'opacity-0 scale-50 rotate-45 pointer-events-none'
+                    : 'opacity-100 scale-100 rotate-0 text-gray-300'
+                }`}
+              />
+              <Check
+                className={`w-4 h-4 absolute inset-0 transition-all duration-300 text-emerald-400 ${
+                  copied
+                    ? 'opacity-100 scale-100 rotate-0'
+                    : 'opacity-0 scale-50 -rotate-45 pointer-events-none'
+                }`}
+              />
+            </div>
+          </Button>
         </Tooltip>
       </div>
     </header>

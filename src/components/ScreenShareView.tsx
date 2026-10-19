@@ -216,7 +216,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
         ? `fixed inset-0 z-50 h-dvh w-screen bg-black rounded-none border-none ${
             isClosing ? 'opacity-0 scale-[0.98] transition-all duration-200 pointer-events-none' : ''
           }`
-        : `relative rounded-2xl border border-white/10 bg-slate-950/80 backdrop-blur-2xl shadow-2xl max-h-[60vh] min-h-70 sm:min-h-90 flex-1 ${
+        : `relative rounded-2xl lg:rounded-none border border-white/10 lg:border-x-0 lg:border-t-0 lg:border-b bg-slate-950/80 backdrop-blur-2xl shadow-2xl lg:shadow-none max-h-[55vh] min-h-70 sm:min-h-90 flex-1 shrink-0 ${
             isClosing ? 'animate-modal-out pointer-events-none' : 'animate-modal-in'
           }`
         }`}

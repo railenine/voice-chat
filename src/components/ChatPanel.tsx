@@ -12,6 +12,7 @@ import {
   AlertCircle,
   ShieldAlert,
   Eye,
+  RefreshCw,
 } from 'lucide-react';
 import type { ChatMessage, ChatAttachment } from '../types/protocol';
 import { Tooltip } from './Tooltip';
@@ -45,6 +46,13 @@ interface ChatPanelProps {
   showHeader?: boolean;
   onOpenMobileDrawer?: () => void;
   participantCount?: number;
+  isConnected?: boolean;
+  error?: string | null;
+  connectionStatus?: string;
+  reconnectAttempts?: number;
+  isRetrying?: boolean;
+  handleRetry?: () => void;
+  streamView?: React.ReactNode;
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = memo(({
@@ -54,6 +62,13 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
   onSendMessage,
   className = '',
   showHeader = true,
+  isConnected = true,
+  error = null,
+  connectionStatus = 'Подключено',
+  reconnectAttempts = 0,
+  isRetrying = false,
+  handleRetry,
+  streamView,
 }) => {
   const [inputText, setInputText] = useState('');
   const [stagedAttachment, setStagedAttachment] = useState<StagedAttachment | null>(null);
@@ -378,7 +393,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative flex flex-col h-full bg-slate-950/45 backdrop-blur-xl rounded-2xl border border-white/10 shadow-2xl shadow-black/40 overflow-hidden ${className}`}
+      className={`relative flex flex-col h-full bg-slate-950/45 backdrop-blur-xl rounded-2xl lg:rounded-none border border-white/10 lg:border-none shadow-2xl lg:shadow-none shadow-black/40 overflow-hidden ${className}`}
     >
       {/* Drag & Drop Visual Overlay */}
       {isDraggingOver && (
@@ -393,7 +408,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
 
       {/* Header (desktop only - mobile uses unified top bar) */}
       {showHeader && (
-        <div className="hidden lg:flex p-3.5 px-4 sm:px-5 border-b border-white/10 items-center justify-between bg-slate-950/60 backdrop-blur-xl shrink-0">
+        <div className="hidden lg:flex h-16 px-4 sm:px-5 border-b border-white/10 items-center justify-between bg-slate-950/60 backdrop-blur-xl shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
               <MessageSquare className="w-4 h-4" />
@@ -412,13 +427,57 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              P2P & RAM Only
-            </span>
+            {error ? (
+              <div className="inline-flex items-center gap-2 pl-2.5 pr-1 py-1 rounded-full border border-rose-500/30 bg-rose-500/10 backdrop-blur-md shadow-xs shadow-rose-950/40 animate-fade-in shrink-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400 animate-pulse shrink-0" />
+                  <span
+                    className="text-[11px] text-rose-200 font-medium truncate max-w-44 xl:max-w-64"
+                    title={error}
+                  >
+                    {error}
+                  </span>
+                </div>
+
+                {handleRetry && (
+                  <>
+                    <span className="w-px h-3.5 bg-rose-500/30 shrink-0" aria-hidden="true" />
+                    <button
+                      type="button"
+                      onClick={handleRetry}
+                      disabled={isRetrying}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold text-rose-200 hover:text-white bg-rose-500/20 hover:bg-rose-500/35 active:bg-rose-500/45 border border-rose-500/40 hover:border-rose-400/60 transition-all duration-150 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap shrink-0 active:scale-95"
+                    >
+                      <RefreshCw className={`w-3 h-3 shrink-0 ${isRetrying ? 'animate-spin' : ''}`} />
+                      <span>{isRetrying ? 'Подключение...' : 'Повторить'}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : !isConnected ? (
+              <div className="flex items-center gap-1.5 animate-fade-in">
+                <span className="inline-flex items-center gap-1.5 text-[11px] text-yellow-300 bg-yellow-500/10 px-2.5 py-1 rounded-full border border-yellow-500/20 font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse shrink-0" />
+                  <span>{connectionStatus || 'Подключение...'}</span>
+                </span>
+                {reconnectAttempts > 0 && (
+                  <span className="text-[10px] text-yellow-400/80 font-mono px-1.5 py-0.5 rounded-md bg-yellow-500/10 border border-yellow-500/20 shrink-0">
+                    попытка {reconnectAttempts}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 font-medium animate-fade-in">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span>Подключено</span>
+              </span>
+            )}
           </div>
         </div>
       )}
+
+      {/* Stream Viewport (Stacked above chat messages when active) */}
+      {streamView}
 
       {/* Message List */}
       <div
@@ -775,7 +834,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       {/* Input Bar */}
       <form
         onSubmit={handleSubmit}
-        className="p-2 sm:p-2.5 bg-slate-950/60 backdrop-blur-xl border-t border-white/10 flex items-center gap-2 shrink-0"
+        className="h-[69px] px-3 sm:px-4 bg-slate-950/60 backdrop-blur-xl border-t border-white/10 flex items-center gap-2 shrink-0"
       >
         {/* Hidden file input */}
         <input
@@ -798,7 +857,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
             icon={<Paperclip className="w-4 h-4 text-gray-300" />}
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="w-10 h-10 px-0 rounded-xl shrink-0"
+            className="w-11 h-11 px-0 rounded-xl shrink-0"
           />
         </Tooltip>
 
@@ -811,7 +870,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
           maxLength={1000}
           disabled={isUploading}
           placeholder={`Сообщение в #${roomId}... (Enter для отправки)`}
-          className="flex-1 h-10 bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl px-3.5 text-base sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all disabled:opacity-50"
+          className="flex-1 h-11 bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl px-3.5 text-base sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all disabled:opacity-50"
         />
 
         <Tooltip
@@ -827,7 +886,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
             isLoading={isUploading}
             disabled={(!inputText.trim() && !stagedAttachment) || isUploading}
             icon={!isUploading ? <Send className="w-4 h-4" /> : undefined}
-            className="w-10 h-10 px-0 rounded-xl shrink-0"
+            className="w-11 h-11 px-0 rounded-xl shrink-0"
           />
         </Tooltip>
       </form>

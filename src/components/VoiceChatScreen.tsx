@@ -22,7 +22,6 @@ import { saveStoredNickname } from '../utils/nicknames';
 import type { PeerInfo } from '../types/protocol';
 
 import { VoiceConnectionBanner, type BannerState } from './voice/VoiceConnectionBanner';
-import { VoiceSharePanel } from './voice/VoiceSharePanel';
 import { VoiceMobileHeader } from './voice/VoiceMobileHeader';
 import { VoiceMobileParticipants } from './voice/VoiceMobileParticipants';
 import { VoiceMobileControls } from './voice/VoiceMobileControls';
@@ -208,9 +207,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
   const prevVolumesRef = useRef<Map<string, number>>(new Map());
 
   const [copied, setCopied] = useState(false);
-  const [showShare, setShowShare] = useState(false);
-  const [shareKey, setShareKey] = useState(0);
-  const shareTimerRef = useRef<number | null>(null);
+  const copiedTimerRef = useRef<number | null>(null);
   const [myNickname, setMyNickname] = useState(nickname);
   const [isEditingNick, setIsEditingNick] = useState(false);
   const [isMobileEditingNick, setIsMobileEditingNick] = useState(false);
@@ -249,65 +246,47 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
     }
   }, [selectedMobilePeer]);
 
-  const closeShare = useCallback(() => {
-    if (shareTimerRef.current) {
-      clearTimeout(shareTimerRef.current);
-      shareTimerRef.current = null;
-    }
-    setShowShare(false);
-  }, []);
-
-  const triggerShare = useCallback(() => {
-    if (showShare) {
-      closeShare();
-      return;
-    }
-
+  const copyRoomId = useCallback(() => {
     const url = getShareUrl(roomId);
-    navigator.clipboard
-      .writeText(url)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2500);
-      })
-      .catch(() => {});
+    const markCopied = () => {
+      setCopied(true);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
+      copiedTimerRef.current = window.setTimeout(() => {
+        setCopied(false);
+      }, 3000);
+    };
 
-    setShowShare(true);
-    setShareKey((k) => k + 1);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(url)
+        .then(markCopied)
+        .catch(() => {
+          const input = document.createElement('input');
+          input.value = url;
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand('copy');
+          document.body.removeChild(input);
+          markCopied();
+        });
+    } else {
+      const input = document.createElement('input');
+      input.value = url;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+      markCopied();
+    }
+  }, [roomId]);
 
-    if (shareTimerRef.current) clearTimeout(shareTimerRef.current);
-    shareTimerRef.current = window.setTimeout(() => {
-      setShowShare(false);
-    }, 10000);
-  }, [showShare, closeShare, roomId]);
+  const triggerShare = copyRoomId;
 
   useEffect(() => {
     return () => {
-      if (shareTimerRef.current) clearTimeout(shareTimerRef.current);
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     };
   }, []);
-
-  const copyRoomId = useCallback(() => {
-    const url = getShareUrl(roomId);
-    navigator.clipboard
-      .writeText(url)
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      })
-      .catch(() => {
-        const input = document.createElement('input');
-        input.value = url;
-        document.body.appendChild(input);
-        input.select();
-        document.execCommand('copy');
-        document.body.removeChild(input);
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-      });
-  }, [roomId]);
-
-  const shareLink = getShareUrl(roomId);
 
   const handleLeave = () => {
     playLeaveSound();
@@ -380,23 +359,12 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
           </div>
         )}
 
-        {/* Global Share Panel */}
-        <VoiceSharePanel
-          showShare={showShare}
-          shareLink={shareLink}
-          shareKey={shareKey}
-          copied={copied}
-          copyRoomId={copyRoomId}
-          closeShare={closeShare}
-        />
-
         {/* Mobile Header (< 1024px) */}
         <VoiceMobileHeader
           roomId={roomId}
           copied={copied}
           copyRoomId={copyRoomId}
           triggerShare={triggerShare}
-          showShare={showShare}
           onOpenSettings={() => {
             setSettingsTab('audio');
             setShowSettingsModal(true);
@@ -481,40 +449,41 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               setShowSettingsModal(true);
             }}
             isConnected={isConnected}
-            error={error}
-            connectionStatus={connectionStatus}
-            reconnectAttempts={reconnectAttempts}
-            showConnectedToast={showConnectedToast}
-            isRetrying={isRetrying}
-            handleRetry={handleRetry}
             copied={copied}
             copyRoomId={copyRoomId}
           />
 
           {/* Main Chat & Stream Area */}
-          <main className="flex-1 flex flex-col min-w-0 p-2 pt-2 sm:p-4 sm:pt-3 lg:p-5 overflow-hidden gap-3">
-            <ScreenShareView
-              activeStreams={screenShare.activeStreams}
-              localVideoTrack={screenShare.localVideoTrack}
-              localAudioTrack={screenShare.localAudioTrack}
-              isSharing={screenShare.isSharing}
-              myNickname={myNickname}
-              watchedPeerId={watchedPeerId}
-              onStopSharing={screenShare.stopScreenShare}
-              onCloseView={() => setWatchedPeerId(null)}
-              onSelectStream={(peerId) => setWatchedPeerId(peerId)}
-              streamVolumes={screenShare.streamVolumes}
-              onVolumeChange={screenShare.setStreamVolume}
-              audioOutputDeviceId={deviceState?.selectedOutput}
-            />
-
+          <main className="flex-1 flex flex-col min-w-0 p-2 pt-2 sm:p-4 sm:pt-3 lg:p-0 overflow-hidden lg:gap-0">
             <ChatPanel
               roomId={roomId}
               messages={messages}
               myPeerId={myPeerId}
               onSendMessage={sendChatMessage}
               participantCount={peers.length + 1}
+              isConnected={isConnected}
+              error={error}
+              connectionStatus={connectionStatus}
+              reconnectAttempts={reconnectAttempts}
+              isRetrying={isRetrying}
+              handleRetry={handleRetry}
               className="flex-1 min-h-0"
+              streamView={
+                <ScreenShareView
+                  activeStreams={screenShare.activeStreams}
+                  localVideoTrack={screenShare.localVideoTrack}
+                  localAudioTrack={screenShare.localAudioTrack}
+                  isSharing={screenShare.isSharing}
+                  myNickname={myNickname}
+                  watchedPeerId={watchedPeerId}
+                  onStopSharing={screenShare.stopScreenShare}
+                  onCloseView={() => setWatchedPeerId(null)}
+                  onSelectStream={(peerId) => setWatchedPeerId(peerId)}
+                  streamVolumes={screenShare.streamVolumes}
+                  onVolumeChange={screenShare.setStreamVolume}
+                  audioOutputDeviceId={deviceState?.selectedOutput}
+                />
+              }
             />
           </main>
         </div>
