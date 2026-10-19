@@ -60,7 +60,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
   const renderAvatar = (sizeClass: string) => (
     <div className="relative shrink-0">
       <div
-        className={`${sizeClass} rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm transition-all duration-150 ${
+        className={`${sizeClass} rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs transition-all duration-150 ${
           isActivelySpeaking
             ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] text-[var(--bg)] bg-[var(--accent)]'
             : isDeafened
@@ -68,8 +68,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
             : isMuted
             ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
             : isSelf
-            ? 'bg-linear-to-br from-blue-700 to-indigo-900 border border-[var(--accent)]/40 text-white outline outline-1 outline-white/20'
-            : `bg-linear-to-br ${gradient} border border-white/15 text-white`
+            ? 'bg-[var(--elevated)] border border-[var(--border)] text-[var(--fg)]'
+            : `bg-linear-to-br ${gradient} border border-[var(--border)] text-[var(--fg)]`
         }`}
       >
         {getInitials(nickname)}
@@ -79,9 +79,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
       {layout === 'compact' && (
         <div className="absolute inset-0 rounded-full bg-slate-950/70 backdrop-blur-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-inner">
           {isSelf ? (
-            <Pencil className="w-4 h-4 text-white drop-shadow-md" />
+            <Pencil className="w-4 h-4 text-[var(--fg)] drop-shadow-md" />
           ) : (
-            <Settings className="w-4 h-4 text-white drop-shadow-md" />
+            <Settings className="w-4 h-4 text-[var(--fg)] drop-shadow-md" />
           )}
         </div>
       )}
@@ -135,8 +135,6 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
               className={`text-[11px] font-semibold truncate max-w-18 text-center transition-colors ${
                 isActivelySpeaking
                   ? 'text-[var(--accent)]'
-                  : isSelf
-                  ? 'text-cyan-300'
                   : 'text-[var(--fg)]'
               }`}
             >

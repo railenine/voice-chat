@@ -43,7 +43,7 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
           <Modal.Body className="space-y-4">
             <Card variant="surface" className="flex items-center gap-3 p-3 select-none">
               <div
-                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-base shadow-sm shrink-0 transition-all ${
+                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-base shadow-xs shrink-0 transition-all ${
                   cachedMobilePeer.isSpeaking && !cachedMobilePeer.isMuted && !cachedMobilePeer.isDeafened
                     ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] text-[var(--bg)] bg-[var(--accent)]'
                     : cachedMobilePeer.isDeafened
@@ -52,7 +52,7 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
                     ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
                     : `bg-linear-to-br ${getAvatarGradient(
                         cachedMobilePeer.peerId || cachedMobilePeer.nickname
-                      )} text-white border border-white/15`
+                      )} text-[var(--fg)] border border-[var(--border)]`
                 }`}
               >
                 {getInitials(cachedMobilePeer.nickname)}

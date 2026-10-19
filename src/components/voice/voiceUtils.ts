@@ -9,13 +9,13 @@ export function getInitials(name: string): string {
 
 export function getAvatarGradient(idOrName: string): string {
   const gradients = [
-    'from-blue-600 to-indigo-800',
-    'from-violet-600 to-purple-800',
-    'from-cyan-600 to-blue-800',
-    'from-emerald-600 to-teal-800',
-    'from-amber-600 to-orange-800',
-    'from-rose-600 to-pink-800',
-    'from-fuchsia-600 to-indigo-800',
+    'from-slate-800 to-slate-950',
+    'from-cyan-950 to-slate-900',
+    'from-blue-950 to-slate-900',
+    'from-indigo-950 to-slate-900',
+    'from-teal-950 to-slate-900',
+    'from-sky-950 to-slate-900',
+    'from-zinc-800 to-zinc-950',
   ];
   let hash = 0;
   for (let i = 0; i < idOrName.length; i++) {
