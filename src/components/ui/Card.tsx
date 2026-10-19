@@ -1,31 +1,41 @@
 import React, { memo } from 'react';
 
+export type CardVariant = 'surface' | 'flat' | 'elevated' | 'glass';
+
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   level?: 1 | 2;
+  variant?: CardVariant;
   interactive?: boolean;
 }
 
 export const Card = memo<CardProps>(({
-  level = 1,
+  level,
+  variant,
   interactive = false,
   className = '',
   children,
   onClick,
   ...props
 }) => {
-  const levelClasses =
-    level === 1
-      ? 'bg-slate-950/45 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/40'
-      : 'bg-white/4 border border-white/10 rounded-xl';
+  // Resolve variant with backward compatibility for level={1 | 2}
+  const resolvedVariant: CardVariant =
+    variant || (level === 2 ? 'flat' : level === 1 ? 'glass' : 'surface');
+
+  const variantClasses: Record<CardVariant, string> = {
+    surface: 'bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius-lg)] p-4 sm:p-5',
+    flat: 'bg-transparent border-0 p-0',
+    elevated: 'bg-[var(--elevated)] border border-[var(--border)] rounded-[var(--radius-lg)] p-4 sm:p-5 shadow-xl shadow-black/40',
+    glass: 'bg-slate-950/45 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/40 p-4 sm:p-5',
+  };
 
   const interactiveClasses = interactive
-    ? 'hover:bg-white/8 hover:border-white/15 cursor-pointer active:scale-[0.99] transition-all duration-150'
+    ? 'hover:bg-[var(--fg-soft)] hover:border-[var(--fg)]/30 cursor-pointer active:translate-y-px transition-all duration-150'
     : '';
 
   return (
     <div
       onClick={onClick}
-      className={`${levelClasses} ${interactiveClasses} ${className}`}
+      className={`${variantClasses[resolvedVariant]} ${interactiveClasses} ${className}`}
       {...props}
     >
       {children}

@@ -1,6 +1,14 @@
 import React, { memo } from 'react';
 
-export type BadgeVariant = 'emerald' | 'blue' | 'amber' | 'rose' | 'neutral';
+export type BadgeVariant =
+  | 'emerald'
+  | 'blue'
+  | 'amber'
+  | 'rose'
+  | 'neutral'
+  | 'pill'
+  | 'tag'
+  | 'accent';
 export type BadgeSize = 'sm' | 'md';
 
 export interface BadgeProps {
@@ -22,8 +30,8 @@ const variantStyles: Record<BadgeVariant, { container: string; pulseDot: string 
   },
   blue: {
     container:
-      'bg-blue-500/15 text-blue-300 border-blue-500/30 hover:bg-blue-500/25',
-    pulseDot: 'bg-blue-400',
+      'bg-[var(--accent-soft)] text-[var(--accent)] border-[var(--accent)]/30 hover:bg-[var(--accent)]/20',
+    pulseDot: 'bg-[var(--accent)]',
   },
   amber: {
     container:
@@ -37,14 +45,29 @@ const variantStyles: Record<BadgeVariant, { container: string; pulseDot: string 
   },
   neutral: {
     container:
-      'bg-white/6 text-gray-300 border-white/10 hover:bg-white/12',
+      'bg-transparent text-[var(--muted)] border-[var(--border)] hover:bg-[var(--fg-soft)]',
     pulseDot: 'bg-gray-400',
+  },
+  pill: {
+    container:
+      'bg-[var(--accent-soft)] text-[var(--accent)] border-transparent font-mono rounded-full',
+    pulseDot: 'bg-[var(--accent)]',
+  },
+  tag: {
+    container:
+      'bg-transparent text-[var(--muted)] border-[var(--border)] rounded-full hover:border-[var(--fg)]/30',
+    pulseDot: 'bg-gray-400',
+  },
+  accent: {
+    container:
+      'bg-[var(--accent)] text-[var(--bg)] font-semibold border-transparent',
+    pulseDot: 'bg-[var(--bg)]',
   },
 };
 
 const sizeStyles: Record<BadgeSize, string> = {
-  sm: 'h-5 px-1.5 text-[10px] gap-1 rounded-md leading-none',
-  md: 'h-6 px-2.5 text-xs gap-1.5 rounded-lg leading-none',
+  sm: 'h-5 px-2 text-[10px] gap-1 rounded-full leading-none',
+  md: 'h-6 px-2.5 text-xs gap-1.5 rounded-full leading-none',
 };
 
 export const Badge = memo<BadgeProps>(({

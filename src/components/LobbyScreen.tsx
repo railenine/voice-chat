@@ -92,7 +92,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
           </div>
 
           {/* Nickname Card */}
-          <Card level={1} className="p-4 sm:p-5 mb-3 sm:mb-4 compact-h-card animate-bounce-in">
+          <Card variant="surface" className="mb-3 sm:mb-4 compact-h-card animate-bounce-in">
             <div className="text-center">
               <p className="text-gray-400 text-xs sm:text-sm mb-1.5">Ваш никнейм</p>
               <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
@@ -130,7 +130,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
 
           {/* Audio Devices Collapsible Card */}
           {deviceState && (
-            <Card level={1} className="compact-h-card p-3.5 sm:p-4 mb-3 sm:mb-4 transition-all animate-bounce-in">
+            <Card variant="surface" className="compact-h-card mb-3 sm:mb-4 transition-all animate-bounce-in">
               <button
                 type="button"
                 onClick={() => setShowAudioSettings(!showAudioSettings)}
@@ -163,19 +163,19 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
           )}
 
           {/* Mode Selection */}
-          <Card level={1} className="p-4 sm:p-5 compact-h-card animate-slide-up">
+          <Card variant="surface" className="compact-h-card animate-slide-up">
             <div className="flex gap-2 mb-3 sm:mb-3.5">
               <Button
-                variant={mode === 'create' ? 'primary' : 'glass'}
+                variant={mode === 'create' ? 'primary' : 'secondary'}
                 onClick={() => setMode('create')}
-                className="flex-1 py-2.5 sm:py-3 h-auto"
+                className="flex-1"
               >
                 Создать
               </Button>
               <Button
-                variant={mode === 'join' ? 'primary' : 'glass'}
+                variant={mode === 'join' ? 'primary' : 'secondary'}
                 onClick={() => setMode('join')}
-                className="flex-1 py-2.5 sm:py-3 h-auto"
+                className="flex-1"
               >
                 Войти
               </Button>

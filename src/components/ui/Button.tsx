@@ -1,6 +1,6 @@
 import React, { forwardRef, memo } from 'react';
 
-export type ButtonVariant = 'primary' | 'glass' | 'danger' | 'ghost' | 'emerald';
+export type ButtonVariant = 'primary' | 'secondary' | 'glass' | 'danger' | 'ghost' | 'emerald';
 export type ButtonSize = 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -13,23 +13,25 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'bg-linear-to-r from-blue-700 to-blue-900 hover:from-blue-800 hover:to-blue-950 text-white font-bold border border-blue-500/40 shadow-lg shadow-blue-900/50 hover:shadow-blue-900/70 active:scale-[0.98]',
+    'bg-[var(--accent)] hover:bg-[color-mix(in_oklch,var(--accent)_88%,var(--bg))] text-[var(--bg)] border border-[var(--accent)] font-semibold shadow-xs',
+  secondary:
+    'bg-transparent hover:bg-[var(--fg-soft)] text-[var(--fg)] border border-[var(--border)] hover:border-[var(--fg)] font-medium',
   glass:
-    'bg-white/6 hover:bg-white/12 active:bg-white/16 text-gray-200 hover:text-white border border-white/10 active:scale-[0.98]',
+    'bg-white/6 hover:bg-white/12 active:bg-white/16 text-gray-200 hover:text-white border border-white/10 font-medium',
   danger:
-    'bg-red-500/20 hover:bg-red-500/30 active:bg-red-500/40 text-red-300 border border-red-500/40 active:scale-[0.98]',
+    'bg-rose-500/15 hover:bg-rose-500/25 active:bg-rose-500/35 text-rose-300 border border-rose-500/35 hover:border-rose-500/50 font-medium',
   ghost:
-    'bg-transparent hover:bg-white/8 active:bg-white/12 text-gray-400 hover:text-white border-transparent',
+    'bg-transparent hover:bg-[var(--fg-soft)] text-[var(--muted)] hover:text-[var(--fg)] border border-transparent font-medium',
   emerald:
-    'bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/40 active:scale-[0.98]',
+    'bg-emerald-500/15 hover:bg-emerald-500/25 active:bg-emerald-500/35 text-emerald-400 border border-emerald-500/30 hover:border-emerald-500/40 font-medium',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'btn-compact !min-h-0 !min-w-0 h-6 px-2 text-[11px] gap-1.5 rounded-md leading-none',
-  md: 'h-9 px-3.5 text-xs sm:text-sm gap-2 rounded-xl',
-  lg: 'h-11 sm:h-12 px-5 text-xs sm:text-sm gap-2.5 rounded-xl font-bold',
-  icon: 'w-8 h-8 !p-0 rounded-xl shrink-0',
-  'icon-sm': 'w-7 h-7 !p-0 rounded-lg shrink-0',
+  sm: 'btn-compact !min-h-0 !min-w-0 h-7 px-2.5 text-xs gap-1.5 rounded-[var(--radius)] leading-none',
+  md: 'min-h-[44px] h-11 px-4 text-sm gap-2 rounded-[var(--radius)] font-medium',
+  lg: 'min-h-[48px] h-12 px-5 text-sm sm:text-base gap-2.5 rounded-[var(--radius)] font-semibold',
+  icon: 'w-11 h-11 min-h-[44px] min-w-[44px] !p-0 rounded-[var(--radius)] shrink-0',
+  'icon-sm': 'w-8 h-8 !p-0 rounded-[var(--radius)] shrink-0',
 };
 
 export const Button = memo(
@@ -57,7 +59,7 @@ export const Button = memo(
           ref={ref}
           type={type}
           disabled={isDisabled}
-          className={`inline-flex items-center justify-center font-medium whitespace-nowrap transition-all duration-150 select-none cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:scale-100 ${
+          className={`inline-flex items-center justify-center whitespace-nowrap transition-all duration-150 select-none cursor-pointer active:translate-y-px focus:outline-none focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:active:translate-y-0 ${
             variantStyles[variant]
           } ${sizeStyles[size]} ${className}`}
           {...props}

@@ -9,9 +9,9 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
 }
 
 const sizeClasses = {
-  sm: 'py-1.5 px-2.5 text-xs rounded-lg',
-  md: 'py-2 sm:py-2.5 px-3 sm:px-4 text-xs sm:text-sm rounded-xl',
-  lg: 'py-2.5 sm:py-3 px-4 text-base sm:text-lg font-bold rounded-xl',
+  sm: 'h-8 py-1.5 px-3 text-xs rounded-[var(--radius)]',
+  md: 'min-h-[44px] h-11 py-2 sm:py-2.5 px-3.5 sm:px-4 text-base sm:text-sm rounded-[var(--radius)]',
+  lg: 'min-h-[48px] h-12 py-2.5 sm:py-3 px-4 text-base sm:text-lg font-bold rounded-[var(--radius)]',
 };
 
 export const Input = memo(
@@ -35,7 +35,7 @@ export const Input = memo(
       return (
         <div className="relative w-full flex items-center">
           {leftIcon && (
-            <div className="absolute left-3 flex items-center justify-center pointer-events-none text-gray-400">
+            <div className="absolute left-3.5 flex items-center justify-center pointer-events-none text-[var(--muted)]">
               {leftIcon}
             </div>
           )}
@@ -43,9 +43,9 @@ export const Input = memo(
           <input
             ref={ref}
             disabled={disabled}
-            className={`w-full bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 text-white placeholder:text-gray-500 focus:outline-none transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
-              leftIcon ? 'pl-9' : ''
-            } ${rightElement ? 'pr-9' : ''} ${textAlign} ${fontStyle} ${
+            className={`w-full bg-[var(--surface)] hover:bg-[color-mix(in_oklch,var(--surface)_90%,var(--fg))] focus:bg-[var(--surface)] border border-[var(--border)] focus:border-[var(--accent)] focus:outline-none focus-visible:outline-2 focus-visible:outline-[var(--accent)] focus-visible:outline-offset-1 text-[var(--fg)] placeholder:text-[var(--muted)] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed ${
+              leftIcon ? 'pl-10' : ''
+            } ${rightElement ? 'pr-10' : ''} ${textAlign} ${fontStyle} ${
               sizeClasses[inputSize]
             } ${className}`}
             {...props}

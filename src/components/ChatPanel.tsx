@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import type { ChatMessage, ChatAttachment } from '../types/protocol';
 import { Tooltip } from './Tooltip';
-import { Button, Badge } from './ui';
+import { Button, Badge, PanelHeader } from './ui';
 import { MediaViewerModal, type MediaViewerItem } from './MediaViewerModal';
 import { ExternalLinkModal } from './ExternalLinkModal';
 import {
@@ -408,7 +408,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
 
       {/* Header (desktop only - mobile uses unified top bar) */}
       {showHeader && (
-        <div className="hidden lg:flex h-16 px-4 sm:px-5 border-b border-white/10 items-center justify-between bg-slate-950/60 backdrop-blur-xl shrink-0">
+        <PanelHeader className="hidden lg:flex">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
               <MessageSquare className="w-4 h-4" />
@@ -473,7 +473,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
               </span>
             )}
           </div>
-        </div>
+        </PanelHeader>
       )}
 
       {/* Stream Viewport (Stacked above chat messages when active) */}

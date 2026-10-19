@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { Mic, MicOff, Headphones, VolumeX, Sparkles, ScreenShare, ScreenShareOff, PhoneOff } from 'lucide-react';
 import { Tooltip } from '../Tooltip';
+import { Button } from '../ui';
 
 export interface VoiceControlBarProps {
   isMuted: boolean;
@@ -44,17 +45,14 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
         hotkey={muteHotkeyLabel}
         position="top"
       >
-        <button
-          type="button"
+        <Button
+          variant={isMuted ? 'danger' : 'secondary'}
+          size="icon"
           onClick={toggleMute}
-          className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center shrink-0 shadow-md ${
-            isMuted
-              ? 'bg-red-500/15 hover:bg-red-500/25 border-red-500/40 text-red-300 shadow-sm shadow-red-950/40'
-              : 'bg-white/8 hover:bg-white/[0.14] border-white/15 text-white'
-          }`}
+          aria-label={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
         >
-          {isMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5 text-white" />}
-        </button>
+          {isMuted ? <MicOff className="w-5 h-5 text-rose-400" /> : <Mic className="w-5 h-5" />}
+        </Button>
       </Tooltip>
 
       {/* Deafen toggle button */}
@@ -68,17 +66,14 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
         hotkey={deafenHotkeyLabel}
         position="top"
       >
-        <button
-          type="button"
+        <Button
+          variant={isDeafened ? 'danger' : 'secondary'}
+          size="icon"
           onClick={toggleDeafen}
-          className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center shrink-0 shadow-md ${
-            isDeafened
-              ? 'bg-red-500/15 hover:bg-red-500/25 border-red-500/40 text-red-300 shadow-sm shadow-red-950/40'
-              : 'bg-white/8 hover:bg-white/[0.14] border-white/15 text-white'
-          }`}
+          aria-label={isDeafened ? 'Включить звук' : 'Заглушить всё'}
         >
-          {isDeafened ? <VolumeX className="w-5 h-5 text-red-400" /> : <Headphones className="w-5 h-5 text-white" />}
-        </button>
+          {isDeafened ? <VolumeX className="w-5 h-5 text-rose-400" /> : <Headphones className="w-5 h-5" />}
+        </Button>
       </Tooltip>
 
       {/* RNNoise AI Toggle */}
@@ -91,17 +86,15 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
         }
         position="top"
       >
-        <button
-          type="button"
+        <Button
+          variant={isNoiseSuppression ? 'secondary' : 'ghost'}
+          size="icon"
           onClick={toggleNoiseSuppression}
-          className={`w-11 h-11 rounded-xl border transition-all active:scale-95 flex items-center justify-center shrink-0 shadow-md ${
-            isNoiseSuppression
-              ? 'bg-white/8 hover:bg-white/[0.14] border-white/15 text-white'
-              : 'bg-white/4 border-white/10 text-gray-400 hover:text-gray-200'
-          }`}
+          aria-label="Шумоподавление"
+          className={!isNoiseSuppression ? 'text-[var(--muted)]' : ''}
         >
           <Sparkles className="w-5 h-5" />
-        </button>
+        </Button>
       </Tooltip>
 
       {/* Screen Share Toggle */}
@@ -115,34 +108,32 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           }
           position="top"
         >
-          <button
-            type="button"
+          <Button
+            variant={isSharingScreen ? 'emerald' : 'secondary'}
+            size="icon"
             onClick={onScreenShareClick}
             disabled={isConnectingScreen}
-            className={`w-11 h-11 rounded-xl border transition-all duration-200 active:scale-95 flex items-center justify-center shrink-0 shadow-md ${
-              isSharingScreen
-                ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-500/50 text-emerald-300 shadow-sm shadow-emerald-950/40 ring-1 ring-emerald-500/40'
-                : 'bg-white/8 hover:bg-white/[0.14] hover:border-white/25 hover:shadow-lg hover:shadow-blue-500/10 border-white/15 text-white'
-            }`}
+            aria-label={isSharingScreen ? 'Остановить показ экрана' : 'Поделиться экраном'}
           >
             {isSharingScreen ? (
               <ScreenShareOff className="w-5 h-5 text-emerald-400" />
             ) : (
-              <ScreenShare className="w-5 h-5 transition-transform duration-200 hover:scale-110" />
+              <ScreenShare className="w-5 h-5" />
             )}
-          </button>
+          </Button>
         </Tooltip>
       )}
 
       {/* Leave Button */}
       <Tooltip content="Выйти из комнаты" description="Отключиться и вернуться на главный экран" position="top">
-        <button
-          type="button"
+        <Button
+          variant="danger"
+          size="icon"
           onClick={handleLeave}
-          className="w-11 h-11 rounded-xl bg-red-500/10 hover:bg-red-600/30 border border-red-500/30 hover:border-red-500/50 text-red-400 hover:text-red-300 transition-all active:scale-95 flex items-center justify-center shrink-0 shadow-md"
+          aria-label="Выйти из комнаты"
         >
-          <PhoneOff className="w-5 h-5 text-red-400" />
-        </button>
+          <PhoneOff className="w-5 h-5 text-rose-400" />
+        </Button>
       </Tooltip>
     </div>
   );

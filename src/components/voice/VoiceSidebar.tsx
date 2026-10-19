@@ -4,11 +4,10 @@ import type { PeerInfo } from "../../types/protocol";
 import { Tooltip } from "../Tooltip";
 import { MAX_ROOM_PEERS } from "../../config";
 import { VoiceCapacityBadge } from "./VoiceCapacityBadge";
-import { VoiceSelfCard } from "./VoiceSelfCard";
-import { VoicePeerCard } from "./VoicePeerCard";
+import { ParticipantCard } from "./ParticipantCard";
 import { VoiceEmptySlot } from "./VoiceEmptySlot";
 import { VoiceControlBar } from "./VoiceControlBar";
-import { Button } from "../ui";
+import { Button, PanelHeader, PanelFooter } from "../ui";
 
 export interface VoiceSidebarProps {
   roomId: string;
@@ -101,7 +100,7 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(
     return (
       <aside className="hidden lg:flex flex-col w-80 xl:w-84 2xl:w-96 border-r border-white/10 bg-slate-950/45 backdrop-blur-xl shrink-0 select-none">
         {/* Sidebar Top: Logo & Room info */}
-        <div className="h-16 px-4 border-b border-white/10 flex items-center justify-between bg-slate-950/60 backdrop-blur-xl shrink-0">
+        <PanelHeader>
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-full bg-linear-to-r from-blue-700 to-blue-900 flex items-center justify-center shadow-md shrink-0">
               <svg
@@ -177,7 +176,7 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(
               </Button>
             </Tooltip>
           </div>
-        </div>
+        </PanelHeader>
 
         {/* Scrollable Participants Section */}
         <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
@@ -191,8 +190,9 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(
 
           <div className="space-y-2.5">
             {/* Current User Card */}
-            <VoiceSelfCard
-              myNickname={myNickname}
+            <ParticipantCard
+              isSelf
+              nickname={myNickname}
               isEditingNick={isEditingNick}
               newNickInput={newNickInput}
               setNewNickInput={setNewNickInput}
@@ -202,14 +202,18 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(
               isSpeaking={isSpeaking}
               isMuted={isMuted}
               isDeafened={isDeafened}
-              isSharingScreen={isSharingScreen}
+              isStreaming={isSharingScreen}
             />
 
             {/* Remote Peers Cards */}
             {peers.map((peer) => (
-              <VoicePeerCard
+              <ParticipantCard
                 key={peer.peerId}
-                peer={peer}
+                peerId={peer.peerId}
+                nickname={peer.nickname}
+                isSpeaking={peer.isSpeaking}
+                isMuted={peer.isMuted}
+                isDeafened={peer.isDeafened}
                 volume={peerVolumes[peer.peerId] ?? 100}
                 onVolumeChange={setPeerVolume}
                 onToggleMutePeer={handleToggleMutePeer}
@@ -227,7 +231,7 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(
         </div>
 
         {/* Desktop Sidebar Bottom Dock: Mic, Deafen, Noise Suppression, Screen Share, Leave */}
-        <div className="h-[69px] px-3 border-t border-white/10 bg-slate-950/60 backdrop-blur-xl shrink-0 flex items-center">
+        <PanelFooter className="px-3">
           <VoiceControlBar
             isMuted={isMuted}
             isDeafened={isDeafened}
@@ -244,7 +248,7 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(
             handleLeave={handleLeave}
             className="flex items-center justify-start gap-2"
           />
-        </div>
+        </PanelFooter>
       </aside>
     );
   },
