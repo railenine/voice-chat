@@ -11,7 +11,7 @@ import {
   SCREEN_SHARE_PRESETS,
 } from '../hooks/useScreenShare';
 import { Modal } from './Modal';
-import { Button } from './ui';
+import { Button, Badge } from './ui';
 
 interface ScreenShareModalProps {
   isOpen: boolean;
@@ -78,7 +78,7 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = memo(({
       <Modal.Header
         title="Параметры трансляции"
         subtitle="Выберите качество видео и частоту кадров"
-        icon={<Monitor className="w-5 h-5 text-blue-400" />}
+        icon={<Monitor className="w-5 h-5 text-[var(--accent)]" />}
         onClose={onClose}
       />
 
@@ -86,11 +86,11 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = memo(({
         {/* Section 1: Resolution & FPS Presets */}
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+            <label className="text-xs font-semibold text-[var(--muted)] uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-[var(--accent)]" />
               <span>Качество и частота кадров</span>
             </label>
-            <span className="text-[11px] text-gray-400 font-mono">
+            <span className="text-[11px] text-[var(--muted)] font-mono">
               {SCREEN_SHARE_PRESETS[selectedQuality]?.width}×
               {SCREEN_SHARE_PRESETS[selectedQuality]?.height} •{' '}
               {SCREEN_SHARE_PRESETS[selectedQuality]?.frameRate} FPS
@@ -107,38 +107,35 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = memo(({
                   key={key}
                   type="button"
                   onClick={() => setSelectedQuality(key)}
-                  className={`p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col justify-between gap-1.5 active:scale-[0.98] ${
+                  className={`p-3 rounded-[var(--radius)] border text-left transition-all duration-200 cursor-pointer relative overflow-hidden flex flex-col justify-between gap-1.5 active:scale-[0.98] ${
                     isSelected
-                      ? 'bg-blue-600/20 border-blue-500/70 ring-1 ring-blue-500/40 shadow-lg shadow-blue-950/40'
-                      : 'bg-white/4 hover:bg-white/8 hover:border-white/20 hover:shadow-md hover:shadow-black/20 border-white/10'
+                      ? 'bg-[var(--accent-soft)]/20 border-[var(--accent)] ring-1 ring-[var(--accent)]/40 shadow-xs'
+                      : 'bg-[var(--surface)]/60 hover:bg-[var(--surface)] border-[var(--border)]'
                   }`}
                 >
                   <div className="flex items-center justify-between w-full">
                     <span
                       className={`text-xs font-bold tracking-tight transition-colors duration-200 ${
-                        isSelected ? 'text-white' : 'text-gray-200'
+                        isSelected ? 'text-[var(--fg)]' : 'text-[var(--muted)]'
                       }`}
                     >
                       {preset.label}
                     </span>
-                    <span
-                      className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border transition-all duration-200 ${
-                        isSelected
-                          ? 'bg-blue-500/30 border-blue-400/50 text-blue-200 font-bold shadow-sm shadow-blue-500/20'
-                          : 'bg-white/5 border-white/10 text-gray-400'
-                      }`}
+                    <Badge
+                      variant={isSelected ? 'blue' : 'tag'}
+                      size="sm"
                     >
                       {preset.badge}
-                    </span>
+                    </Badge>
                   </div>
 
-                  <p className="text-[11px] text-gray-400 leading-snug line-clamp-2">
+                  <p className="text-[11px] text-[var(--muted)] leading-snug line-clamp-2">
                     {preset.desc}
                   </p>
 
                   {/* Selected Indicator Checkmark */}
                   <div
-                    className={`absolute bottom-2.5 right-2.5 w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center shadow-md shadow-blue-500/50 transition-all duration-200 pointer-events-none ${
+                    className={`absolute bottom-2.5 right-2.5 w-4 h-4 rounded-full bg-[var(--accent)] text-[var(--bg)] flex items-center justify-center shadow-xs transition-all duration-200 pointer-events-none ${
                       isSelected
                         ? 'opacity-100 scale-100 rotate-0'
                         : 'opacity-0 scale-50 -rotate-45'
@@ -154,14 +151,14 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = memo(({
 
         {/* Section 2: Informative Notice & Audio Guidance */}
         <div className="space-y-2 animate-tab-fade">
-          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-start gap-2.5 text-xs text-amber-200/90 leading-relaxed">
+          <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-[var(--radius)] flex items-start gap-2.5 text-xs text-amber-200/90 leading-relaxed">
             <Info className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
             <span>
               <strong className="font-semibold text-amber-300">Звук трансляции:</strong> если требуется передавать звук, отметьте галочку общего доступа к аудио в следующем окне выбора. Для изоляции звука видео или музыки выбирайте вкладку браузера.
             </span>
           </div>
-          <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-start gap-2.5 text-[11px] text-blue-200/90 leading-relaxed">
-            <Info className="w-3.5 h-3.5 text-blue-400 mt-0.5 shrink-0" />
+          <div className="p-2.5 bg-[var(--accent-soft)]/10 border border-[var(--accent)]/20 rounded-[var(--radius)] flex items-start gap-2.5 text-[11px] text-[var(--fg)]/80 leading-relaxed">
+            <Info className="w-3.5 h-3.5 text-[var(--accent)] mt-0.5 shrink-0" />
             <span>
               На следующем шаге подтвердите выбор конкретного окна, вкладки или всего экрана в системном диалоге.
             </span>
@@ -194,4 +191,3 @@ export const ScreenShareModal: React.FC<ScreenShareModalProps> = memo(({
 });
 
 ScreenShareModal.displayName = 'ScreenShareModal';
-

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, memo } from 'react';
 import { X } from 'lucide-react';
 import { Tooltip } from './Tooltip';
+import { Button } from './ui/Button';
 
 export interface ModalProps {
   isOpen: boolean;
@@ -39,19 +40,19 @@ export const ModalHeader = memo<ModalHeaderProps>(({
   children,
 }) => {
   return (
-    <div className={`flex items-center justify-between p-4 sm:p-5 border-b border-white/10 shrink-0 bg-white/2 ${className}`}>
+    <div className={`flex items-center justify-between p-4 sm:p-5 border-b border-[var(--border)] shrink-0 bg-[var(--surface)] ${className}`}>
       <div className="flex items-center gap-3 min-w-0">
         {icon && (
-          <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0 shadow-sm">
+          <div className="w-9 h-9 rounded-[var(--radius)] bg-[var(--accent-soft)]/20 border border-[var(--accent)]/30 flex items-center justify-center text-[var(--accent)] shrink-0 shadow-xs">
             {icon}
           </div>
         )}
         <div className="min-w-0">
-          <h3 className="font-bold text-sm sm:text-base text-white leading-snug truncate">
+          <h3 className="font-bold text-sm sm:text-base text-[var(--fg)] leading-snug truncate">
             {title}
           </h3>
           {subtitle && (
-            <p className="text-xs text-gray-400 mt-0.5 truncate">{subtitle}</p>
+            <p className="text-xs text-[var(--muted)] mt-0.5 truncate">{subtitle}</p>
           )}
         </div>
       </div>
@@ -60,14 +61,14 @@ export const ModalHeader = memo<ModalHeaderProps>(({
         {children}
         {onClose && (
           <Tooltip content="Закрыть" position="left">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="icon-sm"
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-white rounded-lg hover:bg-white/10 active:bg-white/15 transition-colors cursor-pointer select-none"
               aria-label="Закрыть"
             >
-              <X className="w-4 h-4" />
-            </button>
+              <X className="w-4 h-4 text-[var(--muted)] hover:text-[var(--fg)]" />
+            </Button>
           </Tooltip>
         )}
       </div>
@@ -82,7 +83,7 @@ export const ModalBody = memo<ModalBodyProps>(({
   className = '',
 }) => {
   return (
-    <div className={`p-4 sm:p-5 overflow-y-auto custom-scrollbar modal-content-scroll ${className}`}>
+    <div className={`p-4 sm:p-5 overflow-y-auto custom-scrollbar modal-content-scroll bg-[var(--bg)]/40 text-[var(--fg)] ${className}`}>
       {children}
     </div>
   );
@@ -95,7 +96,7 @@ export const ModalFooter = memo<ModalFooterProps>(({
   className = '',
 }) => {
   return (
-    <div className={`flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-white/10 shrink-0 bg-slate-950/50 rounded-b-2xl ${className}`}>
+    <div className={`flex items-center justify-end gap-2 p-3 sm:p-4 border-t border-[var(--border)] shrink-0 bg-[var(--surface)] rounded-b-[calc(var(--radius)+4px)] ${className}`}>
       {children}
     </div>
   );
@@ -160,9 +161,9 @@ export const Modal: ModalComponent = (({
       role="dialog"
     >
       <div
-        className={`bg-slate-950/90 backdrop-blur-2xl border border-white/15 rounded-2xl ${
+        className={`bg-[var(--surface)]/95 backdrop-blur-2xl border border-[var(--border)] rounded-[calc(var(--radius)+4px)] ${
           hasCustomMaxWidth ? '' : 'max-w-md'
-        } w-full shadow-2xl shadow-black/80 text-white modal-wrapper flex flex-col overflow-hidden ${
+        } w-full shadow-2xl shadow-black/80 text-[var(--fg)] modal-wrapper flex flex-col overflow-hidden ${
           isClosing ? 'animate-modal-out' : 'animate-modal-in'
         } ${className}`}
         onClick={(e) => e.stopPropagation()}
