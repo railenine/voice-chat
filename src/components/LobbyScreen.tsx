@@ -110,14 +110,15 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                   position="top"
                 >
                   <Button
-                    variant="glass"
+                    variant="secondary"
+                    size="icon"
                     onClick={() => {
                       const newNick = generateNickname();
                       setNickname(newNick);
                       saveStoredNickname(newNick);
                     }}
-                    className="p-2 sm:p-2.5 h-auto rounded-xl shrink-0"
-                    icon={<Dices className="w-4 h-4 text-blue-400" />}
+                    className="shrink-0"
+                    icon={<Dices className="w-4 h-4 text-[var(--accent)]" />}
                   />
                 </Tooltip>
               </div>
@@ -184,8 +185,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                     Создайте новую комнату и поделитесь ID с друзьями
                   </p>
                 </div>
-                <div className="w-full py-2 sm:py-2.5 px-3 sm:px-4 compact-h-slot bg-white/3 border border-white/6 rounded-xl flex items-center justify-center gap-2 text-gray-400 text-xs sm:text-xs select-none">
-                  <Sparkles className="w-3.5 h-3.5 text-blue-400/90 shrink-0" />
+                <div className="w-full py-2 sm:py-2.5 px-3 sm:px-4 compact-h-slot bg-[var(--elevated)] border border-[var(--border)] rounded-[var(--radius)] flex items-center justify-center gap-2 text-[var(--muted)] text-xs select-none">
+                  <Sparkles className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
                   <span className="truncate">Комната создается мгновенно с P2P шифрованием</span>
                 </div>
                 <Button
@@ -239,16 +240,16 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
 
             {/* Recent Visited Rooms: Visible regardless of active tab */}
             {recentRooms.length > 0 && (
-              <div className="mt-2.5 sm:mt-3 pt-2 sm:pt-2.5 border-t border-white/10 compact-h-recent">
+              <div className="mt-2.5 sm:mt-3 pt-2 sm:pt-2.5 border-t border-[var(--border)] compact-h-recent">
                 <div className="flex items-center justify-between mb-1.5 px-0.5">
-                  <div className="flex items-center gap-1.5 text-gray-400 text-[11px] font-medium tracking-wide">
-                    <History className="w-3 h-3 text-blue-400 shrink-0" />
+                  <div className="flex items-center gap-1.5 text-[var(--muted)] text-[11px] font-medium tracking-wide">
+                    <History className="w-3 h-3 text-[var(--accent)] shrink-0" />
                     <span>Недавние комнаты</span>
                   </div>
                   <button
                     type="button"
                     onClick={handleClearRecent}
-                    className="text-[10px] text-gray-500 hover:text-rose-400 transition-colors cursor-pointer py-0.5"
+                    className="text-[10px] text-[var(--muted)] hover:text-rose-400 transition-colors cursor-pointer py-0.5"
                     title="Очистить историю комнат"
                   >
                     Очистить
@@ -262,17 +263,17 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                       level={2}
                       interactive
                       onClick={() => handleQuickJoin(room.roomId)}
-                      className="group/chip flex-1 min-w-0 flex flex-col justify-between py-1.5 px-2 sm:px-2.5 hover:bg-blue-600/15 hover:border-blue-500/30 text-gray-200 hover:text-white"
+                      className="group/chip flex-1 min-w-0 flex flex-col justify-between py-1.5 px-2 sm:px-2.5 hover:border-[var(--accent)]/50 text-[var(--fg)]"
                       title={`Войти в комнату ${room.roomId}`}
                     >
                       <div className="flex items-center justify-between gap-1 w-full min-w-0">
-                        <span className="font-mono font-bold text-xs tracking-wider text-blue-300 group-hover/chip:text-blue-200 truncate">
+                        <span className="font-mono font-bold text-xs tracking-wider text-[var(--accent)] truncate">
                           {room.roomId}
                         </span>
                         <button
                           type="button"
                           onClick={(e) => handleRemoveRecent(e, room.roomId)}
-                          className="w-6 h-6 -mr-1 -mt-0.5 flex items-center justify-center rounded-md text-gray-500 hover:text-rose-400 hover:bg-rose-500/20 active:scale-90 transition-all shrink-0 cursor-pointer"
+                          className="w-6 h-6 -mr-1 -mt-0.5 flex items-center justify-center rounded-[var(--radius)] text-[var(--muted)] hover:text-rose-400 hover:bg-rose-500/15 active:scale-90 transition-all shrink-0 cursor-pointer"
                           title="Удалить из истории"
                           aria-label="Удалить комнату из истории"
                         >
@@ -280,8 +281,8 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                         </button>
                       </div>
 
-                      <div className="flex items-center gap-1 text-[10px] text-gray-400 group-hover/chip:text-gray-300 mt-0.5 min-w-0">
-                        <Clock className="w-2.5 h-2.5 text-gray-500 group-hover/chip:text-blue-400/80 shrink-0" />
+                      <div className="flex items-center gap-1 text-[10px] text-[var(--muted)] mt-0.5 min-w-0">
+                        <Clock className="w-2.5 h-2.5 text-[var(--muted)] shrink-0" />
                         <span className="truncate">{formatRecentTime(room.lastVisited)}</span>
                       </div>
                     </Card>
@@ -293,11 +294,11 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
 
           {/* Info & Version */}
           <div className="mt-3 sm:mt-4 text-center ultra-compact-h-hide flex flex-col items-center gap-1">
-            <p className="text-gray-500 text-[11px] sm:text-xs flex items-center justify-center gap-1.5">
-              <Lock className="w-3 h-3 text-blue-400/70" />
+            <p className="text-[var(--muted)] text-[11px] sm:text-xs flex items-center justify-center gap-1.5">
+              <Lock className="w-3 h-3 text-[var(--accent)]" />
               <span>Peer-to-peer шифрование • Без записи разговоров</span>
             </p>
-            <p className="text-gray-500 text-[11px] sm:text-xs flex items-center justify-center gap-1.5">
+            <p className="text-[var(--muted)] text-[11px] sm:text-xs flex items-center justify-center gap-1.5">
               <span>Проект создан исключительно в учебных целях</span>
             </p>
             {onCheckUpdates && (
@@ -309,7 +310,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                 <button
                   type="button"
                   onClick={onCheckUpdates}
-                  className="text-[10px] text-gray-500 hover:text-blue-400 font-mono transition-colors cursor-pointer"
+                  className="text-[10px] text-[var(--muted)] hover:text-[var(--accent)] font-mono transition-colors cursor-pointer"
                 >
                   RVxis v{APP_VERSION}
                 </button>

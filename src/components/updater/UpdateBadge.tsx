@@ -21,10 +21,11 @@ export const UpdateBadge: React.FC<UpdateBadgeProps> = memo(({
       position="bottom"
     >
       <Badge
-        variant="emerald"
+        variant="blue"
         size="sm"
+        pulse
         onClick={onClick}
-        icon={<Download className="w-3 h-3 text-emerald-400 shrink-0" />}
+        icon={<Download className="w-3 h-3 text-[var(--accent)] shrink-0" />}
         className={`max-[420px]:px-1.5 ${className}`}
       >
         <span className="max-[420px]:hidden">Обновление</span>

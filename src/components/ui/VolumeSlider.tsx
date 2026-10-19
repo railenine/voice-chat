@@ -26,16 +26,11 @@ export const VolumeSlider = memo<VolumeSliderProps>(({
 }) => {
   const isMuted = value === 0;
   const isBoosted = value > 100;
+  const percent = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
 
-  const valueColor = isMuted
-    ? 'text-red-400'
-    : isBoosted
-    ? 'text-emerald-400 font-bold'
-    : 'text-blue-300';
-
-  const accentColor = isBoosted
-    ? 'bg-emerald-500/25 accent-emerald-400'
-    : 'bg-white/15 accent-blue-500';
+  const trackBackground = isMuted
+    ? 'var(--border)'
+    : `linear-gradient(to right, var(--accent) 0%, var(--accent) ${percent}%, var(--border) ${percent}%, var(--border) 100%)`;
 
   return (
     <div className={`space-y-1.5 ${className}`}>
@@ -43,21 +38,29 @@ export const VolumeSlider = memo<VolumeSliderProps>(({
         <button
           type="button"
           onClick={onToggleMute}
-          className={`flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors cursor-pointer select-none font-medium ${
+          className={`flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--fg)] transition-colors select-none font-medium ${
             onToggleMute ? 'cursor-pointer' : 'cursor-default'
           }`}
           title={onToggleMute ? (isMuted ? 'Включить звук' : 'Заглушить') : label}
         >
           {isMuted ? (
-            <VolumeX className="w-3.5 h-3.5 text-red-400 shrink-0" />
+            <VolumeX className="w-3.5 h-3.5 text-rose-400 shrink-0" />
           ) : (
-            <Volume2 className="w-3.5 h-3.5 text-blue-300 shrink-0" />
+            <Volume2 className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
           )}
           <span>{label}</span>
         </button>
 
         {showPercent && (
-          <span className={`font-mono font-semibold text-[11px] ${valueColor}`}>
+          <span
+            className={`font-mono text-[11px] ${
+              isMuted
+                ? 'text-rose-400 font-semibold'
+                : isBoosted
+                ? 'text-[var(--accent)] font-bold'
+                : 'text-[var(--accent)] font-medium'
+            }`}
+          >
             {value}%
           </span>
         )}
@@ -72,7 +75,8 @@ export const VolumeSlider = memo<VolumeSliderProps>(({
         onChange={(e) => onChange(Number(e.target.value))}
         onInput={(e) => onChange(Number((e.target as HTMLInputElement).value))}
         title={`${label}: ${value}%${isBoosted ? ' (Усиление)' : ''}`}
-        className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer transition-all ${accentColor}`}
+        style={{ background: trackBackground }}
+        className="volume-slider-input w-full h-1.5 rounded-full appearance-none cursor-pointer transition-colors"
       />
     </div>
   );

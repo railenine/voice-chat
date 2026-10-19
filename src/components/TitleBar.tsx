@@ -181,7 +181,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(
                 <button
                   type="button"
                   onClick={onCheckUpdates}
-                  className="text-[10px] text-gray-500 hover:text-blue-400 font-mono leading-none transition-colors cursor-pointer"
+                  className="text-[10px] text-[var(--muted)] hover:text-[var(--accent)] font-mono leading-none transition-colors cursor-pointer"
                 >
                   v{APP_VERSION}
                 </button>
