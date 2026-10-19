@@ -12,14 +12,14 @@ interface UseAppUpdaterOptions {
 
 const DISMISSED_VERSION_KEY = 'rvxis_dismissed_update_version';
 
-// ⚠️ TEMPORARY MOCK FOR UPDATE BUTTON TESTING
-const MOCK_UPDATE_ENABLED = false;
+// ⚠️ TEMPORARY MOCK FOR UPDATE BUTTON TESTING (Requested by user)
+const MOCK_UPDATE_ENABLED = true;
 
 const MOCK_UPDATE_INFO: UpdateInfo = {
-  version: '0.1.17',
+  version: '0.1.18',
   currentVersion: APP_VERSION,
-  notes: '• Тестовое обновление v0.1.17 для проверки кнопки и интерфейса.\n• Проверка отображения бейджа обновления в TitleBar и вкладке настроек.\n• Новое двухколоночное окно настроек звонка.',
-  portableUrl: 'https://github.com/railenine/voice-chat/releases/download/v0.1.17/RVxis.exe',
+  notes: '• Новый визуальный стиль OKLCH по дизайн-спецификации приложения.\n• Кастомные селекторы аудиоустройств с фирменным акцентным фокусом.\n• Обновлённый бейдж и окно проверки обновлений.',
+  portableUrl: 'https://github.com/railenine/voice-chat/releases/download/v0.1.18/RVxis.exe',
 };
 
 export function useAppUpdater(options?: UseAppUpdaterOptions) {

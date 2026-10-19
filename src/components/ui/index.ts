@@ -21,3 +21,7 @@ export type { PanelFooterProps } from './PanelFooter';
 
 export { Logo } from './Logo';
 export type { LogoProps, LogoSize } from './Logo';
+
+export { Select } from './Select';
+export type { SelectProps, SelectOption } from './Select';
+

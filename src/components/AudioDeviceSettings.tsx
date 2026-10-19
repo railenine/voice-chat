@@ -1,8 +1,8 @@
-import React, { memo } from 'react';
-import { Mic, Volume2, Play, Square, ChevronDown } from 'lucide-react';
+import React, { memo, useMemo } from 'react';
+import { Mic, Volume2, Play, Square } from 'lucide-react';
 import { useAudioDevices } from '../hooks/useAudioDevices';
 import { Tooltip } from './Tooltip';
-import { Button } from './ui';
+import { Button, Select, SelectOption } from './ui';
 
 interface AudioDeviceSettingsProps {
   deviceState: ReturnType<typeof useAudioDevices>;
@@ -29,6 +29,38 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
     playTestSound,
   } = deviceState;
 
+  const inputOptions: SelectOption[] = useMemo(() => {
+    if (audioInputs.length === 0) {
+      return [{ value: '', label: 'Микрофон по умолчанию' }];
+    }
+    return audioInputs.map((device, index) => {
+      const fallbackLabel =
+        device.deviceId && device.deviceId !== 'default'
+          ? `Микрофон ${index + 1} (${device.deviceId.slice(0, 8)}...)`
+          : 'Микрофон по умолчанию';
+      return {
+        value: device.deviceId,
+        label: device.label || fallbackLabel,
+      };
+    });
+  }, [audioInputs]);
+
+  const outputOptions: SelectOption[] = useMemo(() => {
+    if (audioOutputs.length === 0) {
+      return [{ value: '', label: 'Устройство вывода по умолчанию' }];
+    }
+    return audioOutputs.map((device, index) => {
+      const fallbackLabel =
+        device.deviceId && device.deviceId !== 'default'
+          ? `Динамики ${index + 1} (${device.deviceId.slice(0, 8)}...)`
+          : 'Устройство вывода по умолчанию';
+      return {
+        value: device.deviceId,
+        label: device.label || fallbackLabel,
+      };
+    });
+  }, [audioOutputs]);
+
   return (
     <div className={compact ? 'space-y-2.5 text-xs' : 'space-y-4 text-sm'}>
       {/* Microphone Selection */}
@@ -49,38 +81,12 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
           )}
         </div>
 
-        <div className="relative">
-          <select
-            value={selectedInput}
-            onChange={(e) => setSelectedInput(e.target.value)}
-            className={`w-full appearance-none bg-[var(--surface)] hover:bg-[var(--elevated)] focus:bg-[var(--elevated)] border border-[var(--border)] focus:border-[var(--accent)] rounded-[var(--radius)] text-[var(--fg)] text-xs focus:outline-none cursor-pointer transition-colors pr-8 ${
-              compact ? 'py-1.5 px-2.5' : 'py-2 px-3'
-            }`}
-          >
-            {audioInputs.length === 0 ? (
-              <option value="" className="bg-[var(--surface)] text-[var(--fg)]">
-                Микрофон по умолчанию
-              </option>
-            ) : (
-              audioInputs.map((device, index) => {
-                const fallbackLabel =
-                  device.deviceId && device.deviceId !== 'default'
-                    ? `Микрофон ${index + 1} (${device.deviceId.slice(0, 8)}...)`
-                    : 'Микрофон по умолчанию';
-                return (
-                  <option
-                    key={device.deviceId || `input-${index}`}
-                    value={device.deviceId}
-                    className="bg-[var(--surface)] text-[var(--fg)]"
-                  >
-                    {device.label || fallbackLabel}
-                  </option>
-                );
-              })
-            )}
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-[var(--muted)] pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
-        </div>
+        <Select
+          value={selectedInput}
+          onChange={setSelectedInput}
+          options={inputOptions}
+          compact={compact}
+        />
 
         {/* Mic test button & volume bar */}
         <div className="flex items-center gap-2 pt-0.5">
@@ -125,38 +131,12 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
         </div>
 
         {isSinkSupported ? (
-          <div className="relative">
-            <select
-              value={selectedOutput}
-              onChange={(e) => setSelectedOutput(e.target.value)}
-              className={`w-full appearance-none bg-[var(--surface)] hover:bg-[var(--elevated)] focus:bg-[var(--elevated)] border border-[var(--border)] focus:border-[var(--accent)] rounded-[var(--radius)] text-[var(--fg)] text-xs focus:outline-none cursor-pointer transition-colors pr-8 ${
-                compact ? 'py-1.5 px-2.5' : 'py-2 px-3'
-              }`}
-            >
-              {audioOutputs.length === 0 ? (
-                <option value="" className="bg-[var(--surface)] text-[var(--fg)]">
-                  Устройство вывода по умолчанию
-                </option>
-              ) : (
-                audioOutputs.map((device, index) => {
-                  const fallbackLabel =
-                    device.deviceId && device.deviceId !== 'default'
-                      ? `Динамики ${index + 1} (${device.deviceId.slice(0, 8)}...)`
-                      : 'Устройство вывода по умолчанию';
-                  return (
-                    <option
-                      key={device.deviceId || `output-${index}`}
-                      value={device.deviceId}
-                      className="bg-[var(--surface)] text-[var(--fg)]"
-                    >
-                      {device.label || fallbackLabel}
-                    </option>
-                  );
-                })
-              )}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-[var(--muted)] pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2" />
-          </div>
+          <Select
+            value={selectedOutput}
+            onChange={setSelectedOutput}
+            options={outputOptions}
+            compact={compact}
+          />
         ) : (
           <p className="text-[11px] text-[var(--muted)] py-0.5">
             Вывод звука управляется системными настройками Windows / браузера.
@@ -168,4 +148,5 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
 });
 
 AudioDeviceSettings.displayName = 'AudioDeviceSettings';
+
 

@@ -90,7 +90,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
           {/* Nickname Card */}
           <Card variant="surface" className="mb-3 sm:mb-4 compact-h-card animate-bounce-in">
             <div className="text-center">
-              <p className="text-gray-400 text-xs sm:text-sm mb-1.5">Ваш никнейм</p>
+              <p className="text-[var(--muted)] text-xs sm:text-sm mb-1.5">Ваш никнейм</p>
               <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
                 <Input
                   align="center"
@@ -134,21 +134,21 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                 className="w-full flex items-center justify-between text-left group cursor-pointer"
               >
                 <div className="flex items-center gap-2">
-                  <Settings2 className="w-4 h-4 text-blue-400" />
-                  <span className="text-white font-semibold text-xs sm:text-sm group-hover:text-blue-300 transition-colors">
+                  <Settings2 className="w-4 h-4 text-[var(--accent)]" />
+                  <span className="text-[var(--fg)] font-semibold text-xs sm:text-sm group-hover:text-[var(--accent)] transition-colors">
                     Настройка звуковых устройств
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-gray-400 group-hover:text-white transition-colors">
-                  <span className="text-[11px] font-medium text-gray-400">
+                <div className="flex items-center gap-1.5 text-xs text-[var(--muted)] group-hover:text-[var(--fg)] transition-colors">
+                  <span className="text-[11px] font-medium text-[var(--muted)] group-hover:text-[var(--fg)] transition-colors">
                     {showAudioSettings ? 'Скрыть' : 'Настроить'}
                   </span>
-                  <ChevronDown className={`w-3.5 h-3.5 transform transition-transform duration-200 ${showAudioSettings ? 'rotate-180' : ''}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 transform transition-transform duration-200 ${showAudioSettings ? 'rotate-180 text-[var(--accent)]' : ''}`} />
                 </div>
               </button>
               <div
                 className={`grid transition-all duration-300 ease-in-out ${showAudioSettings
-                  ? 'grid-rows-[1fr] opacity-100 pt-3 mt-3 border-t border-white/10'
+                  ? 'grid-rows-[1fr] opacity-100 pt-3 mt-3 border-t border-[var(--border)]'
                   : 'grid-rows-[0fr] opacity-0 pt-0 mt-0 border-t-0'
                   }`}
               >
@@ -181,7 +181,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
             {mode === 'create' ? (
               <div key="create" className="animate-tab-fade mode-card-content flex flex-col justify-between">
                 <div className="text-center pt-0.5 sm:pt-1">
-                  <p className="text-gray-300 text-xs sm:text-sm font-medium">
+                  <p className="text-[var(--muted)] text-xs sm:text-sm font-medium">
                     Создайте новую комнату и поделитесь ID с друзьями
                   </p>
                 </div>
@@ -202,7 +202,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
             ) : (
               <div key="join" className="animate-tab-fade mode-card-content flex flex-col justify-between">
                 <div className="text-center pt-0.5 sm:pt-1">
-                  <p className="text-gray-300 text-xs sm:text-sm font-medium">
+                  <p className="text-[var(--muted)] text-xs sm:text-sm font-medium">
                     Введите ID комнаты для присоединения
                   </p>
                 </div>
