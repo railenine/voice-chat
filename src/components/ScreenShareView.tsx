@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { RemoteScreenShare } from '../hooks/useScreenShare';
 import { normalizeSinkId } from '../utils/device';
-import { Button } from './ui';
+import { Button, Badge } from './ui';
 
 interface ScreenShareViewProps {
   activeStreams: RemoteScreenShare[];
@@ -216,7 +216,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
         ? `fixed inset-0 z-50 h-dvh w-screen bg-black rounded-none border-none ${
             isClosing ? 'opacity-0 scale-[0.98] transition-all duration-200 pointer-events-none' : ''
           }`
-        : `relative rounded-2xl lg:rounded-none border border-white/10 lg:border-x-0 lg:border-t-0 lg:border-b bg-slate-950/80 backdrop-blur-2xl shadow-2xl lg:shadow-none max-h-[55vh] min-h-70 sm:min-h-90 flex-1 shrink-0 ${
+        : `relative rounded-2xl lg:rounded-none border border-[var(--border)] lg:border-x-0 lg:border-t-0 lg:border-b bg-[var(--bg)]/90 backdrop-blur-xl shadow-2xl lg:shadow-none max-h-[55vh] min-h-70 sm:min-h-90 flex-1 shrink-0 ${
             isClosing ? 'animate-modal-out pointer-events-none' : 'animate-modal-in'
           }`
         }`}
@@ -269,26 +269,23 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
             }`}
         >
           <div className="flex items-center gap-2 min-w-0">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
-            <span className="text-white font-semibold text-xs sm:text-sm truncate drop-shadow">
+            <span className="text-[var(--fg)] font-semibold text-xs sm:text-sm truncate drop-shadow">
               {isLocalFocused ? `${myNickname} (Ваш экран)` : focusedRemoteStream?.participantName || 'Трансляция'}
             </span>
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 shrink-0">
-              <Radio className="w-2.5 h-2.5 animate-pulse shrink-0" />
-              <span>В эфире</span>
-            </span>
+            <Badge variant="blue" size="sm" pulse icon={<Radio className="w-2.5 h-2.5" />}>
+              В эфире
+            </Badge>
             {((isLocalFocused && localAudioTrack) || focusedRemoteStream?.hasAudio) && (
-              <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/20 text-blue-300 border border-blue-500/30 shrink-0">
-                <Volume2 className="w-3 h-3 shrink-0" />
-                <span>Звук системы</span>
-              </span>
+              <Badge variant="pill" size="sm" icon={<Volume2 className="w-3 h-3" />}>
+                Звук
+              </Badge>
             )}
           </div>
 
           <div className="flex items-center gap-2">
             {/* Stream volume control in top header for remote stream */}
             {!isLocalFocused && focusedRemoteStream && (
-              <div className="btn-compact min-w-0! min-h-0! h-8 px-2 sm:px-2.5 rounded-lg bg-black/60 hover:bg-black/80 border border-white/15 flex items-center gap-1.5 text-xs text-white shrink-0 shadow-sm">
+              <div className="btn-compact min-w-0! min-h-0! h-8 px-2 sm:px-2.5 rounded-[var(--radius)] bg-[var(--surface)]/90 hover:bg-[var(--surface)] border border-[var(--border)] flex items-center gap-1.5 text-xs text-[var(--fg)] shrink-0 shadow-xs">
                 <button
                   type="button"
                   onClick={() =>
@@ -297,13 +294,13 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
                       (streamVolumes[focusedRemoteStream.participantId] ?? 100) === 0 ? 100 : 0
                     )
                   }
-                  className="hover:text-emerald-400 transition-colors p-0.5 cursor-pointer flex items-center justify-center"
+                  className="hover:text-[var(--accent)] transition-colors p-0.5 cursor-pointer flex items-center justify-center"
                   title="Вкл/Выкл звук стрима"
                 >
                   {(streamVolumes[focusedRemoteStream.participantId] ?? 100) === 0 ? (
-                    <VolumeX className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                    <VolumeX className="w-3.5 h-3.5 text-rose-400 shrink-0" />
                   ) : (
-                    <Volume2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <Volume2 className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
                   )}
                 </button>
                 <input
@@ -314,10 +311,10 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
                   onChange={(e) =>
                     onVolumeChange(focusedRemoteStream.participantId, Number(e.target.value))
                   }
-                  className="w-14 sm:w-20 h-1.5 bg-white/25 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                  className="w-14 sm:w-20 h-1.5 bg-[var(--border)] rounded-lg appearance-none cursor-pointer accent-[var(--accent)]"
                   title={`Громкость стрима: ${streamVolumes[focusedRemoteStream.participantId] ?? 100}%`}
                 />
-                <span className="font-mono text-[10px] text-emerald-300 font-semibold w-6 text-right">
+                <span className="font-mono text-[10px] text-[var(--muted)] font-semibold w-6 text-right">
                   {streamVolumes[focusedRemoteStream.participantId] ?? 100}%
                 </span>
               </div>
@@ -366,9 +363,9 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
       </div>
       {/* Multi-stream Thumbnails Bar (visible if 2 or more streams are active) */}
       {(activeStreams.length > 1 || (isSharing && activeStreams.length > 0)) && (
-        <div className="px-3 py-2 border-t border-white/10 bg-slate-950/90 backdrop-blur-xl flex items-center gap-2 overflow-x-auto no-scrollbar z-10 shrink-0">
-          <span className="text-[11px] text-gray-400 flex items-center gap-1 shrink-0 mr-1">
-            <Radio className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+        <div className="px-3 py-2 border-t border-[var(--border)] bg-[var(--surface)]/95 backdrop-blur-xl flex items-center gap-2 overflow-x-auto no-scrollbar z-10 shrink-0">
+          <span className="text-[11px] text-[var(--muted)] flex items-center gap-1 shrink-0 mr-1">
+            <Radio className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
             Стримы ({activeStreams.length + (isSharing ? 1 : 0)}):
           </span>
           {/* Local thumbnail if sharing */}
@@ -376,12 +373,13 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
             <button
               type="button"
               onClick={() => handleSelectThumbnail('local')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center gap-1.5 shrink-0 hover:scale-105 active:scale-95 cursor-pointer ${focusedId === 'local'
-                ? 'bg-blue-600/30 border-blue-500/60 text-white shadow-sm shadow-blue-500/20'
-                : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50 hover:border-white/20'
-                }`}
+              className={`px-2.5 py-1 rounded-[var(--radius)] text-xs font-medium border transition-all duration-150 flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
+                focusedId === 'local'
+                  ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)] font-semibold shadow-xs'
+                  : 'bg-[var(--elevated)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--fg)] hover:border-[var(--fg)]/30'
+              }`}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse shrink-0" />
               <span>Вы (Экран)</span>
             </button>
           )}
@@ -391,14 +389,15 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
               key={stream.participantId}
               type="button"
               onClick={() => handleSelectThumbnail(stream.participantId)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all duration-200 flex items-center gap-1.5 shrink-0 hover:scale-105 active:scale-95 cursor-pointer ${focusedId === stream.participantId
-                ? 'bg-blue-600/30 border-blue-500/60 text-white shadow-sm shadow-blue-500/20'
-                : 'bg-black/30 border-white/10 text-gray-300 hover:bg-black/50 hover:border-white/20'
-                }`}
+              className={`px-2.5 py-1 rounded-[var(--radius)] text-xs font-medium border transition-all duration-150 flex items-center gap-1.5 shrink-0 active:scale-95 cursor-pointer ${
+                focusedId === stream.participantId
+                  ? 'bg-[var(--accent-soft)] border-[var(--accent)] text-[var(--accent)] font-semibold shadow-xs'
+                  : 'bg-[var(--elevated)] border-[var(--border)] text-[var(--muted)] hover:text-[var(--fg)] hover:border-[var(--fg)]/30'
+              }`}
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--accent)] animate-pulse shrink-0" />
               <span className="truncate max-w-30">{stream.participantName}</span>
-              {stream.hasAudio && <Volume2 className="w-3 h-3 text-blue-300 shrink-0" />}
+              {stream.hasAudio && <Volume2 className="w-3 h-3 text-[var(--accent)] shrink-0" />}
             </button>
           ))}
         </div>

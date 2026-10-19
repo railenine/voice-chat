@@ -87,11 +87,11 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
             {isStreaming && (
               <Card variant="flat" className="p-3 border-[var(--accent)]/30 bg-[var(--accent-soft)]/10 space-y-3">
                 <div className="flex items-center justify-between">
-                  <Badge variant="emerald" size="sm" pulse icon={<Radio className="w-3.5 h-3.5" />}>
+                  <Badge variant="blue" size="sm" pulse icon={<Radio className="w-3.5 h-3.5" />}>
                     Прямой эфир экрана
                   </Badge>
                   <Button
-                    variant={watchedPeerId === cachedMobilePeer.peerId ? 'danger' : 'emerald'}
+                    variant={watchedPeerId === cachedMobilePeer.peerId ? 'danger' : 'primary'}
                     size="sm"
                     icon={<Radio className="w-3.5 h-3.5" />}
                     onClick={() => {

@@ -100,7 +100,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
         </span>
       ) : isStreaming ? (
         <span
-          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-[var(--surface)] shadow-xs animate-pulse"
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[var(--accent)] text-[var(--bg)] flex items-center justify-center border-2 border-[var(--surface)] shadow-xs animate-pulse"
           title="В эфире"
         >
           <Radio className="w-2.5 h-2.5" />
@@ -145,7 +145,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
                     Вы
                   </Badge>
                   {isStreaming && (
-                    <Badge variant="emerald" size="sm" pulse>
+                    <Badge variant="blue" size="sm" pulse>
                       Эфир
                     </Badge>
                   )}
@@ -166,23 +166,19 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
                     {volume === 0 ? '0%' : `${volume}%`}
                   </Badge>
                   {isStreaming && (
-                    <button
-                      type="button"
+                    <Badge
+                      variant={isWatched ? 'accent' : 'blue'}
+                      size="sm"
+                      pulse={!isWatched}
+                      icon={<Radio className="w-2.5 h-2.5 shrink-0" />}
                       onClick={(e) => {
                         e.stopPropagation();
                         if (peerId && onToggleWatchPeer) onToggleWatchPeer(peerId);
                       }}
-                      className={`btn-compact min-w-0! min-h-0! h-4.5 px-1.5 py-0 rounded-full text-[9px] font-semibold inline-flex items-center gap-1 border transition-all cursor-pointer select-none shrink-0 ${
-                        isWatched
-                          ? 'bg-blue-500/30 border-blue-400 text-blue-200'
-                          : 'bg-emerald-500/25 border-emerald-400/50 text-emerald-300 active:scale-95'
-                      }`}
-                      style={{ minHeight: 'unset', minWidth: 'unset', height: '18px', maxHeight: '18px' }}
                       title={isWatched ? 'Свернуть трансляцию' : 'Смотреть стрим'}
                     >
-                      <Radio className="w-2.5 h-2.5 shrink-0 animate-pulse text-emerald-400" />
-                      <span className="leading-none">{isWatched ? 'Стрим' : 'Смотреть'}</span>
-                    </button>
+                      {isWatched ? 'Стрим' : 'Смотреть'}
+                    </Badge>
                   )}
                 </>
               )}
@@ -259,15 +255,10 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
           <div className="flex items-center gap-1.5 mt-0.5">
             {isStreaming && (
               <Badge
-                variant={isWatched ? 'blue' : 'emerald'}
+                variant={isWatched ? 'accent' : 'blue'}
                 size="sm"
-                icon={
-                  <Radio
-                    className={`w-3 h-3 shrink-0 ${
-                      isWatched ? 'text-[var(--accent)]' : 'text-emerald-400'
-                    } animate-pulse`}
-                  />
-                }
+                pulse={!isWatched}
+                icon={<Radio className="w-3 h-3 shrink-0" />}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (peerId && onToggleWatchPeer) onToggleWatchPeer(peerId);

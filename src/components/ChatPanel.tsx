@@ -375,7 +375,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
                 e.stopPropagation();
                 handleLinkClick(part);
               }}
-              className="text-blue-400 hover:text-blue-300 underline underline-offset-2 font-medium break-all inline-flex items-center gap-1 group/link cursor-pointer"
+              className="text-[var(--accent)] hover:underline underline-offset-2 font-medium break-all inline-flex items-center gap-1 group/link cursor-pointer"
             >
               <span>{part}</span>
               <ExternalLink className="w-3 h-3 opacity-60 group-hover/link:opacity-100 transition-opacity shrink-0" />
@@ -393,14 +393,14 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative flex flex-col h-full bg-slate-950/45 backdrop-blur-xl rounded-2xl lg:rounded-none border border-white/10 lg:border-none shadow-2xl lg:shadow-none shadow-black/40 overflow-hidden ${className}`}
+      className={`relative flex flex-col h-full bg-[var(--bg)] rounded-2xl lg:rounded-none border border-[var(--border)] lg:border-none shadow-2xl lg:shadow-none shadow-black/40 overflow-hidden ${className}`}
     >
       {/* Drag & Drop Visual Overlay */}
       {isDraggingOver && (
-        <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-md z-30 flex flex-col items-center justify-center border-2 border-dashed border-blue-400 rounded-2xl animate-fade-in pointer-events-none p-4 text-center">
-          <UploadCloud className="w-12 h-12 text-blue-400 mb-2 animate-bounce" />
-          <p className="text-white font-bold text-sm sm:text-base">Перетащите файлы сюда</p>
-          <p className="text-gray-400 text-xs mt-0.5">
+        <div className="absolute inset-0 bg-[var(--bg)]/90 backdrop-blur-md z-30 flex flex-col items-center justify-center border-2 border-dashed border-[var(--accent)] rounded-2xl animate-fade-in pointer-events-none p-4 text-center">
+          <UploadCloud className="w-12 h-12 text-[var(--accent)] mb-2 animate-bounce" />
+          <p className="text-[var(--fg)] font-bold text-sm sm:text-base">Перетащите файлы сюда</p>
+          <p className="text-[var(--muted)] text-xs mt-0.5">
             Изображения, GIF или видео (до 25 МБ)
           </p>
         </div>
@@ -410,15 +410,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       {showHeader && (
         <PanelHeader className="hidden lg:flex">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-[var(--accent-soft)] border border-[var(--accent)]/30 flex items-center justify-center text-[var(--accent)] shrink-0">
               <MessageSquare className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-white truncate flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-[var(--fg)] truncate flex items-center gap-2">
                 <span>Чат комнаты</span>
-                <span className="text-[11px] font-mono text-gray-400 font-normal">#{roomId}</span>
+                <span className="text-[11px] font-mono text-[var(--muted)] font-normal">#{roomId}</span>
               </h2>
-              <p className="text-[11px] text-gray-400 truncate">
+              <p className="text-[11px] text-[var(--muted)] truncate">
                 {messages.length === 0
                   ? 'Сообщения видны только участникам'
                   : `${messages.length} ${messages.length === 1 ? 'сообщение' : messages.length < 5 ? 'сообщения' : 'сообщений'}`}
@@ -467,10 +467,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
                 )}
               </div>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 font-medium animate-fade-in">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                <span>Подключено</span>
-              </span>
+              <Badge variant="pill" size="sm" pulse>
+                Подключено
+              </Badge>
             )}
           </div>
         </PanelHeader>
@@ -486,38 +485,51 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
         className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3.5 min-h-0 select-text custom-scrollbar"
       >
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-4 select-none animate-fade-in text-gray-500/40">
+          <div className="h-full flex flex-col items-center justify-center text-center p-4 select-none animate-fade-in text-[var(--muted)]/40">
             <MessageSquare className="w-10 h-10 sm:w-12 sm:h-12 stroke-[1.5]" />
           </div>
         ) : (
-          messages.map((msg) => {
+          messages.map((msg, index) => {
             const isMe = msg.peerId === myPeerId;
             const attachments = msg.attachments || [];
             const textMediaUrls = attachments.length === 0 ? extractMediaUrlsFromText(msg.text) : [];
+            const prevMsg = index > 0 ? messages[index - 1] : null;
+            const isFirstInGroup =
+              !prevMsg ||
+              prevMsg.peerId !== msg.peerId ||
+              msg.timestamp - prevMsg.timestamp > 3 * 60 * 1000;
 
             return (
               <div
                 key={msg.id}
-                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group animate-fade-in`}
+                className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} group animate-fade-in ${
+                  isFirstInGroup ? 'mt-3.5 first:mt-0' : 'mt-1'
+                }`}
               >
-                <div className="flex items-baseline gap-1.5 mb-1 px-1">
-                  <span
-                    className={`text-[11px] font-semibold ${
-                      isMe ? 'text-blue-300' : 'text-amber-300'
-                    }`}
-                  >
-                    {isMe ? 'Вы' : msg.nickname}
-                  </span>
-                  <span className="text-[10px] text-gray-500 font-mono">
-                    {formatTime(msg.timestamp)}
-                  </span>
-                </div>
+                {isFirstInGroup && (
+                  <div className="flex items-baseline gap-1.5 mb-1 px-1">
+                    <span
+                      className={`text-[11px] font-semibold ${
+                        isMe ? 'text-[var(--accent)]' : 'text-[var(--fg)]'
+                      }`}
+                    >
+                      {isMe ? 'Вы' : msg.nickname}
+                    </span>
+                    <span className="text-[10px] text-[var(--muted)] font-mono">
+                      {formatTime(msg.timestamp)}
+                    </span>
+                  </div>
+                )}
 
                 <div
-                  className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm wrap-break-word whitespace-pre-wrap leading-relaxed shadow-md ${
+                  className={`max-w-[85%] sm:max-w-[75%] px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm wrap-break-word whitespace-pre-wrap leading-relaxed shadow-xs ${
                     isMe
-                      ? 'bg-linear-to-br from-blue-600 to-blue-700 text-white rounded-tr-sm border border-blue-400/30'
-                      : 'bg-white/6 hover:bg-white/9 text-gray-100 rounded-tl-sm border border-white/8'
+                      ? `bg-[color-mix(in_oklch,var(--accent)_16%,var(--surface))] hover:bg-[color-mix(in_oklch,var(--accent)_20%,var(--surface))] text-[var(--fg)] border border-[var(--accent)]/30 ${
+                          isFirstInGroup ? 'rounded-tr-xs' : 'rounded-tr-xl'
+                        }`
+                      : `bg-[var(--surface)] hover:bg-[var(--elevated)] text-[var(--fg)] border border-[var(--border)] ${
+                          isFirstInGroup ? 'rounded-tl-xs' : 'rounded-tl-xl'
+                        }`
                   }`}
                 >
                   {/* Message Text with styled links */}
@@ -788,11 +800,11 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
 
       {/* Staged Attachment Preview Bar */}
       {stagedAttachment && (
-        <div className="p-2.5 px-3 bg-slate-900/90 backdrop-blur-xl border-t border-white/10 flex items-center justify-between gap-3 animate-slide-up">
+        <div className="p-2.5 px-3 bg-[var(--surface)] border-t border-[var(--border)] flex items-center justify-between gap-3 animate-slide-up">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-11 h-11 rounded-lg bg-black/40 border border-white/15 overflow-hidden flex items-center justify-center shrink-0">
+            <div className="w-11 h-11 rounded-[var(--radius)] bg-[var(--bg)] border border-[var(--border)] overflow-hidden flex items-center justify-center shrink-0">
               {stagedAttachment.type === 'video' ? (
-                <Video className="w-5 h-5 text-emerald-400" />
+                <Video className="w-5 h-5 text-[var(--accent)]" />
               ) : (
                 <img
                   src={stagedAttachment.previewUrl}
@@ -803,12 +815,12 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
             </div>
 
             <div className="min-w-0">
-              <p className="text-xs text-white font-medium truncate max-w-50 sm:max-w-xs">
+              <p className="text-xs text-[var(--fg)] font-medium truncate max-w-50 sm:max-w-xs">
                 {stagedAttachment.file.name}
               </p>
-              <div className="flex items-center gap-2 text-[10px] text-gray-400 mt-0.5">
+              <div className="flex items-center gap-2 text-[10px] text-[var(--muted)] mt-0.5">
                 <Badge
-                  variant={stagedAttachment.type === 'video' ? 'emerald' : stagedAttachment.type === 'gif' ? 'amber' : 'blue'}
+                  variant={stagedAttachment.type === 'video' ? 'blue' : stagedAttachment.type === 'gif' ? 'amber' : 'neutral'}
                   size="sm"
                 >
                   {stagedAttachment.type.toUpperCase()}
@@ -823,7 +835,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
               type="button"
               onClick={handleClearStaged}
               disabled={isUploading}
-              className="p-1.5 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+              className="p-1.5 text-[var(--muted)] hover:text-[var(--fg)] hover:bg-[var(--fg-soft)] rounded-[var(--radius)] transition-colors cursor-pointer disabled:opacity-50"
             >
               <X className="w-4 h-4" />
             </button>
@@ -834,7 +846,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       {/* Input Bar */}
       <form
         onSubmit={handleSubmit}
-        className="h-[69px] px-3 sm:px-4 bg-slate-950/60 backdrop-blur-xl border-t border-white/10 flex items-center gap-2 shrink-0"
+        className="h-[69px] px-3 sm:px-4 bg-[var(--surface)] border-t border-[var(--border)] flex items-center gap-2 shrink-0"
       >
         {/* Hidden file input */}
         <input
@@ -854,10 +866,10 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
           <Button
             variant="glass"
             size="md"
-            icon={<Paperclip className="w-4 h-4 text-gray-300" />}
+            icon={<Paperclip className="w-4 h-4 text-[var(--muted)]" />}
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="w-11 h-11 px-0 rounded-xl shrink-0"
+            className="w-11 h-11 px-0 rounded-[var(--radius)] shrink-0"
           />
         </Tooltip>
 
@@ -870,7 +882,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
           maxLength={1000}
           disabled={isUploading}
           placeholder={`Сообщение в #${roomId}... (Enter для отправки)`}
-          className="flex-1 h-11 bg-black/30 hover:bg-black/40 focus:bg-black/50 border border-white/10 focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 rounded-xl px-3.5 text-base sm:text-sm text-white placeholder:text-gray-400 focus:outline-none transition-all disabled:opacity-50"
+          className="flex-1 h-11 bg-[var(--bg)] hover:bg-[var(--elevated)]/50 focus:bg-[var(--bg)] border border-[var(--border)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-[var(--radius)] px-3.5 text-base sm:text-sm text-[var(--fg)] placeholder:text-[var(--muted)] focus:outline-none transition-all disabled:opacity-50"
         />
 
         <Tooltip
@@ -886,7 +898,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
             isLoading={isUploading}
             disabled={(!inputText.trim() && !stagedAttachment) || isUploading}
             icon={!isUploading ? <Send className="w-4 h-4" /> : undefined}
-            className="w-11 h-11 px-0 rounded-xl shrink-0"
+            className="w-11 h-11 px-0 rounded-[var(--radius)] shrink-0"
           />
         </Tooltip>
       </form>
