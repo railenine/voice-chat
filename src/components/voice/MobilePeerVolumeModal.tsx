@@ -3,7 +3,7 @@ import { Volume2, VolumeX, Radio } from 'lucide-react';
 import type { PeerInfo } from '../../types/protocol';
 import { Modal } from '../Modal';
 import { Button, VolumeSlider, Card, Badge } from '../ui';
-import { getInitials, getAvatarGradient } from './voiceUtils';
+import { getInitials } from './voiceUtils';
 
 export interface MobilePeerVolumeModalProps {
   selectedMobilePeer: PeerInfo | null;
@@ -50,9 +50,7 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
                     ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
                     : cachedMobilePeer.isMuted
                     ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
-                    : `bg-linear-to-br ${getAvatarGradient(
-                        cachedMobilePeer.peerId || cachedMobilePeer.nickname
-                      )} text-[var(--fg)] border border-[var(--border)]`
+                    : 'bg-[var(--elevated)] border border-[var(--border)] text-[var(--fg)]'
                 }`}
               >
                 {getInitials(cachedMobilePeer.nickname)}

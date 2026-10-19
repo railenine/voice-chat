@@ -2,7 +2,7 @@ import React, { memo } from 'react';
 import { VolumeX, MicOff, Radio, Pencil, Check, X, Settings } from 'lucide-react';
 import { Tooltip } from '../Tooltip';
 import { Badge, VolumeSlider } from '../ui';
-import { getInitials, getAvatarGradient } from './voiceUtils';
+import { getInitials } from './voiceUtils';
 
 export interface ParticipantCardProps {
   nickname: string;
@@ -54,7 +54,6 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
   className = '',
 }) => {
   const isActivelySpeaking = isSpeaking && !isMuted && !isDeafened;
-  const gradient = getAvatarGradient(peerId || nickname);
 
   // Avatar markup shared across both layout modes
   const renderAvatar = (sizeClass: string) => (
@@ -67,9 +66,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
             ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
             : isMuted
             ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
-            : isSelf
-            ? 'bg-[var(--elevated)] border border-[var(--border)] text-[var(--fg)]'
-            : `bg-linear-to-br ${gradient} border border-[var(--border)] text-[var(--fg)]`
+            : 'bg-[var(--elevated)] border border-[var(--border)] text-[var(--fg)]'
         }`}
       >
         {getInitials(nickname)}
