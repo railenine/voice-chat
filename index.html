@@ -17,7 +17,7 @@
         width: 100%;
         height: 100%;
         height: 100dvh;
-        background-color: #020617;
+        background-color: oklch(0.15 0.035 255);
         color: #ffffff;
         overflow: hidden;
         position: fixed;
@@ -53,15 +53,15 @@
         inset: 0;
         overflow: hidden;
         z-index: 0;
-        background: #020617;
+        background: oklch(0.15 0.035 255);
         pointer-events: none;
       }
 
       .jelly-blob {
         position: absolute;
         border-radius: 50%;
-        filter: blur(65px);
-        opacity: 0.75;
+        filter: blur(100px);
+        opacity: 0.35;
         mix-blend-mode: screen;
         pointer-events: none;
         will-change: transform, top, left, right, bottom, width, height, opacity;
@@ -75,22 +75,22 @@
         animation: preloader-jelly-pulse 2.4s ease-in-out infinite;
       }
 
-      .jelly-blob-1 { background: radial-gradient(circle, #1e3a8a 0%, #1e40af 50%, transparent 70%); }
-      .jelly-blob-2 { background: radial-gradient(circle, #172554 0%, #1e3a5f 50%, transparent 70%); animation-delay: -0.4s; }
-      .jelly-blob-3 { background: radial-gradient(circle, #312e81 0%, #1e1b4b 50%, transparent 70%); animation-delay: -0.8s; }
-      .jelly-blob-4 { background: radial-gradient(circle, #164e63 0%, #155e75 50%, transparent 70%); animation-delay: -1.2s; }
-      .jelly-blob-5 { background: radial-gradient(circle, #2563eb 0%, #1d4ed8 45%, #1e1b4b 70%, transparent 80%); animation-delay: -1.6s; }
-      .jelly-blob-6 { background: radial-gradient(circle, #4f46e5 0%, #3730a3 50%, transparent 70%); animation-delay: -0.6s; }
-      .jelly-blob-7 { background: radial-gradient(circle, #0284c7 0%, #0369a1 50%, transparent 70%); animation-delay: -1.0s; }
+      .jelly-blob-1 { background: radial-gradient(circle, oklch(0.24 0.05 230 / 0.7) 0%, oklch(0.18 0.035 250 / 0.35) 50%, transparent 75%); }
+      .jelly-blob-2 { background: radial-gradient(circle, oklch(0.20 0.04 255 / 0.8) 0%, oklch(0.16 0.03 260 / 0.4) 50%, transparent 75%); animation-delay: -0.4s; }
+      .jelly-blob-3 { background: radial-gradient(circle, oklch(0.22 0.04 245 / 0.7) 0%, oklch(0.16 0.035 255 / 0.3) 50%, transparent 75%); animation-delay: -0.8s; }
+      .jelly-blob-4 { background: radial-gradient(circle, oklch(0.26 0.06 220 / 0.65) 0%, oklch(0.18 0.035 240 / 0.3) 50%, transparent 75%); animation-delay: -1.2s; }
+      .jelly-blob-5 { background: radial-gradient(circle, oklch(0.25 0.05 225 / 0.6) 0%, oklch(0.17 0.035 255 / 0.35) 50%, transparent 75%); animation-delay: -1.6s; }
+      .jelly-blob-6 { background: radial-gradient(circle, oklch(0.21 0.04 250 / 0.75) 0%, oklch(0.16 0.03 260 / 0.3) 50%, transparent 75%); animation-delay: -0.6s; }
+      .jelly-blob-7 { background: radial-gradient(circle, oklch(0.27 0.06 215 / 0.6) 0%, oklch(0.18 0.035 235 / 0.3) 50%, transparent 75%); animation-delay: -1.0s; }
 
       @keyframes preloader-jelly-pulse {
         0%, 100% {
           transform: scale(0.92);
-          opacity: 0.75;
+          opacity: 0.35;
         }
         50% {
           transform: scale(1.08);
-          opacity: 0.95;
+          opacity: 0.50;
         }
       }
 
@@ -139,7 +139,7 @@
       }
     </style>
   </head>
-  <body style="background-color: #020617;">
+  <body style="background-color: oklch(0.15 0.035 255);">
     <div id="root"></div>
     <div id="jelly-bg" class="jelly-background jelly-converged" aria-hidden="true">
       <div class="jelly-blob jelly-blob-1"></div>

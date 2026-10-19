@@ -187,15 +187,15 @@
   height: 100%;
   overflow: hidden;
   z-index: 0;
-  background: #020617;
+  background: var(--bg);
   pointer-events: none;
 }
 
 .jelly-blob {
   position: absolute;
   border-radius: 50%;
-  filter: blur(95px);
-  opacity: 0.65;
+  filter: blur(100px);
+  opacity: 0.35;
   mix-blend-mode: screen;
   will-change: transform, top, left, right, bottom, width, height, opacity;
   pointer-events: none;
@@ -461,7 +461,7 @@
 .jelly-blob-1 {
   width: clamp(340px, 42vw, 560px);
   height: clamp(340px, 42vw, 560px);
-  background: radial-gradient(circle, #1e3a8a 0%, #1e40af 50%, transparent 70%);
+  background: radial-gradient(circle, oklch(0.24 0.05 230 / 0.7) 0%, oklch(0.18 0.035 250 / 0.35) 50%, transparent 75%);
   top: -8%;
   left: -8%;
   animation: blob-1 22s ease-in-out infinite;
@@ -470,7 +470,7 @@
 .jelly-blob-2 {
   width: clamp(380px, 46vw, 640px);
   height: clamp(380px, 46vw, 640px);
-  background: radial-gradient(circle, #172554 0%, #1e3a5f 50%, transparent 70%);
+  background: radial-gradient(circle, oklch(0.20 0.04 255 / 0.8) 0%, oklch(0.16 0.03 260 / 0.4) 50%, transparent 75%);
   top: 45%;
   right: -12%;
   animation: blob-2 26s ease-in-out infinite;
@@ -479,7 +479,7 @@
 .jelly-blob-3 {
   width: clamp(320px, 38vw, 520px);
   height: clamp(320px, 38vw, 520px);
-  background: radial-gradient(circle, #312e81 0%, #1e1b4b 50%, transparent 70%);
+  background: radial-gradient(circle, oklch(0.22 0.04 245 / 0.7) 0%, oklch(0.16 0.035 255 / 0.3) 50%, transparent 75%);
   bottom: -8%;
   left: 25%;
   animation: blob-3 24s ease-in-out infinite;
@@ -488,7 +488,7 @@
 .jelly-blob-4 {
   width: clamp(340px, 40vw, 550px);
   height: clamp(340px, 40vw, 550px);
-  background: radial-gradient(circle, #164e63 0%, #155e75 50%, transparent 70%);
+  background: radial-gradient(circle, oklch(0.26 0.06 220 / 0.65) 0%, oklch(0.18 0.035 240 / 0.3) 50%, transparent 75%);
   top: 25%;
   left: 15%;
   animation: blob-4 28s ease-in-out infinite;
@@ -497,7 +497,7 @@
 .jelly-blob-5 {
   width: clamp(300px, 36vw, 500px);
   height: clamp(300px, 36vw, 500px);
-  background: radial-gradient(circle, #2563eb 0%, #1d4ed8 45%, #1e1b4b 70%, transparent 80%);
+  background: radial-gradient(circle, oklch(0.25 0.05 225 / 0.6) 0%, oklch(0.17 0.035 255 / 0.35) 50%, transparent 75%);
   top: -6%;
   right: 12%;
   animation: blob-5 25s ease-in-out infinite;
@@ -506,7 +506,7 @@
 .jelly-blob-6 {
   width: clamp(320px, 38vw, 520px);
   height: clamp(320px, 38vw, 520px);
-  background: radial-gradient(circle, #4f46e5 0%, #3730a3 50%, transparent 70%);
+  background: radial-gradient(circle, oklch(0.21 0.04 250 / 0.75) 0%, oklch(0.16 0.03 260 / 0.3) 50%, transparent 75%);
   bottom: -10%;
   right: 18%;
   animation: blob-6 27s ease-in-out infinite;
@@ -515,7 +515,7 @@
 .jelly-blob-7 {
   width: clamp(280px, 32vw, 440px);
   height: clamp(280px, 32vw, 440px);
-  background: radial-gradient(circle, #0284c7 0%, #0369a1 50%, transparent 70%);
+  background: radial-gradient(circle, oklch(0.27 0.06 215 / 0.6) 0%, oklch(0.18 0.035 235 / 0.3) 50%, transparent 75%);
   top: 35%;
   left: 55%;
   animation: blob-7 30s ease-in-out infinite;
