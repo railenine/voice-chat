@@ -47,7 +47,7 @@ export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(({
         <Logo size="sm" className="shadow-xs" />
 
         <div className="min-w-0 flex items-center gap-2 shrink-0">
-          <span className="text-sm sm:text-base font-bold text-white tracking-tight shrink-0">
+          <span className="text-sm sm:text-base font-bold text-[var(--fg)] tracking-tight shrink-0">
             RVxis
           </span>
 
@@ -60,13 +60,13 @@ export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(({
             <button
               type="button"
               onClick={copyRoomId}
-              className="text-xs text-[var(--muted)] hover:text-[var(--accent)] font-mono transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer py-1 px-1.5 rounded-lg hover:bg-white/5 active:scale-95"
+              className="text-xs text-[var(--muted)] hover:text-[var(--accent)] font-mono transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer py-1 px-1.5 rounded-[var(--radius)] hover:bg-[var(--fg-soft)] active:scale-95"
             >
               <span className="font-semibold">#{roomId}</span>
               {copied ? (
                 <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-scale-up" />
               ) : (
-                <Copy className="w-3.5 h-3.5 text-[var(--muted)] hover:text-white shrink-0 transition-colors" />
+                <Copy className="w-3.5 h-3.5 text-[var(--muted)] hover:text-[var(--fg)] shrink-0 transition-colors" />
               )}
             </button>
           </Tooltip>
@@ -104,12 +104,12 @@ export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(({
           position="bottom"
         >
           <Button
-            variant="glass"
+            variant="secondary"
             size="icon-sm"
             onClick={onOpenSettings}
             aria-label="Настройки"
           >
-            <Settings className="w-4 h-4 text-gray-300" />
+            <Settings className="w-4 h-4 text-[var(--muted)] hover:text-[var(--fg)]" />
           </Button>
         </Tooltip>
 
@@ -119,7 +119,7 @@ export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(({
           position="bottom"
         >
           <Button
-            variant={copied ? 'emerald' : 'glass'}
+            variant={copied ? 'emerald' : 'secondary'}
             size="icon-sm"
             onClick={triggerShare}
             aria-label={copied ? 'Ссылка скопирована' : 'Поделиться ссылкой'}
@@ -132,7 +132,7 @@ export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(({
                 className={`w-4 h-4 transition-all duration-300 ${
                   copied
                     ? 'opacity-0 scale-50 rotate-45 pointer-events-none'
-                    : 'opacity-100 scale-100 rotate-0 text-gray-300'
+                    : 'opacity-100 scale-100 rotate-0 text-[var(--muted)]'
                 }`}
               />
               <Check
