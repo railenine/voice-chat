@@ -18,3 +18,6 @@ export type { PanelHeaderProps } from './PanelHeader';
 
 export { PanelFooter } from './PanelFooter';
 export type { PanelFooterProps } from './PanelFooter';
+
+export { Logo } from './Logo';
+export type { LogoProps, LogoSize } from './Logo';

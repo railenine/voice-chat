@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, memo } from "react";
 import { isTauri, APP_VERSION } from "../config";
 import { Tooltip } from "./Tooltip";
 import { UpdateBadge } from "./updater/UpdateBadge";
+import { Logo } from "./ui";
 
 interface TitleBarProps {
   roomId?: string;
@@ -162,6 +163,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(
           data-tauri-drag-region
           className="flex items-center gap-2 px-3 h-full cursor-default z-10"
         >
+          <Logo size="xs" className="w-4 h-4 shrink-0" />
           <div
             className={`flex ${hasUpdate && updateVersion ? "items-center" : "items-baseline"} gap-1.5 leading-none`}
           >

@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { VolumeX, MicOff, Radio, Pencil, Check, X } from 'lucide-react';
+import { VolumeX, MicOff, Radio, Pencil, Check, X, Settings } from 'lucide-react';
 import { Tooltip } from '../Tooltip';
 import { Badge, VolumeSlider } from '../ui';
 import { getInitials, getAvatarGradient } from './voiceUtils';
@@ -10,7 +10,9 @@ export interface ParticipantCardProps {
   isMuted?: boolean;
   isDeafened?: boolean;
   isSelf?: boolean;
-  // Self editing nickname
+  layout?: 'row' | 'compact';
+  onClick?: () => void;
+  // Self editing nickname (desktop row)
   isEditingNick?: boolean;
   newNickInput?: string;
   setNewNickInput?: (val: string) => void;
@@ -34,6 +36,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
   isMuted,
   isDeafened,
   isSelf = false,
+  layout = 'row',
+  onClick,
   isEditingNick = false,
   newNickInput = '',
   setNewNickInput,
@@ -52,6 +56,149 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
   const isActivelySpeaking = isSpeaking && !isMuted && !isDeafened;
   const gradient = getAvatarGradient(peerId || nickname);
 
+  // Avatar markup shared across both layout modes
+  const renderAvatar = (sizeClass: string) => (
+    <div className="relative shrink-0">
+      <div
+        className={`${sizeClass} rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm transition-all duration-150 ${
+          isActivelySpeaking
+            ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] text-[var(--bg)] bg-[var(--accent)]'
+            : isDeafened
+            ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
+            : isMuted
+            ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
+            : isSelf
+            ? 'bg-linear-to-br from-blue-700 to-indigo-900 border border-[var(--accent)]/40 text-white outline outline-1 outline-white/20'
+            : `bg-linear-to-br ${gradient} border border-white/15 text-white`
+        }`}
+      >
+        {getInitials(nickname)}
+      </div>
+
+      {/* Hover action overlay on compact mode */}
+      {layout === 'compact' && (
+        <div className="absolute inset-0 rounded-full bg-slate-950/70 backdrop-blur-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-inner">
+          {isSelf ? (
+            <Pencil className="w-4 h-4 text-white drop-shadow-md" />
+          ) : (
+            <Settings className="w-4 h-4 text-white drop-shadow-md" />
+          )}
+        </div>
+      )}
+
+      {/* Micro status icon badge in corner */}
+      {isDeafened ? (
+        <span
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-[var(--surface)] shadow-xs"
+          title="Звук заглушен"
+        >
+          <VolumeX className="w-2.5 h-2.5" />
+        </span>
+      ) : isMuted ? (
+        <span
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-[var(--surface)] shadow-xs"
+          title="Микрофон выключен"
+        >
+          <MicOff className="w-2.5 h-2.5" />
+        </span>
+      ) : isStreaming ? (
+        <span
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 text-white flex items-center justify-center border-2 border-[var(--surface)] shadow-xs animate-pulse"
+          title="В эфире"
+        >
+          <Radio className="w-2.5 h-2.5" />
+        </span>
+      ) : null}
+    </div>
+  );
+
+  // 1. COMPACT LAYOUT (Mobile Rail < 1024px)
+  if (layout === 'compact') {
+    return (
+      <Tooltip
+        content={nickname}
+        description={
+          isSelf
+            ? 'Нажмите, чтобы изменить свой никнейм'
+            : `Громкость: ${volume}%. Нажмите для настройки звука`
+        }
+        position="bottom"
+      >
+        <div
+          onClick={onClick}
+          className={`flex flex-col items-center gap-1 shrink-0 cursor-pointer group active:scale-95 transition-transform ${className}`}
+        >
+          {renderAvatar('w-12 h-12')}
+
+          <div className="flex flex-col items-center gap-0.5 mt-0.5">
+            <span
+              className={`text-[11px] font-semibold truncate max-w-18 text-center transition-colors ${
+                isActivelySpeaking
+                  ? 'text-[var(--accent)]'
+                  : isSelf
+                  ? 'text-cyan-300'
+                  : 'text-[var(--fg)]'
+              }`}
+            >
+              {nickname}
+            </span>
+
+            <div className="flex items-center gap-1">
+              {isSelf ? (
+                <>
+                  <Badge variant="tag" size="sm">
+                    Вы
+                  </Badge>
+                  {isStreaming && (
+                    <Badge variant="emerald" size="sm" pulse>
+                      Эфир
+                    </Badge>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Badge
+                    variant="pill"
+                    size="sm"
+                    className={
+                      volume === 0
+                        ? 'text-rose-400 border-rose-500/30'
+                        : volume > 100
+                        ? 'text-emerald-400 border-emerald-500/30 font-bold'
+                        : 'text-[var(--muted)]'
+                    }
+                  >
+                    {volume === 0 ? '0%' : `${volume}%`}
+                  </Badge>
+                  {isStreaming && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (peerId && onToggleWatchPeer) onToggleWatchPeer(peerId);
+                      }}
+                      className={`btn-compact min-w-0! min-h-0! h-4.5 px-1.5 py-0 rounded-full text-[9px] font-semibold inline-flex items-center gap-1 border transition-all cursor-pointer select-none shrink-0 ${
+                        isWatched
+                          ? 'bg-blue-500/30 border-blue-400 text-blue-200'
+                          : 'bg-emerald-500/25 border-emerald-400/50 text-emerald-300 active:scale-95'
+                      }`}
+                      style={{ minHeight: 'unset', minWidth: 'unset', height: '18px', maxHeight: '18px' }}
+                      title={isWatched ? 'Свернуть трансляцию' : 'Смотреть стрим'}
+                    >
+                      <Radio className="w-2.5 h-2.5 shrink-0 animate-pulse text-emerald-400" />
+                      <span className="leading-none">{isWatched ? 'Стрим' : 'Смотреть'}</span>
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </Tooltip>
+    );
+  }
+
+  // 2. ROW LAYOUT (Desktop Sidebar >= 1024px)
   return (
     <div
       className={`p-3 rounded-[var(--radius)] border transition-all duration-150 select-none ${
@@ -63,41 +210,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
       } ${className}`}
     >
       <div className="flex items-center gap-3">
-        {/* Avatar with speaking ring (2px accent ring per design spec) */}
-        <div className="relative shrink-0">
-          <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-sm transition-all duration-150 ${
-              isActivelySpeaking
-                ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] text-[var(--bg)] bg-[var(--accent)] scale-105'
-                : isDeafened
-                ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
-                : isMuted
-                ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
-                : isSelf
-                ? 'bg-linear-to-br from-blue-700 to-indigo-900 border border-[var(--accent)]/40 text-white'
-                : `bg-linear-to-br ${gradient} border border-white/15 text-white`
-            }`}
-          >
-            {getInitials(nickname)}
-          </div>
-
-          {/* Micro status icon badge in corner */}
-          {isDeafened ? (
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-[var(--surface)] shadow-xs"
-              title="Звук заглушен"
-            >
-              <VolumeX className="w-2.5 h-2.5" />
-            </span>
-          ) : isMuted ? (
-            <span
-              className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-[var(--surface)] shadow-xs"
-              title="Микрофон выключен"
-            >
-              <MicOff className="w-2.5 h-2.5" />
-            </span>
-          ) : null}
-        </div>
+        {renderAvatar('w-10 h-10')}
 
         {/* Info & Statuses */}
         <div className="flex-1 min-w-0">

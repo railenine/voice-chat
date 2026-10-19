@@ -15,7 +15,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Modal } from '../Modal';
-import { Button } from '../ui';
+import { Button, Logo } from '../ui';
 import { Tooltip } from '../Tooltip';
 import { AudioDeviceSettings } from '../AudioDeviceSettings';
 import { useAudioDevices } from '../../hooks/useAudioDevices';
@@ -316,9 +316,7 @@ export const VoiceSettingsModal: React.FC<VoiceSettingsModalProps> = memo(({
       {/* 1. App Header & Version */}
       <div className="p-4 bg-linear-to-br from-blue-900/20 via-slate-900/40 to-indigo-900/10 border border-white/10 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shadow-inner shrink-0">
-            <Radio className="w-6 h-6" />
-          </div>
+          <Logo size="lg" className="rounded-xl shadow-xs" />
           <div>
             <div className="flex items-center gap-2">
               <h4 className="font-bold text-base text-white tracking-wide">RVxis</h4>

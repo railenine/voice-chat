@@ -73,13 +73,12 @@ voice-chat-main/
 │   ├── components/                       # Базовые UI-компоненты
 │   │   ├── voice/                        # Декомпозированные модули экрана голосового чата
 │   │   │   ├── VoiceCapacityBadge.tsx    # Индикатор емкости комнаты (N/12) и Mesh P2P статуса
-│   │   │   ├── VoicePeerCard.tsx         # Мемоизированная карточка собеседника (слайдер 0-200%, стрим)
-│   │   │   ├── VoiceSelfCard.tsx         # Карточка локального пользователя с инлайн-сменой ника
+│   │   │   ├── ParticipantCard.tsx       # Универсальная карточка участника (row для десктопа, compact для мобилки)
 │   │   │   ├── VoiceEmptySlot.tsx        # Состояние комнаты в одиночестве с кнопкой инвайта
 │   │   │   ├── VoiceSidebar.tsx          # Десктопная боковая панель участников и управления
-│   │   │   ├── VoiceMobileHeader.tsx     # Мобильный компактный заголовок с бейджем заполненности
-│   │   │   ├── VoiceMobileParticipants.tsx # Горизонтальная лента аватаров для смартфонов
-│   │   │   ├── VoiceMobileControls.tsx   # Мобильная панель быстрых действий (Mic, Deafen, Share)
+│   │   │   ├── VoiceHeader.tsx           # Унифицированный заголовок для десктопа и мобильной версии
+│   │   │   ├── VoiceMobileParticipants.tsx # Горизонтальная лента аватаров для смартфонов на базе ParticipantCard
+│   │   │   ├── VoiceControlBar.tsx       # Унифицированная панель быстрых действий (Mic, Deafen, RNNoise, Share, Leave)
 │   │   │   ├── VoiceConnectionBanner.tsx # Анимированный баннер состояния связи и ошибки room_full
 │   │   │   ├── VoiceSharePanel.tsx       # Панель демонстрации ссылки и QR-приглашения
 │   │   │   ├── VoiceSettingsModal.tsx    # Модальное окно аудиоустройств и хоткеев

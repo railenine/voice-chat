@@ -1,46 +1,57 @@
 import React, { memo } from 'react';
-import { Volume2, Check, Copy, Settings, Share2 } from 'lucide-react';
+import { Settings, Share2, Check, Copy } from 'lucide-react';
+import { PanelHeader, Button, Logo, Badge } from '../ui';
 import { Tooltip } from '../Tooltip';
-import { Button } from '../ui';
-
 import { MAX_ROOM_PEERS } from '../../config';
 
-export interface VoiceMobileHeaderProps {
+export interface VoiceHeaderProps {
   roomId: string;
   copied: boolean;
   copyRoomId: () => void;
   triggerShare: () => void;
-  showShare?: boolean;
   onOpenSettings: () => void;
-  isSmartphone: boolean;
+  isMobile?: boolean;
+  isSmartphone?: boolean;
   participantCount?: number;
   maxParticipants?: number;
+  className?: string;
 }
 
-export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
+export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(({
   roomId,
   copied,
   copyRoomId,
   triggerShare,
-  showShare,
   onOpenSettings,
-  isSmartphone,
+  isMobile = false,
+  isSmartphone = false,
   participantCount,
   maxParticipants = MAX_ROOM_PEERS,
+  className = '',
 }) => {
   return (
-    <header
-      style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }}
-      className="lg:hidden px-3.5 pb-2.5 pt-2 border-b border-white/10 backdrop-blur-xl bg-slate-950/60 flex items-center justify-between gap-2.5 shrink-0 z-20"
+    <PanelHeader
+      style={
+        isMobile
+          ? { paddingTop: 'calc(env(safe-area-inset-top, 0px) + 0.5rem)' }
+          : undefined
+      }
+      className={`${
+        isMobile
+          ? 'lg:hidden z-20 px-3.5 pb-2.5 pt-2'
+          : 'px-3'
+      } ${className}`}
     >
       {/* Left: Branding & Room Info */}
       <div className="flex items-center gap-2.5 min-w-0">
-        <div className="w-8 h-8 rounded-xl bg-linear-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white shadow-md shrink-0">
-          <Volume2 className="w-4 h-4" />
-        </div>
+        <Logo size="sm" className="shadow-xs" />
 
         <div className="min-w-0 flex items-center gap-2 shrink-0">
-          <span className="text-sm font-bold text-white tracking-tight shrink-0">RVxis</span>
+          <span className="text-sm sm:text-base font-bold text-white tracking-tight shrink-0">
+            RVxis
+          </span>
+
+          {/* Room ID Badge & Copy Action */}
           <Tooltip
             content={copied ? 'Скопировано!' : 'Скопировать ссылку'}
             description="Скопировать ссылку на комнату в буфер"
@@ -49,25 +60,27 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
             <button
               type="button"
               onClick={copyRoomId}
-              className="text-xs text-gray-400 hover:text-blue-300 font-mono transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer py-1 px-1.5 rounded-lg hover:bg-white/5 active:scale-95"
+              className="text-xs text-[var(--muted)] hover:text-[var(--accent)] font-mono transition-colors flex items-center gap-1.5 shrink-0 cursor-pointer py-1 px-1.5 rounded-lg hover:bg-white/5 active:scale-95"
             >
               <span className="font-semibold">#{roomId}</span>
               {copied ? (
                 <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0 animate-scale-up" />
               ) : (
-                <Copy className="w-3.5 h-3.5 text-gray-400 hover:text-white shrink-0 transition-colors" />
+                <Copy className="w-3.5 h-3.5 text-[var(--muted)] hover:text-white shrink-0 transition-colors" />
               )}
             </button>
           </Tooltip>
 
+          {/* Participant count badge on mobile */}
           {typeof participantCount === 'number' && (
-            <span
-              className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full shrink-0 transition-colors ${
+            <Badge
+              variant="pill"
+              className={`shrink-0 transition-colors ${
                 participantCount >= maxParticipants
-                  ? 'bg-rose-500/20 border border-rose-500/40 text-rose-300 font-semibold'
+                  ? 'bg-rose-500/20 border-rose-500/40 text-rose-300 font-semibold'
                   : participantCount >= 8
-                  ? 'bg-amber-500/20 border border-amber-500/30 text-amber-300'
-                  : 'bg-white/6 border border-white/10 text-gray-400'
+                  ? 'bg-amber-500/20 border-amber-500/30 text-amber-300'
+                  : 'text-[var(--muted)]'
               }`}
               title={
                 participantCount >= maxParticipants
@@ -78,12 +91,12 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
               }
             >
               {participantCount}/{maxParticipants}
-            </span>
+            </Badge>
           )}
         </div>
       </div>
 
-      {/* Right: Quick Actions */}
+      {/* Right: Quick Actions (Settings & Share) */}
       <div className="flex items-center gap-1.5 shrink-0">
         <Tooltip
           content={isSmartphone ? 'Настройки звука' : 'Настройки'}
@@ -92,13 +105,14 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
         >
           <Button
             variant="glass"
-            size="icon"
+            size="icon-sm"
             onClick={onOpenSettings}
             aria-label="Настройки"
           >
             <Settings className="w-4 h-4 text-gray-300" />
           </Button>
         </Tooltip>
+
         <Tooltip
           content={copied ? 'Скопировано!' : 'Поделиться'}
           description={copied ? 'Ссылка в буфере обмена' : 'Скопировать ссылку на комнату'}
@@ -106,7 +120,7 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
         >
           <Button
             variant={copied ? 'emerald' : 'glass'}
-            size="icon"
+            size="icon-sm"
             onClick={triggerShare}
             aria-label={copied ? 'Ссылка скопирована' : 'Поделиться ссылкой'}
             className={`transition-all duration-300 ${
@@ -132,8 +146,8 @@ export const VoiceMobileHeader: React.FC<VoiceMobileHeaderProps> = memo(({
           </Button>
         </Tooltip>
       </div>
-    </header>
+    </PanelHeader>
   );
 });
 
-VoiceMobileHeader.displayName = 'VoiceMobileHeader';
+VoiceHeader.displayName = 'VoiceHeader';

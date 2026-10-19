@@ -13,7 +13,7 @@ import {
 import { APP_VERSION } from '../config';
 import { Tooltip } from './Tooltip';
 import { JellyBackground } from './JellyBackground';
-import { Button, Input, Card } from './ui';
+import { Button, Input, Card, Logo } from './ui';
 
 interface LobbyScreenProps {
   nickname: string;
@@ -75,11 +75,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
           {/* Logo / Title */}
           <div className="text-center mb-4 sm:mb-6 compact-h-header">
             <div className="flex flex-col items-center compact-h-row">
-              <div className="inline-flex items-center justify-center w-14 h-14 sm:w-18 sm:h-18 compact-h-icon rounded-full bg-linear-to-r from-blue-700 to-blue-900 mb-3 sm:mb-4 shadow-lg shadow-blue-900/50 shrink-0 transition-all">
-                <svg className="w-7 h-7 sm:w-9 sm:h-9 text-white transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                </svg>
-              </div>
+              <Logo size="xl" className="mb-3 sm:mb-4 shadow-xl shadow-cyan-950/40 shrink-0 transition-transform hover:scale-105 duration-200" />
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold text-white mb-0.5 compact-h-title transition-all">
                   RVxis

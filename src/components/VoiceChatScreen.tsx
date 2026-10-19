@@ -22,13 +22,14 @@ import { saveStoredNickname } from '../utils/nicknames';
 import type { PeerInfo } from '../types/protocol';
 
 import { VoiceConnectionBanner, type BannerState } from './voice/VoiceConnectionBanner';
-import { VoiceMobileHeader } from './voice/VoiceMobileHeader';
+import { VoiceHeader } from './voice/VoiceHeader';
 import { VoiceMobileParticipants } from './voice/VoiceMobileParticipants';
-import { VoiceMobileControls } from './voice/VoiceMobileControls';
+import { VoiceControlBar } from './voice/VoiceControlBar';
 import { VoiceSidebar } from './voice/VoiceSidebar';
 import { VoiceSettingsModal } from './voice/VoiceSettingsModal';
 import { MobilePeerVolumeModal } from './voice/MobilePeerVolumeModal';
 import { MobileNicknameModal } from './voice/MobileNicknameModal';
+import { PanelFooter } from './ui';
 
 interface VoiceChatScreenProps {
   nickname: string;
@@ -360,7 +361,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         )}
 
         {/* Mobile Header (< 1024px) */}
-        <VoiceMobileHeader
+        <VoiceHeader
+          isMobile
           roomId={roomId}
           copied={copied}
           copyRoomId={copyRoomId}
@@ -489,25 +491,31 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         </div>
 
         {/* Mobile Sticky Bottom Controls (< 1024px) */}
-        <VoiceMobileControls
-          isMuted={isMuted}
-          isDeafened={isDeafened}
-          isNoiseSuppression={isNoiseSuppression}
-          canShareScreen={screenShare.isAvailable && screenShare.canShareScreen}
-          isSharingScreen={screenShare.isSharing}
-          isConnectingScreen={screenShare.isConnecting}
-          muteHotkeyLabel={muteHotkey.label}
-          deafenHotkeyLabel={deafenHotkey.label}
-          toggleMute={toggleMute}
-          toggleDeafen={toggleDeafen}
-          toggleNoiseSuppression={toggleNoiseSuppression}
-          onScreenShareClick={
-            screenShare.isSharing
-              ? screenShare.stopScreenShare
-              : () => setShowScreenShareModal(true)
-          }
-          handleLeave={handleLeave}
-        />
+        <PanelFooter
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.625rem)' }}
+          className="lg:hidden p-2.5 sm:p-3 bg-[var(--surface)]/80 backdrop-blur-xl border-t border-[var(--border)] flex items-center justify-center shrink-0 z-20 h-auto"
+        >
+          <VoiceControlBar
+            isMuted={isMuted}
+            isDeafened={isDeafened}
+            isNoiseSuppression={isNoiseSuppression}
+            canShareScreen={screenShare.isAvailable && screenShare.canShareScreen}
+            isSharingScreen={screenShare.isSharing}
+            isConnectingScreen={screenShare.isConnecting}
+            muteHotkeyLabel={muteHotkey.label}
+            deafenHotkeyLabel={deafenHotkey.label}
+            toggleMute={toggleMute}
+            toggleDeafen={toggleDeafen}
+            toggleNoiseSuppression={toggleNoiseSuppression}
+            onScreenShareClick={
+              screenShare.isSharing
+                ? screenShare.stopScreenShare
+                : () => setShowScreenShareModal(true)
+            }
+            handleLeave={handleLeave}
+            className="flex items-center justify-center gap-2.5 sm:gap-3"
+          />
+        </PanelFooter>
       </div>
 
       {/* Mobile Peer Volume Modal */}
