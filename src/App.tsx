@@ -70,37 +70,57 @@ function App() {
     } catch {}
   }, []);
 
-  // Gracefully disperse jelly blobs, reveal app interface, and fade out splash preloader once React mounts
+  // Reveal app interface and fade out splash preloader once React mounts
   useEffect(() => {
-    const jellyBg = document.getElementById('jelly-bg');
     const preloader = document.getElementById('app-preloader');
     const root = document.getElementById('root');
+    const hint = document.getElementById('app-preloader-hint');
 
-    // Settle frame so React DOM is completely painted before reveal
-    const frameId = requestAnimationFrame(() => {
-      const timer = setTimeout(() => {
-        // 1. Reveal loaded app UI seamlessly
-        if (root) {
-          root.classList.add('app-loaded');
-        }
+    const searchParams = new URLSearchParams(window.location.search);
+    const isHoldPreview =
+      searchParams.has('preloader') ||
+      searchParams.has('preview-loader') ||
+      searchParams.has('debug-preloader');
 
-        // 2. Disperse jelly blobs outward from center to corners
-        if (jellyBg) {
-          jellyBg.classList.remove('jelly-converged');
-          jellyBg.classList.add('jelly-dispersed');
-        }
+    // Expose helper to inspect preloader in console or tests
+    (window as unknown as { __showPreloader: (hold?: boolean) => void }).__showPreloader = (hold = true) => {
+      if (!preloader) return;
+      preloader.classList.remove('fade-out');
+      preloader.style.display = 'flex';
+      if (hint && hold) hint.style.display = 'block';
+    };
 
-        // 3. Fade out splash preloader icon and dots simultaneously
+    if (isHoldPreview) {
+      if (hint) hint.style.display = 'block';
+      const dismiss = () => {
+        if (root) root.classList.add('app-loaded');
         if (preloader) {
           preloader.classList.add('fade-out');
-          const removeTimer = setTimeout(() => {
-            preloader.remove();
+          setTimeout(() => {
+            preloader.style.display = 'none';
           }, 400);
-          return () => clearTimeout(removeTimer);
         }
-      }, 100);
+        window.removeEventListener('click', dismiss);
+        window.removeEventListener('keydown', dismiss);
+      };
+      window.addEventListener('click', dismiss);
+      window.addEventListener('keydown', dismiss);
+      return;
+    }
 
-      return () => clearTimeout(timer);
+    // Instant startup: reveal UI immediately upon first frame paint without artificial delays
+    const frameId = requestAnimationFrame(() => {
+      if (root) {
+        root.classList.add('app-loaded');
+      }
+
+      if (preloader) {
+        preloader.classList.add('fade-out');
+        const removeTimer = setTimeout(() => {
+          preloader.style.display = 'none';
+        }, 350);
+        return () => clearTimeout(removeTimer);
+      }
     });
 
     return () => cancelAnimationFrame(frameId);

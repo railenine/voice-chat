@@ -10,6 +10,15 @@
     <title>RVxis - Голосовой чат</title>
     <link rel="icon" type="image/png" href="/icon.png" />
     <style>
+      :root {
+        --bg: oklch(0.15 0.035 255);
+        --surface: oklch(0.19 0.035 255);
+        --border: oklch(0.31 0.045 250);
+        --accent: oklch(0.78 0.14 220);
+        --fg: oklch(0.96 0.018 235);
+        --muted: oklch(0.72 0.035 245);
+      }
+
       html,
       body {
         margin: 0;
@@ -17,8 +26,8 @@
         width: 100%;
         height: 100%;
         height: 100dvh;
-        background-color: oklch(0.15 0.035 255);
-        color: #ffffff;
+        background-color: var(--bg);
+        color: var(--fg);
         overflow: hidden;
         position: fixed;
         inset: 0;
@@ -32,7 +41,7 @@
         height: 100%;
         height: 100dvh;
         background-color: transparent;
-        color: #ffffff;
+        color: var(--fg);
         overflow: hidden;
         position: fixed;
         inset: 0;
@@ -48,52 +57,6 @@
         pointer-events: auto;
       }
 
-      .jelly-background {
-        position: fixed;
-        inset: 0;
-        overflow: hidden;
-        z-index: 0;
-        background: oklch(0.15 0.035 255);
-        pointer-events: none;
-      }
-
-      .jelly-blob {
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(100px);
-        opacity: 0.35;
-        mix-blend-mode: screen;
-        pointer-events: none;
-        will-change: transform, top, left, right, bottom, width, height, opacity;
-      }
-
-      .jelly-converged .jelly-blob {
-        top: calc(50% - 140px);
-        left: calc(50% - 140px);
-        width: 280px;
-        height: 280px;
-        animation: preloader-jelly-pulse 2.4s ease-in-out infinite;
-      }
-
-      .jelly-blob-1 { background: radial-gradient(circle, oklch(0.24 0.05 230 / 0.7) 0%, oklch(0.18 0.035 250 / 0.35) 50%, transparent 75%); }
-      .jelly-blob-2 { background: radial-gradient(circle, oklch(0.20 0.04 255 / 0.8) 0%, oklch(0.16 0.03 260 / 0.4) 50%, transparent 75%); animation-delay: -0.4s; }
-      .jelly-blob-3 { background: radial-gradient(circle, oklch(0.22 0.04 245 / 0.7) 0%, oklch(0.16 0.035 255 / 0.3) 50%, transparent 75%); animation-delay: -0.8s; }
-      .jelly-blob-4 { background: radial-gradient(circle, oklch(0.26 0.06 220 / 0.65) 0%, oklch(0.18 0.035 240 / 0.3) 50%, transparent 75%); animation-delay: -1.2s; }
-      .jelly-blob-5 { background: radial-gradient(circle, oklch(0.25 0.05 225 / 0.6) 0%, oklch(0.17 0.035 255 / 0.35) 50%, transparent 75%); animation-delay: -1.6s; }
-      .jelly-blob-6 { background: radial-gradient(circle, oklch(0.21 0.04 250 / 0.75) 0%, oklch(0.16 0.03 260 / 0.3) 50%, transparent 75%); animation-delay: -0.6s; }
-      .jelly-blob-7 { background: radial-gradient(circle, oklch(0.27 0.06 215 / 0.6) 0%, oklch(0.18 0.035 235 / 0.3) 50%, transparent 75%); animation-delay: -1.0s; }
-
-      @keyframes preloader-jelly-pulse {
-        0%, 100% {
-          transform: scale(0.92);
-          opacity: 0.35;
-        }
-        50% {
-          transform: scale(1.08);
-          opacity: 0.50;
-        }
-      }
-
       #app-preloader {
         position: fixed;
         inset: 0;
@@ -102,7 +65,7 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        background-color: transparent;
+        background-color: var(--bg);
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         user-select: none;
         transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1), transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.35s;
@@ -116,51 +79,75 @@
         pointer-events: none;
       }
 
-      @keyframes preloader-pulse {
-        0%, 100% {
-          transform: scale(1);
-          opacity: 0.35;
+      @keyframes preloader-spin-cw {
+        from {
+          transform: rotate(0deg);
         }
-        50% {
-          transform: scale(1.15);
-          opacity: 0.65;
+        to {
+          transform: rotate(360deg);
         }
       }
 
-      @keyframes preloader-dot {
-        0%, 80%, 100% {
-          transform: scale(0.6);
-          opacity: 0.4;
+      @keyframes preloader-spin-ccw {
+        from {
+          transform: rotate(0deg);
         }
-        40% {
-          transform: scale(1);
-          opacity: 1;
+        to {
+          transform: rotate(-360deg);
         }
+      }
+
+      .preloader-spin-cw {
+        transform-origin: 256px 256px;
+        transform-box: view-box;
+        animation: preloader-spin-cw 2.4s linear infinite;
+      }
+
+      .preloader-spin-ccw {
+        transform-origin: 256px 256px;
+        transform-box: view-box;
+        animation: preloader-spin-ccw 2.4s linear infinite;
       }
     </style>
   </head>
-  <body style="background-color: oklch(0.15 0.035 255);">
+  <body>
     <div id="root"></div>
-    <div id="jelly-bg" class="jelly-background jelly-converged" aria-hidden="true">
-      <div class="jelly-blob jelly-blob-1"></div>
-      <div class="jelly-blob jelly-blob-2"></div>
-      <div class="jelly-blob jelly-blob-3"></div>
-      <div class="jelly-blob jelly-blob-4"></div>
-      <div class="jelly-blob jelly-blob-5"></div>
-      <div class="jelly-blob jelly-blob-6"></div>
-      <div class="jelly-blob jelly-blob-7"></div>
-    </div>
     <div id="app-preloader">
-      <div style="position: relative; width: 72px; height: 72px; margin-bottom: 18px; display: flex; align-items: center; justify-content: center;">
-        <div style="position: absolute; inset: -4px; border-radius: 50%; background: linear-gradient(135deg, #06b6d4, #3b82f6); filter: blur(14px); animation: preloader-pulse 2s infinite ease-in-out;"></div>
-        <img src="/icon.png" width="64" height="64" alt="RVxis Logo" style="position: relative; border-radius: 50%; box-shadow: 0 10px 25px -5px rgba(6, 182, 212, 0.4); border: 1px solid rgba(255, 255, 255, 0.2);" />
+      <div style="width: 72px; height: 72px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center;">
+        <svg viewBox="0 0 512 512" width="72" height="72" fill="none" style="display: block; width: 100%; height: 100%;">
+          <!-- Static outer ring -->
+          <circle cx="256" cy="256" r="210" stroke="var(--accent)" stroke-width="36" />
+          <!-- Outer semicircle rotating clockwise around center (256, 256) -->
+          <g class="preloader-spin-cw">
+            <path d="M 256 118 A 138 138 0 0 1 256 394" stroke="var(--accent)" stroke-width="34" stroke-linecap="butt" />
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from="0 256 256"
+              to="360 256 256"
+              dur="2.4s"
+              repeatCount="indefinite"
+            />
+          </g>
+          <!-- Inner semicircle rotating counter-clockwise around center (256, 256) -->
+          <g class="preloader-spin-ccw">
+            <path d="M 256 184 A 72 72 0 0 1 256 328" stroke="var(--accent)" stroke-width="34" stroke-linecap="butt" />
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from="0 256 256"
+              to="-360 256 256"
+              dur="2.4s"
+              repeatCount="indefinite"
+            />
+          </g>
+        </svg>
       </div>
-      <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #ffffff; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;">
+      <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg); display: flex; align-items: center; gap: 8px;">
         <span>RVxis</span>
       </div>
-      <div style="display: flex; align-items: center; gap: 6px;">
-        <div style="width: 7px; height: 7px; border-radius: 50%; background-color: #3b82f6; animation: preloader-dot 1.4s infinite ease-in-out both; animation-delay: -0.32s;"></div>
-        <div style="width: 7px; height: 7px; border-radius: 50%; background-color: #60a5fa; animation: preloader-dot 1.4s infinite ease-in-out both; animation-delay: -0.16s;"></div>
+      <div id="app-preloader-hint" style="display: none; margin-top: 20px; font-size: 13px; color: var(--muted); opacity: 0.9; letter-spacing: 0.01em; cursor: pointer; padding: 6px 14px; border-radius: 9999px; border: 1px solid var(--border); background-color: var(--surface); transition: background-color 0.15s ease;">
+        Предпросмотр &bull; Нажмите для входа
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>
@@ -176,17 +163,14 @@
 
       setTimeout(function() {
         var r = document.getElementById('root');
-        if (r && !r.classList.contains('app-loaded')) {
+        var urlParams = new URLSearchParams(window.location.search);
+        var isHold = urlParams.has('preloader') || urlParams.has('preview-loader') || urlParams.has('debug-preloader');
+        if (!isHold && r && !r.classList.contains('app-loaded')) {
           r.classList.add('app-loaded');
           var p = document.getElementById('app-preloader');
           if (p) p.classList.add('fade-out');
-          var j = document.getElementById('jelly-bg');
-          if (j) {
-            j.classList.remove('jelly-converged');
-            j.classList.add('jelly-dispersed');
-          }
         }
-      }, 3500);
+      }, 4000);
     </script>
   </body>
 </html>
