@@ -12,8 +12,11 @@ interface UseAppUpdaterOptions {
 
 const DISMISSED_VERSION_KEY = 'rvxis_dismissed_update_version';
 
-// ⚠️ TEMPORARY MOCK FOR UPDATE BUTTON TESTING (Requested by user)
-const MOCK_UPDATE_ENABLED = true;
+// Optional dev/test mock: enabled ONLY if explicitly requested via URL (?mock_update=true)
+const isMockUpdateEnabled = (): boolean =>
+  typeof window !== 'undefined' &&
+  (new URLSearchParams(window.location.search).has('mock_update') ||
+   new URLSearchParams(window.location.search).has('mock-update'));
 
 const MOCK_UPDATE_INFO: UpdateInfo = {
   version: '0.1.18',
@@ -24,8 +27,8 @@ const MOCK_UPDATE_INFO: UpdateInfo = {
 
 export function useAppUpdater(options?: UseAppUpdaterOptions) {
   const isInRoom = !!options?.isInRoom;
-  const [status, setStatus] = useState<UpdateStatus>(MOCK_UPDATE_ENABLED ? 'available' : 'idle');
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(MOCK_UPDATE_ENABLED ? MOCK_UPDATE_INFO : null);
+  const [status, setStatus] = useState<UpdateStatus>(isMockUpdateEnabled() ? 'available' : 'idle');
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(isMockUpdateEnabled() ? MOCK_UPDATE_INFO : null);
   const [isPortable, setIsPortable] = useState<boolean>(false);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [downloadedBytes, setDownloadedBytes] = useState<number>(0);
@@ -48,7 +51,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
   }, []);
 
   const checkForUpdates = useCallback(async (manual = false) => {
-    if (MOCK_UPDATE_ENABLED) {
+    if (isMockUpdateEnabled()) {
       setStatus('available');
       setUpdateInfo(MOCK_UPDATE_INFO);
       if (manual) {
@@ -250,7 +253,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
 
   // Install update: supports both 'portable' in-place swap and 'installer' setup
   const installUpdate = useCallback(async (mode?: 'portable' | 'installer') => {
-    if (MOCK_UPDATE_ENABLED) {
+    if (isMockUpdateEnabled()) {
       setStatus('downloading');
       setDownloadProgress(20);
       setTimeout(() => setDownloadProgress(50), 300);

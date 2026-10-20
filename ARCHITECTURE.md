@@ -88,7 +88,6 @@ voice-chat-main/
 │   │   ├── AudioDeviceSettings.tsx       # Настройки аудиоустройств и горячих клавиш
 │   │   ├── ChatPanel.tsx                 # Текстовый чат комнаты в реальном времени
 │   │   ├── ChunkErrorBoundary.tsx        # Защита от белого экрана (Error Boundary) и Suspense Fallback
-│   │   ├── JellyBackground.tsx           # Анимированные сферы органического плазменного свечения
 │   │   ├── LobbyScreen.tsx               # Экран создания комнаты и ввода 6-значного кода
 │   │   ├── Modal.tsx                     # Базовый компонент стеклянного модального окна
 │   │   ├── updater/                      # Декомпозированные модули диалога обновления
@@ -351,12 +350,12 @@ flowchart TD
 
 ## 9. Дизайн-система (Glassmorphism Dark)
 
-- **Базовый фон**: `#020617` (Tailwind `slate-950`).
+- **Базовый фон**: `--bg` (`oklch(0.15 0.035 255)`).
 - **Стеклянные панели**: `bg-slate-950/45 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl shadow-black/40`.
 - **Интерактивные карточки**: `bg-black/30 hover:bg-black/40 border border-white/10 hover:border-white/20 rounded-xl`.
 - **Индикация собственной карточки («Вы»)**: `border-blue-500/30 hover:border-blue-500/45`.
 - **Индикация активной речи**: изумрудное кольцо `border-green-500/50 bg-green-500/[0.06] shadow-sm shadow-green-500/20`.
-- **7-сферный органический фон (Jelly)**: 7 независимых цветных сфер с `mix-blend-mode: screen` и размытием `filter: blur(80px)`.
+- **Монолитный фон приложения**: чистый производительный фон на OKLCH токенах (`--bg: oklch(0.15 0.035 255)`) без накладных расходов на GPU.
 
 ---
 
