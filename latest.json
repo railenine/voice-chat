@@ -1,22 +1,22 @@
 {
-  "version": "0.1.17",
-  "notes": "• 📸 **Безопасный обмен медиафайлами в чате:** отправка изображений, видео, аудио и документов с поддержкой drag-and-drop, буфера обмена (Ctrl+V) и адаптивного предпросмотра.\n• 🛡️ **3-уровневая архитектура безопасности (3-Tier Security):**\n• 1. **Уровень 1 (Серверная защита):** побайтовая валидация Magic Bytes (первые 4–12 байт файла по строгому белому списку сигнатур), полный запрет SVG для защиты от Stored XSS, уведомление с кодом ошибки 400 при отклонении файла, эфемерное RAM-only хранение.\n• 2. **Уровень 2 (Клиентская песочница):** безопасный рендеринг медиа в CSP-песочнице, полноэкранный просмотрщик `MediaViewerModal` с зумом, панорамированием и прямым скачиванием.\n• 3. **Уровень 3 (Приватность и защита пользователя):** Privacy Shield (блокировка скрытой загрузки внешних ресурсов для защиты от утечки IP-адреса) и модальное окно подтверждения внешних ссылок `ExternalLinkModal` с защитой от фишинга.\n• 🎨 **Комплексная унификация UI-компонентов:** стандартизация модальных окон на `Modal.Header / Body / Footer`, внедрение дизайн-системы `ui/` (`Button`, `Badge`, `Card`, `Input`, `VolumeSlider`).\n• 🎛️ **Устранение дублирования кода (DRY):** единый компонент `VoiceControlBar` для десктопа и мобильных устройств.\n• ⚡ **Синхронизация Tailwind CSS v4:** чистый синтаксис `shrink-0`, `bg-linear-to-*` и валидные токены непрозрачности.",
-  "pub_date": "2026-10-14T19:50:09.908Z",
+  "version": "0.2.0",
+  "notes": "• 🎨 **Полный переход на OKLCH дизайн-систему (100% OKLCH Design Tokens):** тотальный отказ от сырых цветов (`#hex`, `rgb`, статических Tailwind классов `slate-*`, `white`, `black`), перевод всех 35+ компонентов приложения на семантические CSS-переменные темы (`--bg`, `--surface`, `--elevated`, `--border`, `--fg`, `--muted`, `--accent`, `--danger` и др.) и чистый синтаксис Tailwind CSS v4.\n• 🌀 **Анимированный векторный прелоадер (Vector Logo Preloader):** плавный индикатор загрузки с контр-вращающимися дугами, пульсирующим центральным узлом логотипа RVxis и мерцающим статусом подключения к серверу.\n• 💬 **Унифицированные дизайн-системные подсказки (Unified Tooltips):** полное устранение нативных нестилизованных подсказок ОС (`title=\"...\"`) на интерактивных элементах (карточки недавних комнат, корзина, стрим, громкость), перевод компонента `Tooltip` на токен `--elevated` со стеклянным размытием `backdrop-blur-xl`, горячими клавишами и изоляцией от перекрытия.\n• 🧹 **Очистка кодовой базы от легаси:** полное удаление устаревшего тяжёлого компонента `JellyBackground` и отвязка мокового автообновления.",
+  "pub_date": "2026-10-20T20:02:11.723Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUUXBRQ09zd3c3SGlDZEpXMkNIQnJhNHZ1aFFrVGFBSTVKWENEb1E3NXdPMzNyK0dRMnMzN3dhdmUwT0E3bnFRZU1ra0EyUzAwSXRJNVpWZGVGWXJINDZDSjJzQlFPaVFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMTc2Mjk5CWZpbGU6dGVtcF9Wb2ljZUNoYXRfMC4wLjQ1X3g2NC5leGUJdmVyc2lvbjowLjAuNDUKdngzd1dHSGJveUpxeDVVRTZERWx4VGZqTDUzL0MwbnV6SnZ1dnlpU1dNUUNEWGhzbVUveXMyQWI1K1BMZWtBR3YzWDVycmp5U2JjbmxCaEZNaXM2Q1E9PQo=",
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.1.17/RVxis_0.1.17_x64-setup.exe",
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.0/RVxis_0.2.0_x64-setup.exe",
       "size": 4703402,
       "sha256": "4a33f68806ceb42a8822955e13e27cf4ba13442a741b58d8d9bd63b77c686112"
     }
   },
   "portable": {
     "windows-x86_64": {
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.1.17/RVxis.exe",
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.0/RVxis.exe",
       "size": 17463808,
       "sha256": "b3d6a61e24a933470fb6f692495db98dcd7a09ab348be01eb0efc551d20880fe",
       "signature": ""
     }
   },
-  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.1.17/RVxis.exe"
+  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.2.0/RVxis.exe"
 }

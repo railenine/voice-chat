@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.17';
+export const APP_VERSION = '0.2.0';
 export const PRODUCTION_SERVER = 'https://rvxis.site';
 export const PRODUCTION_WS = 'wss://rvxis.site/peerjs/ws';
 
