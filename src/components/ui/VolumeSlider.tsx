@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
+import { Tooltip } from '../Tooltip';
 
 export interface VolumeSliderProps {
   value: number; // 0 to 200
@@ -35,21 +36,28 @@ export const VolumeSlider = memo<VolumeSliderProps>(({
   return (
     <div className={`space-y-1.5 ${className}`}>
       <div className="flex items-center justify-between text-xs">
-        <button
-          type="button"
-          onClick={onToggleMute}
-          className={`flex items-center gap-1.5 text-(--muted) hover:text-(--fg) transition-colors select-none font-medium ${
-            onToggleMute ? 'cursor-pointer' : 'cursor-default'
-          }`}
-          title={onToggleMute ? (isMuted ? 'Включить звук' : 'Заглушить') : label}
-        >
-          {isMuted ? (
-            <VolumeX className="w-3.5 h-3.5 text-(--danger) shrink-0" />
-          ) : (
+        {onToggleMute ? (
+          <Tooltip content={isMuted ? 'Включить звук' : 'Заглушить'} position="top">
+            <button
+              type="button"
+              onClick={onToggleMute}
+              className="flex items-center gap-1.5 text-(--muted) hover:text-(--fg) transition-colors select-none font-medium cursor-pointer"
+              aria-label={isMuted ? 'Включить звук' : 'Заглушить'}
+            >
+              {isMuted ? (
+                <VolumeX className="w-3.5 h-3.5 text-(--danger) shrink-0" />
+              ) : (
+                <Volume2 className="w-3.5 h-3.5 text-(--accent) shrink-0" />
+              )}
+              <span>{label}</span>
+            </button>
+          </Tooltip>
+        ) : (
+          <div className="flex items-center gap-1.5 text-(--muted) select-none font-medium cursor-default">
             <Volume2 className="w-3.5 h-3.5 text-(--accent) shrink-0" />
-          )}
-          <span>{label}</span>
-        </button>
+            <span>{label}</span>
+          </div>
+        )}
 
         {showPercent && (
           <span
@@ -74,7 +82,7 @@ export const VolumeSlider = memo<VolumeSliderProps>(({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         onInput={(e) => onChange(Number((e.target as HTMLInputElement).value))}
-        title={`${label}: ${value}%${isBoosted ? ' (Усиление)' : ''}`}
+        aria-label={`${label}: ${value}%${isBoosted ? ' (Усиление)' : ''}`}
         style={{ background: trackBackground }}
         className="volume-slider-input w-full h-1.5 rounded-full appearance-none cursor-pointer transition-colors"
       />

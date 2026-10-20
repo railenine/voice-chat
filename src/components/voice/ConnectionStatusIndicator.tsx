@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Badge } from '../ui';
+import { Tooltip } from '../Tooltip';
 
 export interface ConnectionStatusIndicatorProps {
   isConnected: boolean;
@@ -38,7 +39,7 @@ export const ConnectionStatusIndicator: React.FC<ConnectionStatusIndicatorProps>
         role="status"
         aria-live="polite"
         className={`${basePill} pl-2.5 pr-1.5 gap-1.5 bg-(--danger-soft) border-(--danger-border) text-(--danger) ${className}`}
-        title={error}
+        aria-label={error}
       >
         <span className="w-1.5 h-1.5 rounded-full bg-(--danger) shrink-0 -translate-y-px" aria-hidden="true" />
         <span className={`leading-none truncate ${isMobile ? 'max-w-28' : 'max-w-44 xl:max-w-64'}`}>
@@ -48,16 +49,17 @@ export const ConnectionStatusIndicator: React.FC<ConnectionStatusIndicatorProps>
         {handleRetry && (
           <>
             <span className="w-px h-3 bg-(--danger-border) shrink-0 self-center" aria-hidden="true" />
-            <button
-              type="button"
-              onClick={handleRetry}
-              disabled={isRetrying}
-              title="Повторить подключение"
-              aria-label="Повторить подключение"
-              className="inline-flex items-center justify-center w-4 h-4 rounded text-(--danger) hover:text-white transition-colors cursor-pointer disabled:opacity-50 active:scale-90 focus-visible:outline-2 focus-visible:outline-(--accent) shrink-0"
-            >
-              <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} aria-hidden="true" />
-            </button>
+            <Tooltip content="Повторить подключение" position="top">
+              <button
+                type="button"
+                onClick={handleRetry}
+                disabled={isRetrying}
+                aria-label="Повторить подключение"
+                className="inline-flex items-center justify-center w-4 h-4 rounded text-(--danger) hover:text-(--fg) transition-colors cursor-pointer disabled:opacity-50 active:scale-90 focus-visible:outline-2 focus-visible:outline-(--accent) shrink-0"
+              >
+                <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} aria-hidden="true" />
+              </button>
+            </Tooltip>
           </>
         )}
       </div>

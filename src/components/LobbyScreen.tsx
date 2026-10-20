@@ -245,51 +245,61 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                     <History className="w-3 h-3 text-(--accent) shrink-0" />
                     <span>Недавние комнаты</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleClearRecent}
-                    className="text-[10px] text-(--muted) hover:text-(--danger) transition-colors cursor-pointer py-0.5 focus-visible:outline-2 focus-visible:outline-(--accent)"
-                    title="Очистить историю комнат"
-                  >
-                    Очистить
-                  </button>
+                  <Tooltip content="Очистить историю комнат" position="bottom">
+                    <button
+                      type="button"
+                      onClick={handleClearRecent}
+                      className="text-[10px] text-(--muted) hover:text-(--danger) transition-colors cursor-pointer py-0.5 focus-visible:outline-2 focus-visible:outline-(--accent)"
+                      aria-label="Очистить историю комнат"
+                    >
+                      Очистить
+                    </button>
+                  </Tooltip>
                 </div>
 
                 <div className="w-full flex gap-1.5 sm:gap-2 py-1">
                   {recentRooms.map((room) => (
-                    <div
-                      key={room.roomId}
-                      onClick={() => handleQuickJoin(room.roomId)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          handleQuickJoin(room.roomId);
-                        }
-                      }}
-                      className="group/chip flex-1 min-w-0 flex flex-col justify-between p-2 sm:p-2.5 bg-(--surface) hover:bg-(--elevated) border border-(--border) hover:border-(--accent)/50 rounded-(--radius) transition-all duration-150 cursor-pointer text-(--fg) active:translate-y-px shadow-xs focus:outline-none focus-visible:outline-2 focus-visible:outline-(--accent) focus-visible:outline-offset-1 select-none"
-                      title={`Войти в комнату ${room.roomId}`}
-                    >
-                      <div className="flex items-center justify-between gap-1 w-full min-w-0">
-                        <span className="font-mono font-bold text-xs tracking-wider text-(--accent) truncate">
-                          {room.roomId}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => handleRemoveRecent(e, room.roomId)}
-                          className="w-5 h-5 -mr-0.5 -mt-0.5 flex items-center justify-center rounded-(--radius) text-(--muted) opacity-35 group-hover/chip:opacity-100 max-sm:opacity-80 hover:opacity-100! hover:text-(--danger) hover:bg-(--danger-soft) active:scale-90 transition-all shrink-0 cursor-pointer focus:outline-none focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-(--accent)"
-                          title="Удалить из истории"
-                          aria-label={`Удалить комнату ${room.roomId} из истории`}
+                    <div key={room.roomId} className="flex-1 min-w-0">
+                      <Tooltip content={`Войти в комнату ${room.roomId}`} position="top" className="w-full">
+                        <div
+                          onClick={() => handleQuickJoin(room.roomId)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleQuickJoin(room.roomId);
+                            }
+                          }}
+                          className="group/chip flex-1 min-w-0 flex flex-col justify-between p-2 sm:p-2.5 bg-(--surface) hover:bg-(--elevated) border border-(--border) hover:border-(--accent)/50 rounded-(--radius) transition-all duration-150 cursor-pointer text-(--fg) active:translate-y-px shadow-xs focus:outline-none focus-visible:outline-2 focus-visible:outline-(--accent) focus-visible:outline-offset-1 select-none"
+                          aria-label={`Войти в комнату ${room.roomId}`}
                         >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
-                      </div>
+                          <div className="flex items-center justify-between gap-1 w-full min-w-0">
+                            <span className="font-mono font-bold text-xs tracking-wider text-(--accent) truncate">
+                              {room.roomId}
+                            </span>
+                            <Tooltip content="Удалить из истории" position="top">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveRecent(e, room.roomId);
+                                }}
+                                onMouseEnter={(e) => e.stopPropagation()}
+                                className="w-5 h-5 -mr-0.5 -mt-0.5 flex items-center justify-center rounded-(--radius) text-(--muted) opacity-35 group-hover/chip:opacity-100 max-sm:opacity-80 hover:opacity-100! hover:text-(--danger) hover:bg-(--danger-soft) active:scale-90 transition-all shrink-0 cursor-pointer focus:outline-none focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-(--accent)"
+                                aria-label={`Удалить комнату ${room.roomId} из истории`}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </Tooltip>
+                          </div>
 
-                      <div className="flex items-center gap-1 text-[10px] text-(--muted) mt-1 min-w-0">
-                        <Clock className="w-2.5 h-2.5 text-(--muted) shrink-0" />
-                        <span className="truncate">{formatRecentTime(room.lastVisited)}</span>
-                      </div>
+                          <div className="flex items-center gap-1 text-[10px] text-(--muted) mt-1 min-w-0">
+                            <Clock className="w-2.5 h-2.5 text-(--muted) shrink-0" />
+                            <span className="truncate">{formatRecentTime(room.lastVisited)}</span>
+                          </div>
+                        </div>
+                      </Tooltip>
                     </div>
                   ))}
                 </div>

@@ -86,22 +86,22 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
       {/* Micro status icon badge in corner */}
       {isDeafened ? (
         <span
-          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--danger) text-white flex items-center justify-center border-2 border-(--surface) shadow-xs"
-          title="Звук заглушен"
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--danger) text-(--bg) flex items-center justify-center border-2 border-(--surface) shadow-xs"
+          aria-label="Звук заглушен"
         >
           <VolumeX className="w-2.5 h-2.5" />
         </span>
       ) : isMuted ? (
         <span
-          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--danger) text-white flex items-center justify-center border-2 border-(--surface) shadow-xs"
-          title="Микрофон выключен"
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--danger) text-(--bg) flex items-center justify-center border-2 border-(--surface) shadow-xs"
+          aria-label="Микрофон выключен"
         >
           <MicOff className="w-2.5 h-2.5" />
         </span>
       ) : isStreaming ? (
         <span
           className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--accent) text-(--bg) flex items-center justify-center border-2 border-(--surface) shadow-xs animate-pulse"
-          title="В эфире"
+          aria-label="В эфире"
         >
           <Radio className="w-2.5 h-2.5" />
         </span>
@@ -166,19 +166,20 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
                     {volume === 0 ? '0%' : `${volume}%`}
                   </Badge>
                   {isStreaming && (
-                    <Badge
-                      variant={isWatched ? 'accent' : 'blue'}
-                      size="sm"
-                      pulse={!isWatched}
-                      icon={<Radio className="w-2.5 h-2.5 shrink-0" />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (peerId && onToggleWatchPeer) onToggleWatchPeer(peerId);
-                      }}
-                      title={isWatched ? 'Свернуть трансляцию' : 'Смотреть стрим'}
-                    >
-                      {isWatched ? 'Стрим' : 'Смотреть'}
-                    </Badge>
+                    <Tooltip content={isWatched ? 'Свернуть трансляцию' : 'Смотреть стрим'} position="top">
+                      <Badge
+                        variant={isWatched ? 'accent' : 'blue'}
+                        size="sm"
+                        pulse={!isWatched}
+                        icon={<Radio className="w-2.5 h-2.5 shrink-0" />}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (peerId && onToggleWatchPeer) onToggleWatchPeer(peerId);
+                        }}
+                      >
+                        {isWatched ? 'Стрим' : 'Смотреть'}
+                      </Badge>
+                    </Tooltip>
                   )}
                 </>
               )}
@@ -256,19 +257,20 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
           {/* Subtitle / Status Tags */}
           <div className="flex items-center gap-1.5 mt-0.5">
             {isStreaming && (
-              <Badge
-                variant={isWatched ? 'accent' : 'blue'}
-                size="sm"
-                pulse={!isWatched}
-                icon={<Radio className="w-3 h-3 shrink-0" />}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (peerId && onToggleWatchPeer) onToggleWatchPeer(peerId);
-                }}
-                title={isWatched ? 'Свернуть трансляцию' : 'Смотреть стрим'}
-              >
-                {isWatched ? 'Просмотр' : 'Смотреть стрим'}
-              </Badge>
+              <Tooltip content={isWatched ? 'Свернуть трансляцию' : 'Смотреть стрим'} position="top">
+                <Badge
+                  variant={isWatched ? 'accent' : 'blue'}
+                  size="sm"
+                  pulse={!isWatched}
+                  icon={<Radio className="w-3 h-3 shrink-0" />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (peerId && onToggleWatchPeer) onToggleWatchPeer(peerId);
+                  }}
+                >
+                  {isWatched ? 'Просмотр' : 'Смотреть стрим'}
+                </Badge>
+              </Tooltip>
             )}
 
             {isDeafened ? (

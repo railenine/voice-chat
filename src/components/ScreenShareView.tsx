@@ -19,6 +19,7 @@ import {
 import { RemoteScreenShare } from '../hooks/useScreenShare';
 import { normalizeSinkId } from '../utils/device';
 import { Button, Badge } from './ui';
+import { Tooltip } from './Tooltip';
 
 interface ScreenShareViewProps {
   activeStreams: RemoteScreenShare[];
@@ -287,24 +288,25 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
             {/* Stream volume control in top header for remote stream */}
             {!isLocalFocused && focusedRemoteStream && (
               <div className="btn-compact min-w-0! min-h-0! h-8 px-2 sm:px-2.5 rounded-(--radius) bg-(--surface)/90 hover:bg-(--surface) border border-(--border) flex items-center gap-1.5 text-xs text-(--fg) shrink-0 shadow-xs">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onVolumeChange(
-                      focusedRemoteStream.participantId,
-                      (streamVolumes[focusedRemoteStream.participantId] ?? 100) === 0 ? 100 : 0
-                    )
-                  }
-                  className="hover:text-(--accent) transition-colors p-0.5 cursor-pointer flex items-center justify-center focus-visible:outline-2 focus-visible:outline-(--accent)"
-                  title="Вкл/Выкл звук стрима"
-                  aria-label="Вкл/Выкл звук стрима"
-                >
-                  {(streamVolumes[focusedRemoteStream.participantId] ?? 100) === 0 ? (
-                    <VolumeX className="w-3.5 h-3.5 text-(--danger) shrink-0" />
-                  ) : (
-                    <Volume2 className="w-3.5 h-3.5 text-(--accent) shrink-0" />
-                  )}
-                </button>
+                <Tooltip content={(streamVolumes[focusedRemoteStream.participantId] ?? 100) === 0 ? "Включить звук" : "Заглушить звук"} position="top">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onVolumeChange(
+                        focusedRemoteStream.participantId,
+                        (streamVolumes[focusedRemoteStream.participantId] ?? 100) === 0 ? 100 : 0
+                      )
+                    }
+                    className="hover:text-(--accent) transition-colors p-0.5 cursor-pointer flex items-center justify-center focus-visible:outline-2 focus-visible:outline-(--accent)"
+                    aria-label="Вкл/Выкл звук стрима"
+                  >
+                    {(streamVolumes[focusedRemoteStream.participantId] ?? 100) === 0 ? (
+                      <VolumeX className="w-3.5 h-3.5 text-(--danger) shrink-0" />
+                    ) : (
+                      <Volume2 className="w-3.5 h-3.5 text-(--accent) shrink-0" />
+                    )}
+                  </button>
+                </Tooltip>
                 <input
                   type="range"
                   min={0}
@@ -314,7 +316,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
                     onVolumeChange(focusedRemoteStream.participantId, Number(e.target.value))
                   }
                   className="w-14 sm:w-20 h-1.5 bg-(--border) rounded-lg appearance-none cursor-pointer accent-(--accent)"
-                  title={`Громкость стрима: ${streamVolumes[focusedRemoteStream.participantId] ?? 100}%`}
+                  aria-label={`Громкость стрима: ${streamVolumes[focusedRemoteStream.participantId] ?? 100}%`}
                 />
                 <span className="font-mono text-[10px] text-(--muted) font-semibold w-6 text-right">
                   {streamVolumes[focusedRemoteStream.participantId] ?? 100}%
@@ -323,43 +325,47 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
             )}
 
             {isLocalFocused ? (
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={onStopSharing}
-                icon={<ScreenShareOff className="w-3.5 h-3.5 shrink-0" />}
-                className="h-8 px-2.5 text-xs rounded-lg shadow-sm shrink-0"
-                title="Остановить показ экрана"
-              >
-                <span className="hidden sm:inline">Остановить показ</span>
-              </Button>
+              <Tooltip content="Остановить показ экрана" position="bottom">
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={onStopSharing}
+                  icon={<ScreenShareOff className="w-3.5 h-3.5 shrink-0" />}
+                  className="h-8 px-2.5 text-xs rounded-(--radius) shadow-xs shrink-0"
+                >
+                  <span className="hidden sm:inline">Остановить показ</span>
+                </Button>
+              </Tooltip>
             ) : (
+              <Tooltip content="Закрыть окно просмотра" position="bottom">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onCloseView}
+                  icon={<X className="w-3.5 h-3.5 shrink-0" />}
+                  className="h-8 px-2 sm:px-2.5 text-xs rounded-(--radius) shrink-0"
+                >
+                  <span className="hidden sm:inline">Закрыть просмотр</span>
+                </Button>
+              </Tooltip>
+            )}
+
+            <Tooltip content={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'} position="bottom">
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={onCloseView}
-                icon={<X className="w-3.5 h-3.5 shrink-0" />}
-                className="h-8 px-2 sm:px-2.5 text-xs rounded-(--radius) shrink-0"
-                title="Закрыть окно просмотра"
-              >
-                <span className="hidden sm:inline">Закрыть просмотр</span>
-              </Button>
-            )}
-
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={toggleFullscreen}
-              icon={
-                isFullscreen ? (
-                  <Minimize2 className="w-4 h-4 shrink-0 block" />
-                ) : (
-                  <Maximize2 className="w-4 h-4 shrink-0 block" />
-                )
-              }
-              className="w-8 h-8 px-0 rounded-(--radius) shrink-0"
-              title={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}
-            />
+                onClick={toggleFullscreen}
+                icon={
+                  isFullscreen ? (
+                    <Minimize2 className="w-4 h-4 shrink-0 block" />
+                  ) : (
+                    <Maximize2 className="w-4 h-4 shrink-0 block" />
+                  )
+                }
+                className="w-8 h-8 px-0 rounded-(--radius) shrink-0"
+                aria-label={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}
+              />
+            </Tooltip>
           </div>
         </div>
       </div>

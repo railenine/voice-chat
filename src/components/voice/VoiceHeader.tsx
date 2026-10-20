@@ -62,26 +62,30 @@ export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(
 
           {/* Participant count badge on tablet/laptop */}
           {isMobile && typeof participantCount === "number" && (
-            <Badge
-              variant="neutral"
-              size="sm"
-              className={`shrink-0 transition-colors hidden md:inline-flex ${
-                participantCount >= maxParticipants
-                  ? "bg-(--danger-soft)! border-(--danger-border)! text-(--danger)! font-semibold"
-                  : participantCount >= 8
-                    ? "bg-(--warning-soft)! border-(--warning-border)! text-(--warning)!"
-                    : "text-(--muted)"
-              }`}
-              title={
+            <Tooltip
+              content={
                 participantCount >= maxParticipants
                   ? "Комната заполнена"
                   : participantCount >= 8
                     ? "Mesh P2P (8+ участников)"
                     : "Количество участников"
               }
+              position="bottom"
             >
-              {participantCount}/{maxParticipants}
-            </Badge>
+              <Badge
+                variant="neutral"
+                size="sm"
+                className={`shrink-0 transition-colors hidden md:inline-flex ${
+                  participantCount >= maxParticipants
+                    ? "bg-(--danger-soft)! border-(--danger-border)! text-(--danger)! font-semibold"
+                    : participantCount >= 8
+                      ? "bg-(--warning-soft)! border-(--warning-border)! text-(--warning)!"
+                      : "text-(--muted)"
+                }`}
+              >
+                {participantCount}/{maxParticipants}
+              </Badge>
+            </Tooltip>
           )}
 
           {/* Unified Connection Status Indicator for Mobile (< 1024px) */}
