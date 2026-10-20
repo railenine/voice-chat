@@ -41,6 +41,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
 }) => {
   const [showAudioSettings, setShowAudioSettings] = useState(false);
   const [recentRooms, setRecentRooms] = useState<RecentRoom[]>(() => getRecentRooms());
+  const [hoveredTrashRoomId, setHoveredTrashRoomId] = useState<string | null>(null);
 
   useEffect(() => {
     setRecentRooms(getRecentRooms());
@@ -260,7 +261,11 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                 <div className="w-full flex gap-1.5 sm:gap-2 py-1">
                   {recentRooms.map((room) => (
                     <div key={room.roomId} className="flex-1 min-w-0">
-                      <Tooltip content={`Войти в комнату ${room.roomId}`} position="top" className="w-full">
+                      <Tooltip
+                        content={`Войти в комнату ${room.roomId}`}
+                        position="top"
+                        disabled={hoveredTrashRoomId === room.roomId}
+                      >
                         <div
                           onClick={() => handleQuickJoin(room.roomId)}
                           role="button"
@@ -271,7 +276,7 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                               handleQuickJoin(room.roomId);
                             }
                           }}
-                          className="group/chip flex-1 min-w-0 flex flex-col justify-between p-2 sm:p-2.5 bg-(--surface) hover:bg-(--elevated) border border-(--border) hover:border-(--accent)/50 rounded-(--radius) transition-all duration-150 cursor-pointer text-(--fg) active:translate-y-px shadow-xs focus:outline-none focus-visible:outline-2 focus-visible:outline-(--accent) focus-visible:outline-offset-1 select-none"
+                          className="group/chip w-full min-w-0 flex flex-col justify-between p-2 sm:p-2.5 bg-(--surface) hover:bg-(--elevated) border border-(--border) hover:border-(--accent)/50 rounded-(--radius) transition-all duration-150 cursor-pointer text-(--fg) active:translate-y-px shadow-xs focus:outline-none focus-visible:outline-2 focus-visible:outline-(--accent) focus-visible:outline-offset-1 select-none"
                           aria-label={`Войти в комнату ${room.roomId}`}
                         >
                           <div className="flex items-center justify-between gap-1 w-full min-w-0">
@@ -285,7 +290,11 @@ export const LobbyScreen: React.FC<LobbyScreenProps> = memo(({
                                   e.stopPropagation();
                                   handleRemoveRecent(e, room.roomId);
                                 }}
-                                onMouseEnter={(e) => e.stopPropagation()}
+                                onMouseEnter={(e) => {
+                                  e.stopPropagation();
+                                  setHoveredTrashRoomId(room.roomId);
+                                }}
+                                onMouseLeave={() => setHoveredTrashRoomId(null)}
                                 className="w-5 h-5 -mr-0.5 -mt-0.5 flex items-center justify-center rounded-(--radius) text-(--muted) opacity-35 group-hover/chip:opacity-100 max-sm:opacity-80 hover:opacity-100! hover:text-(--danger) hover:bg-(--danger-soft) active:scale-90 transition-all shrink-0 cursor-pointer focus:outline-none focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-(--accent)"
                                 aria-label={`Удалить комнату ${room.roomId} из истории`}
                               >

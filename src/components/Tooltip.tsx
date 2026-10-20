@@ -223,24 +223,26 @@ export const Tooltip: React.FC<TooltipProps> = memo(
                 left: `${coords.left}px`,
                 visibility: isRendered ? "visible" : "hidden",
               }}
-              className={`fixed z-99999 pointer-events-none select-none ${className}`}
+              className="fixed z-99999 pointer-events-none select-none w-max max-w-[calc(100vw-24px)]"
             >
-              <div className="relative bg-(--elevated) backdrop-blur-xl border border-(--border) text-(--fg) rounded-(--radius) px-3 py-1.5 shadow-xl max-w-[calc(100vw-24px)] sm:max-w-xs text-xs flex flex-col gap-0.5 overflow-hidden animate-scale-up">
+              <div
+                className={`relative bg-(--elevated) backdrop-blur-xl border border-(--border) text-(--fg) rounded-(--radius) px-3 py-1.5 shadow-xl max-w-[calc(100vw-24px)] sm:max-w-xs text-xs flex flex-col gap-0.5 overflow-hidden animate-scale-up ${className}`}
+              >
                 {/* Subtle top reflection line with design token */}
                 <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-(--fg-soft) to-transparent pointer-events-none" />
 
                 <div className="flex items-center gap-2 justify-between">
-                  <span className="font-semibold text-(--fg) text-xs tracking-wide">
+                  <span className="font-semibold text-(--fg) text-xs tracking-wide whitespace-nowrap">
                     {content}
                   </span>
                   {hotkey && (
-                    <span className="text-[10px] font-mono font-medium text-(--accent) bg-(--accent-soft) border border-(--accent)/30 px-1.5 py-0.5 rounded-(--radius) shadow-xs shrink-0">
+                    <span className="text-[10px] font-mono font-medium text-(--accent) bg-(--accent-soft) border border-(--accent)/30 px-1.5 py-0.5 rounded-(--radius) shadow-xs shrink-0 whitespace-nowrap">
                       {hotkey}
                     </span>
                   )}
                 </div>
                 {description && (
-                  <span className="text-[11px] text-(--muted) font-normal leading-relaxed wrap-break-word">
+                  <span className="text-[11px] text-(--muted) font-normal leading-relaxed wrap-break-words">
                     {description}
                   </span>
                 )}
