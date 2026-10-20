@@ -51,7 +51,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           onClick={toggleMute}
           aria-label={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
         >
-          {isMuted ? <MicOff className="w-5 h-5 text-rose-400" /> : <Mic className="w-5 h-5" />}
+          {isMuted ? <MicOff className="w-5 h-5 text-(--danger)" /> : <Mic className="w-5 h-5" />}
         </Button>
       </Tooltip>
 
@@ -72,7 +72,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           onClick={toggleDeafen}
           aria-label={isDeafened ? 'Включить звук' : 'Заглушить всё'}
         >
-          {isDeafened ? <VolumeX className="w-5 h-5 text-rose-400" /> : <Headphones className="w-5 h-5" />}
+          {isDeafened ? <VolumeX className="w-5 h-5 text-(--danger)" /> : <Headphones className="w-5 h-5" />}
         </Button>
       </Tooltip>
 
@@ -91,7 +91,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           size="icon"
           onClick={toggleNoiseSuppression}
           aria-label="Шумоподавление"
-          className={!isNoiseSuppression ? 'text-[var(--muted)]' : ''}
+          className={!isNoiseSuppression ? 'text-(--muted)' : ''}
         >
           <Sparkles className="w-5 h-5" />
         </Button>
@@ -109,14 +109,14 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           position="top"
         >
           <Button
-            variant={isSharingScreen ? 'emerald' : 'secondary'}
+            variant={isSharingScreen ? 'success' : 'secondary'}
             size="icon"
             onClick={onScreenShareClick}
             disabled={isConnectingScreen}
             aria-label={isSharingScreen ? 'Остановить показ экрана' : 'Поделиться экраном'}
           >
             {isSharingScreen ? (
-              <ScreenShareOff className="w-5 h-5 text-emerald-400" />
+              <ScreenShareOff className="w-5 h-5 text-(--success)" />
             ) : (
               <ScreenShare className="w-5 h-5" />
             )}
@@ -132,7 +132,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           onClick={handleLeave}
           aria-label="Выйти из комнаты"
         >
-          <PhoneOff className="w-5 h-5 text-rose-400" />
+          <PhoneOff className="w-5 h-5 text-(--danger)" />
         </Button>
       </Tooltip>
     </div>

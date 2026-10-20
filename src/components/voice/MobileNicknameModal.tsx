@@ -22,13 +22,13 @@ export const MobileNicknameModal: React.FC<MobileNicknameModalProps> = memo(({
     <Modal isOpen={isOpen} onClose={onClose}>
       <Modal.Header
         title="Ваш никнейм"
-        icon={<Pencil className="w-5 h-5 text-[var(--accent)]" />}
+        icon={<Pencil className="w-5 h-5 text-(--accent)" />}
         onClose={onClose}
       />
 
       <form onSubmit={onSubmit}>
         <Modal.Body className="space-y-3">
-          <label className="text-xs text-[var(--muted)] block">
+          <label className="text-xs text-(--muted) block">
             Введите никнейм для отображения в комнате:
           </label>
           <Input

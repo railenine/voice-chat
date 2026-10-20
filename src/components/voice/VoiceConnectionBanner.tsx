@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { resolveConnectionBannerState } from '../../utils/connectionPolicy';
+import { Button } from '../ui';
 
 export interface BannerState {
   error: string | null;
@@ -30,56 +31,56 @@ export const VoiceConnectionBanner: React.FC<VoiceConnectionBannerProps> = memo(
   return (
     <div
       className={`banner-expand-wrapper ${showBanner ? 'expanded' : ''} ${
-        isMobile ? 'lg:hidden' : 'border-b border-white/10 bg-white/2'
+        isMobile ? 'lg:hidden' : 'border-b border-(--border) bg-(--surface)'
       } shrink-0 select-none`}
     >
-      <div className={`banner-expand-inner ${isMobile ? 'px-2 pt-2 sm:px-4 sm:pt-3' : 'p-3'}`}>
+      <div className={`banner-expand-inner ${isMobile ? 'px-3 pt-2 sm:px-4 sm:pt-2.5 pb-1' : 'px-3 py-2'}`}>
         {currentBannerState.error ? (
-          <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-rose-200 text-xs shadow-lg shadow-rose-950/40 backdrop-blur-xl transition-all">
+          <div className="p-3 bg-(--danger-soft) border border-(--danger-border) rounded-(--radius) text-(--danger) text-xs shadow-lg shadow-black/20 backdrop-blur-xl transition-all">
             <div className="flex items-start gap-2.5">
-              <div className="w-6 h-6 rounded-lg bg-rose-500/20 border border-rose-500/40 flex items-center justify-center shrink-0 mt-0.5">
-                <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+              <div className="w-6 h-6 rounded-(--radius) bg-(--danger-soft) border border-(--danger-border) flex items-center justify-center shrink-0 mt-0.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-(--danger)" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-semibold text-rose-300 text-xs mb-0.5">
+                <div className="font-semibold text-(--danger) text-xs mb-0.5">
                   {isRoomFull ? 'Комната переполнена' : 'Ошибка подключения'}
                 </div>
-                <p className="text-[11px] text-rose-200/90 leading-relaxed wrap-break-word">
+                <p className="text-[11px] text-(--fg)/90 leading-relaxed wrap-break-word">
                   {isRoomFull
                     ? 'В комнате достигнут лимит (максимум 12 участников для прямого соединения Full-Mesh P2P).'
                     : currentBannerState.error}
                 </p>
               </div>
             </div>
-            <div className="flex items-center justify-end gap-2 pt-2 mt-2 border-t border-rose-500/20">
-              <button
-                type="button"
+            <div className="flex items-center justify-end gap-2 pt-2 mt-2 border-t border-(--danger-border)">
+              <Button
+                variant="danger"
+                size="sm"
+                icon={<RefreshCw className={`w-3.5 h-3.5 ${isRetrying ? 'animate-spin' : ''}`} />}
                 onClick={handleRetry}
                 disabled={isRetrying}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 active:scale-95 border border-rose-500/40 text-rose-200 text-xs font-medium transition-all cursor-pointer disabled:opacity-50"
               >
-                <RefreshCw className={`w-3 h-3 ${isRetrying ? 'animate-spin' : ''}`} />
-                <span>{isRetrying ? 'Подключение...' : isRoomFull ? 'Проверить снова' : 'Повторить попытку'}</span>
-              </button>
+                {isRetrying ? 'Подключение...' : isRoomFull ? 'Проверить снова' : 'Повторить попытку'}
+              </Button>
             </div>
           </div>
         ) : currentBannerState.showConnectedToast && currentBannerState.isConnected ? (
-          <div className="flex items-center gap-2.5 p-2.5 bg-emerald-500/10 border border-emerald-500/25 rounded-xl text-emerald-300 text-xs shadow-lg shadow-emerald-950/20 backdrop-blur-xl transition-all">
-            <div className="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center shrink-0">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <div className="flex items-center gap-2.5 p-2.5 bg-(--success-soft) border border-(--success-border) rounded-(--radius) text-(--success) text-xs shadow-lg shadow-black/20 backdrop-blur-xl transition-all animate-fade-in">
+            <div className="w-5 h-5 rounded-full bg-(--success-soft) border border-(--success-border) flex items-center justify-center shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-(--success)"></span>
             </div>
-            <span className="font-medium">Подключено ✓</span>
+            <span className="font-medium">Подключено к комнате ✓</span>
           </div>
         ) : (
-          <div className="flex items-center justify-between gap-2.5 p-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-300 text-xs shadow-lg shadow-yellow-950/20 backdrop-blur-xl transition-all">
+          <div className="flex items-center justify-between gap-2.5 p-2.5 bg-(--warning-soft) border border-(--warning-border) rounded-(--radius) text-(--warning) text-xs shadow-lg shadow-black/20 backdrop-blur-xl transition-all">
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-5 h-5 rounded-full bg-yellow-500/20 border border-yellow-500/30 flex items-center justify-center shrink-0">
-                <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></span>
+              <div className="w-5 h-5 rounded-full bg-(--warning-soft) border border-(--warning-border) flex items-center justify-center shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-(--warning) animate-pulse"></span>
               </div>
               <span className="truncate font-medium">{currentBannerState.connectionStatus}</span>
             </div>
             {currentBannerState.reconnectAttempts > 0 && (
-              <span className="text-[10px] text-yellow-400/80 font-mono shrink-0 px-1.5 py-0.5 rounded bg-yellow-500/10 border border-yellow-500/20">
+              <span className="text-[10px] text-(--warning) font-mono shrink-0 px-2 py-0.5 rounded-full bg-(--warning-soft) border border-(--warning-border)">
                 попытка {currentBannerState.reconnectAttempts}
               </span>
             )}

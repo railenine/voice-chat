@@ -25,43 +25,43 @@ export interface BadgeProps {
 const variantStyles: Record<BadgeVariant, { container: string; pulseDot: string }> = {
   emerald: {
     container:
-      'bg-emerald-500/15 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/25',
-    pulseDot: 'bg-emerald-400',
+      'bg-(--success-soft) text-(--success) border-(--success-border) hover:bg-(--success)/20',
+    pulseDot: 'bg-(--success)',
   },
   blue: {
     container:
-      'bg-[var(--accent-soft)] text-[var(--accent)] border-[var(--accent)]/30 hover:bg-[var(--accent)]/20',
-    pulseDot: 'bg-[var(--accent)]',
+      'bg-(--accent-soft) text-(--accent) border-(--accent)/30 hover:bg-(--accent)/20',
+    pulseDot: 'bg-(--accent)',
   },
   amber: {
     container:
-      'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25',
-    pulseDot: 'bg-amber-400',
+      'bg-(--warning-soft) text-(--warning) border-(--warning-border) hover:bg-(--warning)/20',
+    pulseDot: 'bg-(--warning)',
   },
   rose: {
     container:
-      'bg-rose-500/15 text-rose-300 border-rose-500/30 hover:bg-rose-500/25',
-    pulseDot: 'bg-rose-400',
+      'bg-(--danger-soft) text-(--danger) border-(--danger-border) hover:bg-(--danger)/20',
+    pulseDot: 'bg-(--danger)',
   },
   neutral: {
     container:
-      'bg-transparent text-[var(--muted)] border-[var(--border)] hover:bg-[var(--fg-soft)]',
-    pulseDot: 'bg-gray-400',
+      'bg-transparent text-(--muted) border-(--border) hover:bg-(--fg-soft)',
+    pulseDot: 'bg-(--muted)',
   },
   pill: {
     container:
-      'bg-[var(--accent-soft)] text-[var(--accent)] border-transparent font-mono rounded-full',
-    pulseDot: 'bg-[var(--accent)]',
+      'bg-(--accent-soft) text-(--accent) border-transparent font-mono rounded-full',
+    pulseDot: 'bg-(--accent)',
   },
   tag: {
     container:
-      'bg-transparent text-[var(--muted)] border-[var(--border)] rounded-full hover:border-[var(--fg)]/30',
+      'bg-transparent text-(--muted) border-(--border) rounded-full hover:border-(--fg)/30',
     pulseDot: 'bg-gray-400',
   },
   accent: {
     container:
-      'bg-[var(--accent)] text-[var(--bg)] font-semibold border-transparent',
-    pulseDot: 'bg-[var(--bg)]',
+      'bg-(--accent) text-(--bg) font-semibold border-transparent',
+    pulseDot: 'bg-(--bg)',
   },
 };
 
@@ -83,9 +83,9 @@ export const Badge = memo<BadgeProps>(({
   const styles = variantStyles[variant];
   const isInteractive = Boolean(onClick);
 
-  const baseClasses = `btn-compact !min-h-0 !min-w-0 inline-flex items-center justify-center font-medium border transition-colors select-none shrink-0 ${
+  const baseClasses = `btn-compact min-h-0! min-w-0! inline-flex items-center justify-center font-medium border transition-colors select-none shrink-0 ${
     styles.container
-  } ${sizeStyles[size]} ${isInteractive ? 'cursor-pointer active:scale-95' : 'cursor-default'} ${className}`;
+  } ${sizeStyles[size]} ${isInteractive ? 'cursor-pointer active:scale-95 focus:outline-none focus-visible:outline-2 focus-visible:outline-(--accent) focus-visible:outline-offset-1' : 'cursor-default'} ${className}`;
 
   const content = (
     <>

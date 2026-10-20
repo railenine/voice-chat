@@ -45,19 +45,19 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
               <div
                 className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-base shadow-xs shrink-0 transition-all ${
                   cachedMobilePeer.isSpeaking && !cachedMobilePeer.isMuted && !cachedMobilePeer.isDeafened
-                    ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] text-[var(--bg)] bg-[var(--accent)]'
+                    ? 'ring-2 ring-(--accent) ring-offset-2 ring-offset-(--surface) text-(--bg) bg-(--accent)'
                     : cachedMobilePeer.isDeafened
-                    ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
+                    ? 'bg-(--danger-soft) border border-(--danger-border) text-(--danger)'
                     : cachedMobilePeer.isMuted
-                    ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
-                    : 'bg-[var(--elevated)] border border-[var(--border)] text-[var(--fg)]'
+                    ? 'bg-(--danger-soft) border border-(--danger-border) text-(--danger)'
+                    : 'bg-(--elevated) border border-(--border) text-(--fg)'
                 }`}
               >
                 {getInitials(cachedMobilePeer.nickname)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[var(--fg)] font-semibold text-sm truncate">{cachedMobilePeer.nickname}</p>
-                <p className="text-xs text-[var(--muted)]">
+                <p className="text-(--fg) font-semibold text-sm truncate">{cachedMobilePeer.nickname}</p>
+                <p className="text-xs text-(--muted)">
                   {cachedMobilePeer.isDeafened
                     ? 'Заглушил весь звук'
                     : cachedMobilePeer.isMuted
@@ -76,7 +76,7 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
                 value={peerVolume}
                 onChange={(val) => setPeerVolume(cachedMobilePeer.peerId, val)}
               />
-              <div className="flex justify-between text-[10px] text-[var(--muted)] font-mono">
+              <div className="flex justify-between text-[10px] text-(--muted) font-mono">
                 <span>0% (Mute)</span>
                 <span>100% (Норма)</span>
                 <span>200% (Усиление)</span>
@@ -85,7 +85,7 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
 
             {/* If peer is broadcasting their screen */}
             {isStreaming && (
-              <Card variant="flat" className="p-3 border-[var(--accent)]/30 bg-[var(--accent-soft)]/10 space-y-3">
+              <Card variant="flat" className="p-3 border-(--accent)/30 bg-(--accent-soft)/10 space-y-3">
                 <div className="flex items-center justify-between">
                   <Badge variant="blue" size="sm" pulse icon={<Radio className="w-3.5 h-3.5" />}>
                     Прямой эфир экрана
@@ -104,7 +104,7 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
                 </div>
 
                 {/* Stream audio volume for this peer */}
-                <div className="pt-2 border-t border-[var(--border)]">
+                <div className="pt-2 border-t border-(--border)">
                   <VolumeSlider
                     label="Громкость трансляции"
                     value={streamVolume}
@@ -118,7 +118,7 @@ export const MobilePeerVolumeModal: React.FC<MobilePeerVolumeModalProps> = memo(
 
           <Modal.Footer className="justify-between">
             <Button
-              variant={peerVolume === 0 ? 'danger' : 'glass'}
+              variant={peerVolume === 0 ? 'danger' : 'secondary'}
               size="md"
               icon={<VolumeX className="w-3.5 h-3.5" />}
               onClick={() => {

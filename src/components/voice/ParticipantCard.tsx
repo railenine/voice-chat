@@ -61,12 +61,12 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
       <div
         className={`${sizeClass} rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-xs transition-all duration-150 ${
           isActivelySpeaking
-            ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--surface)] text-[var(--bg)] bg-[var(--accent)]'
+            ? 'ring-2 ring-(--accent) ring-offset-2 ring-offset-(--surface) text-(--bg) bg-(--accent)'
             : isDeafened
-            ? 'bg-rose-500/20 border border-rose-500/50 text-rose-300'
+            ? 'bg-(--danger-soft) border border-(--danger-border) text-(--danger)'
             : isMuted
-            ? 'bg-rose-500/15 border border-rose-500/40 text-rose-300'
-            : 'bg-[var(--elevated)] border border-[var(--border)] text-[var(--fg)]'
+            ? 'bg-(--danger-soft) border border-(--danger-border) text-(--danger)'
+            : 'bg-(--elevated) border border-(--border) text-(--fg)'
         }`}
       >
         {getInitials(nickname)}
@@ -74,11 +74,11 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
 
       {/* Hover action overlay on compact mode */}
       {layout === 'compact' && (
-        <div className="absolute inset-0 rounded-full bg-slate-950/70 backdrop-blur-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-inner">
+        <div className="absolute inset-0 rounded-full bg-(--bg)/80 backdrop-blur-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-inner">
           {isSelf ? (
-            <Pencil className="w-4 h-4 text-[var(--fg)] drop-shadow-md" />
+            <Pencil className="w-4 h-4 text-(--fg) drop-shadow-md" />
           ) : (
-            <Settings className="w-4 h-4 text-[var(--fg)] drop-shadow-md" />
+            <Settings className="w-4 h-4 text-(--fg) drop-shadow-md" />
           )}
         </div>
       )}
@@ -86,21 +86,21 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
       {/* Micro status icon badge in corner */}
       {isDeafened ? (
         <span
-          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-[var(--surface)] shadow-xs"
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--danger) text-white flex items-center justify-center border-2 border-(--surface) shadow-xs"
           title="Звук заглушен"
         >
           <VolumeX className="w-2.5 h-2.5" />
         </span>
       ) : isMuted ? (
         <span
-          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-rose-500 text-white flex items-center justify-center border-2 border-[var(--surface)] shadow-xs"
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--danger) text-white flex items-center justify-center border-2 border-(--surface) shadow-xs"
           title="Микрофон выключен"
         >
           <MicOff className="w-2.5 h-2.5" />
         </span>
       ) : isStreaming ? (
         <span
-          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[var(--accent)] text-[var(--bg)] flex items-center justify-center border-2 border-[var(--surface)] shadow-xs animate-pulse"
+          className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-(--accent) text-(--bg) flex items-center justify-center border-2 border-(--surface) shadow-xs animate-pulse"
           title="В эфире"
         >
           <Radio className="w-2.5 h-2.5" />
@@ -131,8 +131,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
             <span
               className={`text-[11px] font-semibold truncate max-w-18 text-center transition-colors ${
                 isActivelySpeaking
-                  ? 'text-[var(--accent)]'
-                  : 'text-[var(--fg)]'
+                  ? 'text-(--accent)'
+                  : 'text-(--fg)'
               }`}
             >
               {nickname}
@@ -157,10 +157,10 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
                     size="sm"
                     className={
                       volume === 0
-                        ? 'text-rose-400 border-rose-500/30'
+                        ? 'text-(--danger) border-(--danger-border)'
                         : volume > 100
-                        ? 'text-emerald-400 border-emerald-500/30 font-bold'
-                        : 'text-[var(--muted)]'
+                        ? 'text-(--accent) border-(--accent)/30 font-bold'
+                        : 'text-(--muted)'
                     }
                   >
                     {volume === 0 ? '0%' : `${volume}%`}
@@ -192,12 +192,12 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
   // 2. ROW LAYOUT (Desktop Sidebar >= 1024px)
   return (
     <div
-      className={`p-3 rounded-[var(--radius)] border transition-all duration-150 select-none ${
+      className={`p-3 rounded-(--radius) border transition-all duration-150 select-none ${
         isActivelySpeaking
-          ? 'border-[var(--accent)] bg-[var(--accent-soft)]/20 shadow-xs ring-1 ring-[var(--accent)]/40'
+          ? 'border-(--accent) bg-(--accent-soft)/20 shadow-xs ring-1 ring-(--accent)/40'
           : isSelf
-          ? 'bg-[var(--surface)] hover:bg-[color-mix(in_oklch,var(--surface)_90%,var(--fg))] border-[var(--border)] border-l-2 border-l-[var(--accent)]/70'
-          : 'bg-[var(--surface)]/60 hover:bg-[var(--surface)] border-[var(--border)]'
+          ? 'bg-(--surface) hover:bg-[color-mix(in_oklch,var(--surface)_90%,var(--fg))] border-(--border) border-l-2 border-l-(--accent)/70'
+          : 'bg-(--surface)/60 hover:bg-(--surface) border-(--border)'
       } ${className}`}
     >
       <div className="flex items-center gap-3">
@@ -213,12 +213,13 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
                 onChange={(e) => setNewNickInput?.(e.target.value)}
                 maxLength={24}
                 autoFocus
-                className="flex-1 min-w-0 px-2 py-0.5 text-xs bg-[var(--bg)] border border-[var(--accent)] rounded-[var(--radius)] text-[var(--fg)] focus:outline-none"
+                className="flex-1 min-w-0 px-2 py-0.5 text-xs bg-(--bg) border border-(--accent) rounded-(--radius) text-(--fg) focus:outline-none"
               />
               <Tooltip content="Сохранить" position="top">
                 <button
                   type="submit"
-                  className="text-emerald-400 hover:text-emerald-300 p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Сохранить никнейм"
+                  className="text-(--accent) hover:text-(--fg) p-1 rounded-(--radius) hover:bg-(--fg-soft) transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-(--accent)"
                 >
                   <Check className="w-3.5 h-3.5" />
                 </button>
@@ -227,7 +228,8 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
                 <button
                   type="button"
                   onClick={onCancelEditingNick}
-                  className="text-rose-400 hover:text-rose-300 p-0.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
+                  aria-label="Отменить изменение никнейма"
+                  className="text-(--danger) hover:text-(--danger)/80 p-1 rounded-(--radius) hover:bg-(--fg-soft) transition-colors cursor-pointer focus-visible:outline-2 focus-visible:outline-(--accent)"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -237,16 +239,16 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
             <Tooltip content="Изменить никнейм" description="Нажмите, чтобы изменить свой никнейм" position="top">
               <div
                 onClick={onStartEditingNick}
-                className="group cursor-pointer flex items-center gap-1.5 hover:text-[var(--accent)] transition-colors"
+                className="group cursor-pointer flex items-center gap-1.5 hover:text-(--accent) transition-colors"
               >
-                <span className="text-[var(--fg)] font-semibold text-xs sm:text-sm truncate max-w-32">
+                <span className="text-(--fg) font-semibold text-xs sm:text-sm truncate max-w-32">
                   {nickname}
                 </span>
-                <Pencil className="w-3.5 h-3.5 text-[var(--muted)] opacity-60 group-hover:opacity-100 group-hover:text-[var(--accent)] shrink-0 transition-all" />
+                <Pencil className="w-3.5 h-3.5 text-(--muted) opacity-60 group-hover:opacity-100 group-hover:text-(--accent) shrink-0 transition-all" />
               </div>
             </Tooltip>
           ) : (
-            <span className="text-[var(--fg)] font-semibold text-xs sm:text-sm truncate block">
+            <span className="text-(--fg) font-semibold text-xs sm:text-sm truncate block">
               {nickname}
             </span>
           )}
@@ -286,7 +288,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
                 Вы
               </Badge>
             ) : (
-              <span className="text-[11px] text-[var(--muted)] font-normal">Участник</span>
+              <span className="text-[11px] text-(--muted) font-normal">Участник</span>
             )}
           </div>
         </div>
@@ -295,7 +297,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
       {/* Peer Volume Slider (only for remote peers) */}
       {!isSelf && peerId && onVolumeChange && onToggleMutePeer && (
         <div
-          className="mt-2.5 pt-2 border-t border-[var(--border)] select-none"
+          className="mt-2.5 pt-2 border-t border-(--border) select-none"
           onClick={(e) => e.stopPropagation()}
           onTouchStart={(e) => e.stopPropagation()}
         >

@@ -38,15 +38,15 @@ export const VolumeSlider = memo<VolumeSliderProps>(({
         <button
           type="button"
           onClick={onToggleMute}
-          className={`flex items-center gap-1.5 text-[var(--muted)] hover:text-[var(--fg)] transition-colors select-none font-medium ${
+          className={`flex items-center gap-1.5 text-(--muted) hover:text-(--fg) transition-colors select-none font-medium ${
             onToggleMute ? 'cursor-pointer' : 'cursor-default'
           }`}
           title={onToggleMute ? (isMuted ? 'Включить звук' : 'Заглушить') : label}
         >
           {isMuted ? (
-            <VolumeX className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <VolumeX className="w-3.5 h-3.5 text-(--danger) shrink-0" />
           ) : (
-            <Volume2 className="w-3.5 h-3.5 text-[var(--accent)] shrink-0" />
+            <Volume2 className="w-3.5 h-3.5 text-(--accent) shrink-0" />
           )}
           <span>{label}</span>
         </button>
@@ -55,10 +55,10 @@ export const VolumeSlider = memo<VolumeSliderProps>(({
           <span
             className={`font-mono text-[11px] ${
               isMuted
-                ? 'text-rose-400 font-semibold'
+                ? 'text-(--danger) font-semibold'
                 : isBoosted
-                ? 'text-[var(--accent)] font-bold'
-                : 'text-[var(--accent)] font-medium'
+                ? 'text-(--accent) font-bold'
+                : 'text-(--accent) font-medium'
             }`}
           >
             {value}%

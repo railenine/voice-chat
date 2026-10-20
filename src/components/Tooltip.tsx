@@ -210,22 +210,22 @@ export const Tooltip: React.FC<TooltipProps> = memo(({
             }}
             className={`fixed z-99999 pointer-events-none select-none ${className}`}
           >
-            <div className="relative bg-slate-950/90 backdrop-blur-2xl border border-white/15 text-white rounded-xl px-3.5 py-2 shadow-2xl shadow-black/80 max-w-[calc(100vw-24px)] sm:max-w-xs text-xs flex flex-col gap-1 ring-1 ring-white/10 overflow-hidden animate-scale-up">
+            <div className="relative bg-(--surface)/95 backdrop-blur-2xl border border-(--border) text-(--fg) rounded-(--radius) px-3.5 py-2 shadow-2xl shadow-black/80 max-w-[calc(100vw-24px)] sm:max-w-xs text-xs flex flex-col gap-1 overflow-hidden animate-scale-up">
               {/* Subtle top reflection line */}
               <div className="absolute inset-x-0 top-0 h-px bg-linear-to-r from-transparent via-white/25 to-transparent pointer-events-none" />
 
               <div className="flex items-center gap-2 justify-between">
-                <span className="font-semibold text-white/95 text-xs tracking-wide">
+                <span className="font-semibold text-(--fg) text-xs tracking-wide">
                   {content}
                 </span>
                 {hotkey && (
-                  <span className="text-[10px] font-mono font-medium text-cyan-300 bg-cyan-500/15 border border-cyan-400/25 px-1.5 py-0.5 rounded shadow-sm shrink-0">
+                  <span className="text-[10px] font-mono font-medium text-(--accent) bg-(--accent-soft) border border-(--accent)/30 px-1.5 py-0.5 rounded-(--radius) shadow-xs shrink-0">
                     {hotkey}
                   </span>
                 )}
               </div>
               {description && (
-                <span className="text-[11px] text-slate-300/85 font-normal leading-relaxed wrap-break-word">
+                <span className="text-[11px] text-(--muted) font-normal leading-relaxed wrap-break-word">
                   {description}
                 </span>
               )}

@@ -12,7 +12,7 @@ export const PanelHeader = memo<PanelHeaderProps>(({
 }) => {
   return (
     <div
-      className={`h-16 px-4 sm:px-5 border-b border-[var(--border)] bg-[var(--surface)]/75 backdrop-blur-xl flex items-center justify-between shrink-0 select-none text-[var(--fg)] ${className}`}
+      className={`h-16 px-4 sm:px-5 border-b border-(--border) bg-(--surface)/75 backdrop-blur-xl flex items-center justify-between shrink-0 select-none text-(--fg) ${className}`}
       {...props}
     >
       {children}

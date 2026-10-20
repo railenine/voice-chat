@@ -155,7 +155,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(
         data-tauri-drag-region
         onMouseDown={handleMouseDown}
         onDoubleClick={() => handleToggleMaximize()}
-        className="relative h-8.5 w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/10 flex items-center justify-between select-none z-50 shrink-0 text-xs font-sans cursor-default"
+        className="relative h-8.5 w-full bg-(--bg)/90 backdrop-blur-xl border-b border-(--border) flex items-center justify-between select-none z-50 shrink-0 text-xs font-sans cursor-default"
       >
         {/* Left: App Logo, Name & Room Badge */}
         <div
@@ -181,7 +181,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(
                 <button
                   type="button"
                   onClick={onCheckUpdates}
-                  className="text-[10px] text-[var(--muted)] hover:text-[var(--accent)] font-mono leading-none transition-colors cursor-pointer"
+                  className="text-[10px] text-(--muted) hover:text-(--accent) font-mono leading-none transition-colors cursor-pointer"
                 >
                   v{APP_VERSION}
                 </button>
@@ -268,7 +268,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(
             <button
               type="button"
               onClick={handleClose}
-              className="btn-compact h-full w-12 flex items-center justify-center text-gray-400 hover:text-white hover:bg-red-600 active:bg-red-700 transition-colors focus:outline-none"
+              className="btn-compact h-full w-12 flex items-center justify-center text-(--muted) hover:text-white hover:bg-(--danger) active:bg-(--danger)/80 transition-colors focus:outline-none"
             >
               <svg
                 width="10"

@@ -97,7 +97,7 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(
     );
 
     return (
-      <aside className="hidden lg:flex flex-col w-80 xl:w-84 2xl:w-96 border-r border-white/10 bg-slate-950/45 backdrop-blur-xl shrink-0 select-none">
+      <aside className="hidden lg:flex flex-col w-80 xl:w-84 2xl:w-96 border-r border-(--border) bg-(--surface) shrink-0 select-none">
         {/* Sidebar Top: Logo & Room info */}
         <VoiceHeader
           roomId={roomId}

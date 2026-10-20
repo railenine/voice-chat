@@ -16,12 +16,10 @@ import { ScreenShareModal } from './ScreenShareModal';
 import { ChatPanel } from './ChatPanel';
 import { getShareUrl, isTauri } from '../config';
 import { playLeaveSound } from '../utils/soundEffects';
-import { JellyBackground } from './JellyBackground';
 import { useIsSmartphone } from '../utils/device';
 import { saveStoredNickname } from '../utils/nicknames';
 import type { PeerInfo } from '../types/protocol';
 
-import { VoiceConnectionBanner, type BannerState } from './voice/VoiceConnectionBanner';
 import { VoiceHeader } from './voice/VoiceHeader';
 import { VoiceMobileParticipants } from './voice/VoiceMobileParticipants';
 import { VoiceControlBar } from './voice/VoiceControlBar';
@@ -171,7 +169,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
     prevConnectedRef.current = isConnected;
   }, [isConnected]);
 
-  const showBanner = !isConnected || Boolean(error) || showConnectedToast;
   const [isRetrying, setIsRetrying] = useState(false);
 
   const handleRetry = useCallback(() => {
@@ -181,29 +178,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
       setIsRetrying(false);
     }, 1200);
   }, [retryConnection]);
-
-  // Retain banner state during smooth collapse animation so content does not flash-disappear
-  const lastBannerStateRef = useRef<BannerState>({
-    error,
-    showConnectedToast,
-    connectionStatus,
-    reconnectAttempts,
-    isConnected,
-  });
-
-  if (showBanner) {
-    lastBannerStateRef.current = {
-      error,
-      showConnectedToast,
-      connectionStatus,
-      reconnectAttempts,
-      isConnected,
-    };
-  }
-
-  const currentBannerState = showBanner
-    ? { error, showConnectedToast, connectionStatus, reconnectAttempts, isConnected }
-    : lastBannerStateRef.current;
 
   const prevVolumesRef = useRef<Map<string, number>>(new Map());
 
@@ -329,8 +303,6 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
 
   return (
     <>
-      <JellyBackground />
-
       <div
         className="content-wrapper h-full w-full flex-1 flex flex-col overflow-hidden text-white font-sans animate-fade-in"
         onClick={() => {
@@ -344,23 +316,20 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               e.stopPropagation();
               unlockAudio();
             }}
-            className="cursor-pointer bg-linear-to-r from-amber-600 via-yellow-600 to-amber-600 hover:from-amber-500 hover:to-yellow-500 text-white px-3 sm:px-4 py-2 text-center text-xs sm:text-sm font-medium shadow-lg flex items-center justify-center gap-2 border-b border-amber-400/40 transition-all z-50 animate-slide-down-fade shrink-0"
+            className="cursor-pointer bg-(--warning-soft) hover:bg-[color-mix(in_oklch,var(--warning)_22%,transparent)] text-(--warning) px-3 sm:px-4 py-2 text-center text-xs sm:text-sm font-medium shadow-lg flex items-center justify-center gap-2 border-b border-(--warning-border) transition-all z-50 animate-slide-down-fade shrink-0"
           >
-            <Volume2 className="w-4 h-4 shrink-0 text-white" />
+            <Volume2 className="w-4 h-4 shrink-0 text-(--warning)" />
             <span>
               Браузер приостановил звук собеседников.{' '}
-              <strong className="underline">Нажмите сюда</strong>, чтобы включить звук.
+              <strong className="underline decoration-(--warning)/50">Нажмите сюда</strong>, чтобы включить звук.
             </span>
-            <button
-              type="button"
-              className="px-2.5 py-0.5 bg-white text-amber-900 rounded-md font-bold text-xs shadow hover:bg-amber-100 transition-all shrink-0 ml-1"
-            >
+            <span className="px-2.5 py-0.5 bg-(--warning-soft) border border-(--warning-border) text-(--warning) rounded-(--radius) font-semibold text-xs transition-colors shrink-0 ml-1">
               Включить
-            </button>
+            </span>
           </div>
         )}
 
-        {/* Mobile Header (< 1024px) */}
+        {/* Mobile Header (< 1024px) with Unified Connection Status */}
         <VoiceHeader
           isMobile
           roomId={roomId}
@@ -373,13 +342,10 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
           }}
           isSmartphone={isSmartphone}
           participantCount={peers.length + 1}
-        />
-
-        {/* Mobile Connection / Error Banner (< 1024px) */}
-        <VoiceConnectionBanner
-          isMobile={true}
-          showBanner={showBanner}
-          currentBannerState={currentBannerState}
+          isConnected={isConnected}
+          error={error}
+          connectionStatus={connectionStatus}
+          reconnectAttempts={reconnectAttempts}
           handleRetry={handleRetry}
           isRetrying={isRetrying}
         />
@@ -493,7 +459,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         {/* Mobile Sticky Bottom Controls (< 1024px) */}
         <PanelFooter
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.625rem)' }}
-          className="lg:hidden p-2.5 sm:p-3 bg-[var(--surface)]/80 backdrop-blur-xl border-t border-[var(--border)] flex items-center justify-center shrink-0 z-20 h-auto"
+          className="lg:hidden p-2.5 sm:p-3 bg-(--surface)/80 backdrop-blur-xl border-t border-(--border) flex items-center justify-center shrink-0 z-20 h-auto"
         >
           <VoiceControlBar
             isMuted={isMuted}

@@ -80,40 +80,49 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
           >
             <div
               onClick={copyRoomId}
-              className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group active:scale-95 transition-transform"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  copyRoomId();
+                }
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={copied ? "Ссылка скопирована в буфер обмена" : "Пригласить друга"}
+              className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group active:scale-95 transition-transform focus-visible:outline-2 focus-visible:outline-(--accent) rounded-(--radius)"
             >
               <div
-                className={`w-12 h-12 rounded-full border transition-all duration-300 ease-out flex items-center justify-center shadow-md ${
+                className={`w-12 h-12 rounded-full border transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center shadow-md ${
                   copied
-                    ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-400 shadow-emerald-950/40'
-                    : 'border-[var(--accent)]/30 bg-[var(--accent-soft)]/20 hover:bg-[var(--accent-soft)]/30 text-[var(--accent)] group-hover:text-white shadow-cyan-950/40'
+                    ? 'border-(--accent) bg-(--accent-soft) text-(--accent) shadow-[0_0_12px_var(--accent-soft)]'
+                    : 'border-(--accent)/30 bg-(--accent-soft) hover:bg-[color-mix(in_oklch,var(--accent)_20%,transparent)] text-(--accent) group-hover:text-white shadow-cyan-950/40'
                 }`}
               >
                 <div className="relative w-5 h-5 flex items-center justify-center">
                   <Check
-                    className={`w-5 h-5 text-emerald-400 absolute transition-all duration-300 ease-out ${
+                    className={`w-5 h-5 text-(--accent) absolute transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                       copied ? 'opacity-100 scale-100 rotate-0' : 'opacity-0 scale-50 -rotate-45 pointer-events-none'
                     }`}
                   />
                   <UserPlus
-                    className={`w-5 h-5 text-[var(--accent)] group-hover:text-white absolute transition-all duration-300 ease-out ${
+                    className={`w-5 h-5 text-(--accent) group-hover:text-white absolute transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                       copied ? 'opacity-0 scale-50 rotate-45 pointer-events-none' : 'opacity-100 scale-100 rotate-0'
                     }`}
                   />
                 </div>
               </div>
 
-              <div className="flex flex-col items-center gap-0.5 mt-0.5">
+              <div className="flex flex-col items-center gap-0.5 mt-0.5" aria-live="polite">
                 <div className="relative h-4 w-16 flex items-center justify-center overflow-hidden">
                   <span
-                    className={`text-[11px] font-semibold text-emerald-400 whitespace-nowrap text-center transition-all duration-300 ease-out absolute inset-x-0 ${
+                    className={`text-[11px] font-semibold text-(--accent) whitespace-nowrap text-center transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] absolute inset-x-0 ${
                       copied ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 translate-y-2 scale-90 pointer-events-none'
                     }`}
                   >
                     Готово
                   </span>
                   <span
-                    className={`text-[11px] text-[var(--muted)] group-hover:text-[var(--accent)] font-medium whitespace-nowrap text-center transition-all duration-300 ease-out absolute inset-x-0 ${
+                    className={`text-[11px] text-(--muted) group-hover:text-(--accent) font-medium whitespace-nowrap text-center transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] absolute inset-x-0 ${
                       copied ? 'opacity-0 -translate-y-2 scale-90 pointer-events-none' : 'opacity-100 translate-y-0 scale-100'
                     }`}
                   >
@@ -121,22 +130,22 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
                   </span>
                 </div>
                 <div
-                  className={`px-2 py-0.5 rounded-full text-[9px] font-medium border transition-all duration-300 ease-out ${
+                  className={`px-2 py-0.5 rounded-full text-[9px] font-medium border transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                     copied
-                      ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300'
-                      : 'bg-[var(--surface)] border-[var(--border)] text-[var(--muted)] group-hover:border-[var(--accent)]/40'
+                      ? 'bg-(--accent-soft) border-(--accent)/40 text-(--accent)'
+                      : 'bg-(--surface) border-(--border) text-(--muted) group-hover:border-(--accent)/40'
                   }`}
                 >
                   <div className="relative h-3 w-14 flex items-center justify-center overflow-hidden">
                     <span
-                      className={`transition-all duration-300 ease-out absolute inset-x-0 text-center whitespace-nowrap ${
+                      className={`transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] absolute inset-x-0 text-center whitespace-nowrap ${
                         copied ? 'opacity-100 scale-100' : 'opacity-0 scale-75 pointer-events-none'
                       }`}
                     >
                       Скопировано
                     </span>
                     <span
-                      className={`transition-all duration-300 ease-out absolute inset-x-0 text-center whitespace-nowrap ${
+                      className={`transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] absolute inset-x-0 text-center whitespace-nowrap ${
                         copied ? 'opacity-0 scale-75 pointer-events-none' : 'opacity-100 scale-100'
                       }`}
                     >

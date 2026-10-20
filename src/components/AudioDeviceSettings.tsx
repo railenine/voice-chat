@@ -62,19 +62,19 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
   }, [audioOutputs]);
 
   return (
-    <div className={compact ? 'space-y-2.5 text-xs' : 'space-y-4 text-sm'}>
+    <div className={compact ? 'space-y-2.5 text-xs w-full min-w-0' : 'space-y-4 text-sm w-full min-w-0'}>
       {/* Microphone Selection */}
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 w-full min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-1">
-          <label className="text-[var(--fg)] font-medium flex items-center gap-1.5 text-xs">
-            <Mic className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <label className="text-(--fg) font-medium flex items-center gap-1.5 text-xs">
+            <Mic className="w-3.5 h-3.5 text-(--accent)" />
             <span>Микрофон</span>
           </label>
           {!hasPermission && (
             <button
               type="button"
               onClick={requestPermission}
-              className="text-[11px] text-[var(--accent)] hover:underline cursor-pointer"
+              className="text-[11px] text-(--accent) hover:underline cursor-pointer"
             >
               Разрешить доступ
             </button>
@@ -95,15 +95,15 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
             size="sm"
             onClick={toggleMicTest}
             icon={isTestingMic ? <Square className="w-3 h-3 fill-current" /> : <Mic className="w-3 h-3" />}
-            className="text-[11px] h-7 px-2.5 rounded-[var(--radius)] shrink-0 font-medium"
+            className="text-[11px] h-7 px-2.5 rounded-(--radius) shrink-0 font-medium"
           >
             {isTestingMic ? 'Стоп тест' : 'Тест микрофона'}
           </Button>
 
           {isTestingMic && (
-            <div className="flex-1 bg-[var(--surface)] h-2 rounded-full overflow-hidden border border-[var(--border)] p-0.5 animate-fade-in">
+            <div className="flex-1 bg-(--bg) h-2 rounded-full overflow-hidden border border-(--border) p-0.5 animate-fade-in">
               <div
-                className="h-full bg-[var(--accent)] rounded-full transition-all duration-75"
+                className="h-full bg-(--accent) rounded-full transition-all duration-75"
                 style={{ width: `${Math.min(100, micVolume * 1.5)}%` }}
               />
             </div>
@@ -112,17 +112,17 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
       </div>
 
       {/* Speaker / Output Selection */}
-      <div className="space-y-1.5 pt-0.5">
+      <div className="space-y-1.5 pt-0.5 w-full min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-1">
-          <label className="text-[var(--fg)] font-medium flex items-center gap-1.5 text-xs">
-            <Volume2 className="w-3.5 h-3.5 text-[var(--accent)]" />
+          <label className="text-(--fg) font-medium flex items-center gap-1.5 text-xs">
+            <Volume2 className="w-3.5 h-3.5 text-(--accent)" />
             <span>Динамики / Наушники</span>
           </label>
           <Tooltip content="Проверить динамики" description="Воспроизвести проверочный сигнал" position="top">
             <button
               type="button"
               onClick={playTestSound}
-              className="text-[11px] text-[var(--accent)] hover:text-[var(--fg)] flex items-center gap-1 cursor-pointer transition-colors"
+              className="text-[11px] text-(--accent) hover:text-(--fg) flex items-center gap-1 cursor-pointer transition-colors"
             >
               <Play className="w-3 h-3 fill-current" />
               <span>Проверить звук</span>
@@ -138,7 +138,7 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
             compact={compact}
           />
         ) : (
-          <p className="text-[11px] text-[var(--muted)] py-0.5">
+          <p className="text-[11px] text-(--muted) py-0.5">
             Вывод звука управляется системными настройками Windows / браузера.
           </p>
         )}

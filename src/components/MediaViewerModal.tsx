@@ -1,7 +1,7 @@
 import React, { useState, memo } from 'react';
 import { Image as ImageIcon, Video, ExternalLink, Copy, Check, Sparkles } from 'lucide-react';
 import { Modal } from './Modal';
-import { Button, Badge } from './ui';
+import { Button } from './ui';
 import { resolveMediaUrl, openExternalUrl, isDomainTrusted } from '../utils/chatMediaUtils';
 import { ExternalLinkModal } from './ExternalLinkModal';
 
@@ -47,9 +47,6 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
     }
   };
 
-  const badgeVariant = item.type === 'video' ? 'emerald' : item.type === 'gif' ? 'amber' : 'blue';
-  const typeLabel = item.type === 'video' ? 'ВИДЕО' : item.type === 'gif' ? 'GIF' : 'ФОТО';
-
   return (
     <>
       <Modal
@@ -62,21 +59,17 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
           subtitle={item.senderNickname ? `Отправил(а): ${item.senderNickname}` : undefined}
           icon={
             item.type === 'video' ? (
-              <Video className="w-4 h-4 text-emerald-400" />
+              <Video className="w-4 h-4 text-(--accent)" />
             ) : item.type === 'gif' ? (
-              <Sparkles className="w-4 h-4 text-amber-400" />
+              <Sparkles className="w-4 h-4 text-(--accent)" />
             ) : (
-              <ImageIcon className="w-4 h-4 text-blue-400" />
+              <ImageIcon className="w-4 h-4 text-(--accent)" />
             )
           }
           onClose={onClose}
-        >
-          <Badge variant={badgeVariant} size="sm">
-            {typeLabel}
-          </Badge>
-        </Modal.Header>
+        />
 
-        <Modal.Body className="p-2 sm:p-4 bg-black/60 flex items-center justify-center min-h-60 max-h-[calc(92vh-140px)] overflow-hidden">
+        <Modal.Body className="p-2 sm:p-4 bg-(--bg) flex items-center justify-center min-h-60 max-h-[calc(92vh-140px)] overflow-hidden">
           {item.type === 'video' ? (
             <video
               src={resolvedUrl}
@@ -85,34 +78,34 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
               playsInline
               // @ts-expect-error referrerPolicy is valid HTML5 attribute for video elements
               referrerPolicy="no-referrer"
-              className="max-h-[calc(92vh-160px)] max-w-full rounded-xl shadow-2xl object-contain bg-black"
+              className="max-h-[calc(92vh-160px)] max-w-full rounded-(--radius) shadow-2xl object-contain bg-(--bg)"
             />
           ) : (
             <img
               src={resolvedUrl}
               alt={item.name || 'Медиа'}
-              className="max-h-[calc(92vh-160px)] max-w-full rounded-xl shadow-2xl object-contain select-none"
+              className="max-h-[calc(92vh-160px)] max-w-full rounded-(--radius) shadow-2xl object-contain select-none"
               loading="eager"
               referrerPolicy="no-referrer"
             />
           )}
         </Modal.Body>
 
-        <Modal.Footer className="justify-between">
+        <Modal.Footer className="justify-between gap-2">
           <div className="flex items-center gap-2">
             <Button
-              variant="glass"
-              size="md"
-              icon={copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              variant="secondary"
+              size="sm"
+              icon={copied ? <Check className="w-3.5 h-3.5 text-(--accent)" /> : <Copy className="w-3.5 h-3.5 text-(--muted)" />}
               onClick={handleCopyLink}
             >
               {copied ? 'Скопировано!' : 'Копировать ссылку'}
             </Button>
 
             <Button
-              variant="glass"
-              size="md"
-              icon={<ExternalLink className="w-4 h-4" />}
+              variant="secondary"
+              size="sm"
+              icon={<ExternalLink className="w-3.5 h-3.5 text-(--accent)" />}
               onClick={handleOpenInBrowser}
             >
               В браузере
@@ -121,7 +114,7 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
 
           <Button
             variant="primary"
-            size="md"
+            size="sm"
             onClick={onClose}
           >
             Закрыть
@@ -138,3 +131,4 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
 });
 
 MediaViewerModal.displayName = 'MediaViewerModal';
+

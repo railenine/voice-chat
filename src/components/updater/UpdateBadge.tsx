@@ -25,7 +25,8 @@ export const UpdateBadge: React.FC<UpdateBadgeProps> = memo(({
         size="sm"
         pulse
         onClick={onClick}
-        icon={<Download className="w-3 h-3 text-[var(--accent)] shrink-0" />}
+        title={`Доступно обновление v${version}`}
+        icon={<Download className="w-3 h-3 text-(--accent) shrink-0" />}
         className={`max-[420px]:px-1.5 ${className}`}
       >
         <span className="max-[420px]:hidden">Обновление</span>

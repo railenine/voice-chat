@@ -8,10 +8,9 @@ import {
   Check,
   CheckSquare,
   Square,
-  ShieldCheck,
 } from 'lucide-react';
 import { Modal } from './Modal';
-import { Button, Badge, Card } from './ui';
+import { Button, Badge } from './ui';
 import {
   analyzeUrlSecurity,
   addTrustedDomain,
@@ -59,18 +58,18 @@ export const ExternalLinkModal: React.FC<ExternalLinkModalProps> = memo(({
     <Modal
       isOpen={Boolean(url)}
       onClose={onClose}
-      className="max-w-lg w-full flex flex-col overflow-hidden"
+      className="max-w-md w-full flex flex-col overflow-hidden"
     >
       <Modal.Header
-        title="Переход по внешней ссылке"
-        subtitle="Безопасность пользователя"
+        title="Внешняя ссылка"
+        subtitle="Безопасность перехода"
         icon={
           isDanger ? (
-            <ShieldAlert className="w-4 h-4 text-rose-400" />
+            <ShieldAlert className="w-4 h-4 text-(--danger)" />
           ) : isWarning ? (
-            <AlertTriangle className="w-4 h-4 text-amber-400" />
+            <AlertTriangle className="w-4 h-4 text-(--warning)" />
           ) : (
-            <ExternalLink className="w-4 h-4 text-[var(--accent)]" />
+            <ExternalLink className="w-4 h-4 text-(--accent)" />
           )
         }
         onClose={onClose}
@@ -83,75 +82,72 @@ export const ExternalLinkModal: React.FC<ExternalLinkModalProps> = memo(({
         </Badge>
       </Modal.Header>
 
-      <Modal.Body className="p-4 sm:p-5 space-y-4">
-        {/* Risk Warning Alert Box */}
+      <Modal.Body className="p-4 sm:p-5 space-y-3.5">
+        {/* Risk Warning or Spec-Compliant Callout */}
         {isDanger ? (
-          <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-[var(--radius)] flex items-start gap-3">
-            <ShieldAlert className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-            <div className="min-w-0 text-xs">
-              <p className="font-semibold text-rose-200">Подозрительный домен!</p>
-              <p className="text-rose-300/90 mt-0.5 leading-relaxed">
+          <div className="p-2.5 bg-(--danger-soft) border border-(--danger-border) rounded-(--radius) flex items-start gap-2.5 text-xs">
+            <ShieldAlert className="w-4 h-4 text-(--danger) shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold text-(--danger)">Подозрительный домен!</p>
+              <p className="text-(--danger)/90 mt-0.5 leading-relaxed">
                 {analysis.warningMessage}
               </p>
             </div>
           </div>
         ) : isWarning ? (
-          <div className="p-3 bg-amber-500/15 border border-amber-500/30 rounded-[var(--radius)] flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-            <div className="min-w-0 text-xs">
-              <p className="font-semibold text-amber-200">Предупреждение безопасности</p>
-              <p className="text-amber-300/90 mt-0.5 leading-relaxed">
+          <div className="p-2.5 bg-(--warning-soft) border border-(--warning-border) rounded-(--radius) flex items-start gap-2.5 text-xs">
+            <AlertTriangle className="w-4 h-4 text-(--warning) shrink-0 mt-0.5" />
+            <div className="min-w-0">
+              <p className="font-semibold text-(--warning)">Предупреждение безопасности</p>
+              <p className="text-(--warning)/90 mt-0.5 leading-relaxed">
                 {analysis.warningMessage}
               </p>
             </div>
           </div>
         ) : (
-          <div className="p-3 bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius)] flex items-start gap-3">
-            <ShieldCheck className="w-5 h-5 text-[var(--accent)] shrink-0 mt-0.5" />
-            <p className="text-xs text-[var(--muted)] leading-relaxed">
-              Вы собираетесь перейти на сторонний ресурс. Никогда не вводите пароли от своих аккаунтов, коды авторизации или личные данные на непроверенных сайтах.
-            </p>
+          <div className="callout border-l-2 border-(--accent) pl-3 py-0.5 text-xs text-(--muted) leading-relaxed">
+            Вы переходите на сторонний ресурс. Никогда не вводите пароли или личные данные на непроверенных сайтах.
           </div>
         )}
 
-        {/* Destination Host Highlight */}
-        <Card variant="surface" className="p-3.5 space-y-2 select-none">
-          <div className="flex items-center justify-between text-xs text-[var(--muted)]">
+        {/* Unified Destination Slot */}
+        <div className="p-3 bg-(--bg) border border-(--border) rounded-(--radius) space-y-1.5 select-none">
+          <div className="flex items-center justify-between text-[11px] text-(--muted)">
             <span className="flex items-center gap-1.5 font-medium">
-              <Globe className="w-3.5 h-3.5 text-[var(--accent)]" />
-              Домен назначения:
+              <Globe className="w-3.5 h-3.5 text-(--accent)" />
+              <span>Домен назначения</span>
             </span>
-            <span className="font-mono text-[11px] text-[var(--muted)]">
+            <span className="font-mono text-[10px] text-(--muted)">
               {analysis.protocol}
             </span>
           </div>
 
-          <div className="text-sm sm:text-base font-bold text-[var(--fg)] font-mono break-all px-2.5 py-1.5 bg-[var(--bg)]/70 rounded-[var(--radius)] border border-[var(--border)] flex items-center justify-between gap-2">
-            <span className={isDanger ? 'text-rose-400' : isWarning ? 'text-amber-300' : 'text-cyan-300'}>
+          <div className="text-sm sm:text-base font-bold font-mono break-all">
+            <span className={isDanger ? 'text-(--danger)' : isWarning ? 'text-(--warning)' : 'text-(--accent)'}>
               {analysis.hostname}
             </span>
           </div>
 
-          <div className="text-[11px] text-[var(--muted)] break-all font-mono select-all bg-[var(--bg)]/40 p-2 rounded-[var(--radius)] border border-[var(--border)] max-h-20 overflow-y-auto custom-scrollbar">
+          <div className="text-[11px] text-(--muted) break-all font-mono select-all pt-1.5 border-t border-(--border) max-h-16 overflow-y-auto custom-scrollbar">
             {url}
           </div>
-        </Card>
+        </div>
 
         {/* Remember Trust Checkbox */}
         {!isDanger && (
           <div
             onClick={() => setDontAskAgain((v) => !v)}
-            className="flex items-center gap-2.5 text-xs text-[var(--muted)] hover:text-[var(--fg)] cursor-pointer select-none transition-colors group"
+            className="flex items-center gap-2 text-xs text-(--muted) hover:text-(--fg) cursor-pointer select-none transition-colors group pt-0.5"
           >
-            <div className="text-[var(--accent)] group-hover:text-[var(--accent)] transition-colors p-0.5 shrink-0">
+            <div className="text-(--accent) transition-colors shrink-0">
               {dontAskAgain ? (
-                <CheckSquare className="w-4 h-4 text-[var(--accent)]" />
+                <CheckSquare className="w-4 h-4 text-(--accent)" />
               ) : (
-                <Square className="w-4 h-4 text-[var(--muted)]" />
+                <Square className="w-4 h-4 text-(--muted)" />
               )}
             </div>
             <span>
-              Больше не предупреждать для домена <span className="text-[var(--accent)] font-mono font-medium">{analysis.hostname}</span>
+              Больше не предупреждать для <span className="text-(--accent) font-mono font-medium">{analysis.hostname}</span>
             </span>
           </div>
         )}
@@ -159,18 +155,18 @@ export const ExternalLinkModal: React.FC<ExternalLinkModalProps> = memo(({
 
       <Modal.Footer className="justify-between gap-2">
         <Button
-          variant="glass"
-          size="md"
-          icon={copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+          variant="secondary"
+          size="sm"
+          icon={copied ? <Check className="w-3.5 h-3.5 text-(--accent)" /> : <Copy className="w-3.5 h-3.5 text-(--muted)" />}
           onClick={handleCopy}
         >
-          {copied ? 'Скопировано!' : 'Копировать ссылку'}
+          {copied ? 'Скопировано!' : 'Копировать'}
         </Button>
 
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="md"
+            size="sm"
             onClick={onClose}
           >
             Отмена
@@ -178,11 +174,11 @@ export const ExternalLinkModal: React.FC<ExternalLinkModalProps> = memo(({
 
           <Button
             variant={isDanger ? 'danger' : 'primary'}
-            size="md"
-            icon={<ExternalLink className="w-4 h-4" />}
+            size="sm"
+            icon={<ExternalLink className="w-3.5 h-3.5" />}
             onClick={handleProceed}
           >
-            {isDanger ? 'Всё равно перейти' : 'Перейти на сайт'}
+            {isDanger ? 'Перейти' : 'Перейти на сайт'}
           </Button>
         </div>
       </Modal.Footer>
@@ -191,3 +187,4 @@ export const ExternalLinkModal: React.FC<ExternalLinkModalProps> = memo(({
 });
 
 ExternalLinkModal.displayName = 'ExternalLinkModal';
+

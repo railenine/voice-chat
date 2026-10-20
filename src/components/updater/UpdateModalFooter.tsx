@@ -23,7 +23,7 @@ export const UpdateModalFooter: React.FC<UpdateModalFooterProps> = memo(({
   onCheckAgain,
 }) => {
   return (
-    <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/10">
+    <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-(--border)">
       <div
         className={`flex items-center justify-end gap-2.5 w-full transition-all duration-200 ease-out ${
           fadeState === 'fading-out' ? 'opacity-0 pointer-events-none' : 'opacity-100'
@@ -31,7 +31,7 @@ export const UpdateModalFooter: React.FC<UpdateModalFooterProps> = memo(({
       >
         {status === 'checking' && (
           <Button
-            variant="glass"
+            variant="secondary"
             size="md"
             onClick={onClose}
           >
@@ -42,7 +42,7 @@ export const UpdateModalFooter: React.FC<UpdateModalFooterProps> = memo(({
         {(status === 'available' || status === 'cancelled') && (
           <div className="flex flex-wrap items-center justify-end gap-2 w-full">
             <Button
-              variant="glass"
+              variant="secondary"
               size="md"
               onClick={onClose}
             >
@@ -56,7 +56,7 @@ export const UpdateModalFooter: React.FC<UpdateModalFooterProps> = memo(({
                 position="top"
               >
                 <Button
-                  variant="glass"
+                  variant="secondary"
                   size="md"
                   onClick={() => onInstall('installer')}
                 >
@@ -84,7 +84,7 @@ export const UpdateModalFooter: React.FC<UpdateModalFooterProps> = memo(({
 
         {status === 'downloading' && (
           <Button
-            variant="glass"
+            variant="secondary"
             size="md"
             isLoading
             disabled
@@ -96,7 +96,7 @@ export const UpdateModalFooter: React.FC<UpdateModalFooterProps> = memo(({
 
         {status === 'downloaded' && (
           <Button
-            variant="emerald"
+            variant="success"
             size="md"
             onClick={() => onInstall()}
             className="w-full"
@@ -107,7 +107,7 @@ export const UpdateModalFooter: React.FC<UpdateModalFooterProps> = memo(({
 
         {(status === 'installing' || status === 'restart-required') && (
           <Button
-            variant="glass"
+            variant="secondary"
             size="md"
             isLoading
             disabled
@@ -121,7 +121,7 @@ export const UpdateModalFooter: React.FC<UpdateModalFooterProps> = memo(({
           <>
             {(status === 'error' || status === 'offline') && (
               <Button
-                variant="glass"
+                variant="secondary"
                 size="md"
                 onClick={onCheckAgain}
               >
