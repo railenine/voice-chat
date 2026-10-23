@@ -1,22 +1,22 @@
 {
-  "version": "0.2.0",
-  "notes": "• 🎨 **Полный переход на OKLCH дизайн-систему (100% OKLCH Design Tokens):** тотальный отказ от сырых цветов (`#hex`, `rgb`, статических Tailwind классов `slate-*`, `white`, `black`), перевод всех 35+ компонентов приложения на семантические CSS-переменные темы (`--bg`, `--surface`, `--elevated`, `--border`, `--fg`, `--muted`, `--accent`, `--danger` и др.) и чистый синтаксис Tailwind CSS v4.\n• 🌀 **Анимированный векторный прелоадер (Vector Logo Preloader):** плавный индикатор загрузки с контр-вращающимися дугами, пульсирующим центральным узлом логотипа RVxis и мерцающим статусом подключения к серверу.\n• 💬 **Унифицированные дизайн-системные подсказки (Unified Tooltips):** полное устранение нативных нестилизованных подсказок ОС (`title=\"...\"`) на интерактивных элементах (карточки недавних комнат, корзина, стрим, громкость), перевод компонента `Tooltip` на токен `--elevated` со стеклянным размытием `backdrop-blur-xl`, горячими клавишами и изоляцией от перекрытия.\n• 🧹 **Очистка кодовой базы от легаси:** полное удаление устаревшего тяжёлого компонента `JellyBackground` и отвязка мокового автообновления.",
-  "pub_date": "2026-10-20T20:02:11.723Z",
+  "version": "0.2.1",
+  "notes": "• 🌐 **Хотфикс сетевого подключения Desktop-клиента (Production Connectivity):** десктопное приложение переведено на прямое подключение к стабильному продакшен-серверу `https://rvxis.site` и `wss://rvxis.site/peerjs/ws` по умолчанию, устранена привязка к локальному хосту.",
+  "pub_date": "2026-10-23T08:15:03.620Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUUXBRQ09zd3c3SGlDZEpXMkNIQnJhNHZ1aFFrVGFBSTVKWENEb1E3NXdPMzNyK0dRMnMzN3dhdmUwT0E3bnFRZU1ra0EyUzAwSXRJNVpWZGVGWXJINDZDSjJzQlFPaVFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMTc2Mjk5CWZpbGU6dGVtcF9Wb2ljZUNoYXRfMC4wLjQ1X3g2NC5leGUJdmVyc2lvbjowLjAuNDUKdngzd1dHSGJveUpxeDVVRTZERWx4VGZqTDUzL0MwbnV6SnZ1dnlpU1dNUUNEWGhzbVUveXMyQWI1K1BMZWtBR3YzWDVycmp5U2JjbmxCaEZNaXM2Q1E9PQo=",
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.0/RVxis_0.2.0_x64-setup.exe",
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.1/RVxis_0.2.1_x64-setup.exe",
       "size": 4703402,
       "sha256": "4a33f68806ceb42a8822955e13e27cf4ba13442a741b58d8d9bd63b77c686112"
     }
   },
   "portable": {
     "windows-x86_64": {
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.0/RVxis.exe",
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.1/RVxis.exe",
       "size": 17463808,
       "sha256": "b3d6a61e24a933470fb6f692495db98dcd7a09ab348be01eb0efc551d20880fe",
       "signature": ""
     }
   },
-  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.2.0/RVxis.exe"
+  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.2.1/RVxis.exe"
 }

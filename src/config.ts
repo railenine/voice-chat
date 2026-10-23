@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.2.1';
 export const PRODUCTION_SERVER = 'https://rvxis.site';
 export const PRODUCTION_WS = 'wss://rvxis.site/peerjs/ws';
 
@@ -6,7 +6,7 @@ export const PRODUCTION_WS = 'wss://rvxis.site/peerjs/ws';
 export const MAX_ROOM_PEERS = 12;
 
 // ⚠️ LOCAL TESTING FLAG (Set to true when running manual tests against localhost)
-const USE_LOCAL_SERVER_FOR_TAURI_TESTS = true;
+const USE_LOCAL_SERVER_FOR_TAURI_TESTS = false;
 const LOCAL_DEV_SERVER = 'http://localhost:3000';
 const LOCAL_DEV_WS = 'ws://localhost:3000/peerjs/ws';
 
