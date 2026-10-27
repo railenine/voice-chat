@@ -16,7 +16,7 @@ export const PanelFooter = memo<PanelFooterProps>(({
 
   return (
     <div
-      className={`border-t border-(--border) bg-(--surface)/85 backdrop-blur-xl flex items-center shrink-0 select-none text-(--fg) ${
+      className={`border-t border-(--border) bg-(--surface) flex items-center shrink-0 select-none text-(--fg) ${
         hasHeight ? '' : 'h-17.25'
       } ${
         hasJustify ? '' : 'justify-between'

@@ -459,7 +459,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
         {/* Mobile Sticky Bottom Controls (< 1024px) */}
         <PanelFooter
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.625rem)' }}
-          className="lg:hidden p-2.5 sm:p-3 bg-(--surface)/80 backdrop-blur-xl border-t border-(--border) flex items-center justify-center shrink-0 z-20 h-auto"
+          className="lg:hidden p-2.5 sm:p-3 flex items-center justify-center shrink-0 z-20 h-auto"
         >
           <VoiceControlBar
             isMuted={isMuted}

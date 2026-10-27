@@ -10,9 +10,19 @@ export const PanelHeader = memo<PanelHeaderProps>(({
   className = '',
   ...props
 }) => {
+  const hasHeight = /(?:^|\s)h-/.test(className);
+  const hasJustify = /(?:^|\s)justify-/.test(className);
+  const hasPadding = /(?:^|\s)p[xye]?-/.test(className);
+
   return (
     <div
-      className={`h-16 px-4 sm:px-5 border-b border-(--border) bg-(--surface)/75 backdrop-blur-xl flex items-center justify-between shrink-0 select-none text-(--fg) ${className}`}
+      className={`border-b border-(--border) bg-(--surface) flex items-center shrink-0 select-none text-(--fg) ${
+        hasHeight ? '' : 'h-16'
+      } ${
+        hasJustify ? '' : 'justify-between'
+      } ${
+        hasPadding ? '' : 'px-4 sm:px-5'
+      } ${className}`}
       {...props}
     >
       {children}
