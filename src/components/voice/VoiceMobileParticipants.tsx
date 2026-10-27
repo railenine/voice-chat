@@ -92,10 +92,10 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
               className="flex flex-col items-center gap-1 shrink-0 cursor-pointer group active:scale-95 transition-transform focus-visible:outline-2 focus-visible:outline-(--accent) rounded-(--radius)"
             >
               <div
-                className={`w-12 h-12 rounded-full border transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center shadow-md ${
+                className={`w-12 h-12 rounded-full border transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] flex items-center justify-center ${
                   copied
-                    ? 'border-(--accent) bg-(--accent-soft) text-(--accent) shadow-[0_0_12px_var(--accent-soft)]'
-                    : 'border-(--accent)/30 bg-(--accent-soft) hover:bg-[color-mix(in_oklch,var(--accent)_20%,transparent)] text-(--accent) group-hover:text-white shadow-cyan-950/40'
+                    ? 'border-(--accent) bg-(--accent-soft) text-(--accent) shadow-xs'
+                    : 'border-(--accent)/30 bg-(--accent-soft) hover:bg-[color-mix(in_oklch,var(--accent)_20%,transparent)] text-(--accent)'
                 }`}
               >
                 <div className="relative w-5 h-5 flex items-center justify-center">
@@ -105,7 +105,7 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
                     }`}
                   />
                   <UserPlus
-                    className={`w-5 h-5 text-(--accent) group-hover:text-white absolute transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                    className={`w-5 h-5 text-(--accent) absolute transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                       copied ? 'opacity-0 scale-50 rotate-45 pointer-events-none' : 'opacity-100 scale-100 rotate-0'
                     }`}
                   />

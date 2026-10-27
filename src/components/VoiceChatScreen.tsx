@@ -316,7 +316,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               e.stopPropagation();
               unlockAudio();
             }}
-            className="cursor-pointer bg-(--warning-soft) hover:bg-[color-mix(in_oklch,var(--warning)_22%,transparent)] text-(--warning) px-3 sm:px-4 py-2 text-center text-xs sm:text-sm font-medium shadow-lg flex items-center justify-center gap-2 border-b border-(--warning-border) transition-all z-50 animate-slide-down-fade shrink-0"
+            className="cursor-pointer bg-(--warning-soft) hover:bg-[color-mix(in_oklch,var(--warning)_22%,transparent)] text-(--warning) px-3 sm:px-4 py-2 text-center text-xs sm:text-sm font-medium flex items-center justify-center gap-2 border-b border-(--warning-border) transition-all z-50 animate-slide-down-fade shrink-0"
           >
             <Volume2 className="w-4 h-4 shrink-0 text-(--warning)" />
             <span>

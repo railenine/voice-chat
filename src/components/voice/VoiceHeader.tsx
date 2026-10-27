@@ -114,12 +114,12 @@ export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(
             position="bottom"
           >
             <Button
-              variant="secondary"
+              variant="ghost"
               size="icon-sm"
               onClick={onOpenSettings}
               aria-label="Настройки"
             >
-              <Settings className="w-4 h-4 text-(--muted) hover:text-(--fg)" />
+              <Settings className="w-4 h-4" />
             </Button>
           </Tooltip>
 
@@ -133,20 +133,18 @@ export const VoiceHeader: React.FC<VoiceHeaderProps> = memo(
             position="bottom"
           >
             <Button
-              variant={copied ? "accent" : "secondary"}
+              variant={copied ? "accent" : "ghost"}
               size="icon-sm"
               onClick={triggerShare}
               aria-label={copied ? "Ссылка скопирована" : "Поделиться ссылкой"}
-              className={`transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                copied ? "shadow-xs" : ""
-              }`}
+              className="transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]"
             >
               <div className="relative w-4 h-4 flex items-center justify-center">
                 <Share2
                   className={`w-4 h-4 transition-all duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                     copied
                       ? "opacity-0 scale-50 rotate-45 pointer-events-none"
-                      : "opacity-100 scale-100 rotate-0 text-(--muted)"
+                      : "opacity-100 scale-100 rotate-0"
                   }`}
                 />
                 <Check

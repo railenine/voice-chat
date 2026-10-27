@@ -394,7 +394,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative flex flex-col h-full bg-(--surface) rounded-2xl lg:rounded-none border border-(--border) lg:border-none shadow-2xl lg:shadow-none shadow-black/40 overflow-hidden ${className}`}
+      className={`relative flex flex-col h-full bg-(--surface) rounded-2xl lg:rounded-none border border-(--border) lg:border-none overflow-hidden ${className}`}
     >
       {/* Drag & Drop Visual Overlay */}
       {isDraggingOver && (
