@@ -10,9 +10,19 @@ export const PanelFooter = memo<PanelFooterProps>(({
   className = '',
   ...props
 }) => {
+  const hasHeight = /(?:^|\s)h-/.test(className);
+  const hasJustify = /(?:^|\s)justify-/.test(className);
+  const hasPadding = /(?:^|\s)p[xye]?-/.test(className);
+
   return (
     <div
-      className={`h-17.25 px-3 sm:px-4 border-t border-(--border) bg-(--surface)/75 backdrop-blur-xl flex items-center justify-between shrink-0 select-none text-(--fg) ${className}`}
+      className={`border-t border-(--border) bg-(--surface)/85 backdrop-blur-xl flex items-center shrink-0 select-none text-(--fg) ${
+        hasHeight ? '' : 'h-17.25'
+      } ${
+        hasJustify ? '' : 'justify-between'
+      } ${
+        hasPadding ? '' : 'px-3 sm:px-4'
+      } ${className}`}
       {...props}
     >
       {children}

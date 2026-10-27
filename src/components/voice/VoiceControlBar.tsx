@@ -18,6 +18,7 @@ export interface VoiceControlBarProps {
   onScreenShareClick: () => void;
   handleLeave: () => void;
   className?: string;
+  buttonClassName?: string;
 }
 
 export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
@@ -35,6 +36,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
   onScreenShareClick,
   handleLeave,
   className = 'flex items-center gap-2',
+  buttonClassName = '',
 }) => {
   return (
     <div className={className}>
@@ -46,12 +48,13 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
         position="top"
       >
         <Button
-          variant={isMuted ? 'danger' : 'secondary'}
+          variant={isMuted ? 'danger' : 'glass'}
           size="icon"
           onClick={toggleMute}
           aria-label={isMuted ? 'Включить микрофон' : 'Выключить микрофон'}
+          className={buttonClassName}
         >
-          {isMuted ? <MicOff className="w-5 h-5 text-(--danger)" /> : <Mic className="w-5 h-5" />}
+          {isMuted ? <MicOff className="w-5 h-5 text-(--danger)" /> : <Mic className="w-5 h-5 text-(--fg)" />}
         </Button>
       </Tooltip>
 
@@ -67,12 +70,13 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
         position="top"
       >
         <Button
-          variant={isDeafened ? 'danger' : 'secondary'}
+          variant={isDeafened ? 'danger' : 'glass'}
           size="icon"
           onClick={toggleDeafen}
           aria-label={isDeafened ? 'Включить звук' : 'Заглушить всё'}
+          className={buttonClassName}
         >
-          {isDeafened ? <VolumeX className="w-5 h-5 text-(--danger)" /> : <Headphones className="w-5 h-5" />}
+          {isDeafened ? <VolumeX className="w-5 h-5 text-(--danger)" /> : <Headphones className="w-5 h-5 text-(--fg)" />}
         </Button>
       </Tooltip>
 
@@ -87,13 +91,13 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
         position="top"
       >
         <Button
-          variant={isNoiseSuppression ? 'secondary' : 'ghost'}
+          variant={isNoiseSuppression ? 'accent' : 'glass'}
           size="icon"
           onClick={toggleNoiseSuppression}
           aria-label="Шумоподавление"
-          className={!isNoiseSuppression ? 'text-(--muted)' : ''}
+          className={`${!isNoiseSuppression ? 'text-(--muted)' : ''} ${buttonClassName}`.trim()}
         >
-          <Sparkles className="w-5 h-5" />
+          <Sparkles className={`w-5 h-5 ${isNoiseSuppression ? 'text-(--accent)' : ''}`} />
         </Button>
       </Tooltip>
 
@@ -109,16 +113,17 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           position="top"
         >
           <Button
-            variant={isSharingScreen ? 'success' : 'secondary'}
+            variant={isSharingScreen ? 'success' : 'glass'}
             size="icon"
             onClick={onScreenShareClick}
             disabled={isConnectingScreen}
             aria-label={isSharingScreen ? 'Остановить показ экрана' : 'Поделиться экраном'}
+            className={buttonClassName}
           >
             {isSharingScreen ? (
               <ScreenShareOff className="w-5 h-5 text-(--success)" />
             ) : (
-              <ScreenShare className="w-5 h-5" />
+              <ScreenShare className="w-5 h-5 text-(--fg)" />
             )}
           </Button>
         </Tooltip>
@@ -131,6 +136,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           size="icon"
           onClick={handleLeave}
           aria-label="Выйти из комнаты"
+          className={buttonClassName}
         >
           <PhoneOff className="w-5 h-5 text-(--danger)" />
         </Button>
