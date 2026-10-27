@@ -1,22 +1,22 @@
 {
-  "version": "0.2.1",
-  "notes": "• 🌐 **Хотфикс сетевого подключения Desktop-клиента (Production Connectivity):** десктопное приложение переведено на прямое подключение к стабильному продакшен-серверу `https://rvxis.site` и `wss://rvxis.site/peerjs/ws` по умолчанию, устранена привязка к локальному хосту.",
-  "pub_date": "2026-10-23T08:15:03.622Z",
+  "version": "0.2.2",
+  "notes": "• 🎛️ **Тактильные кнопки и статусная подсветка панели звонка (Tactile Voice Control Bar):** устранен эффект «пустого проволочного каркаса», контролы звонка переведены на объемный тактильный вариант `glass` (`bg-(--fg-soft)`), а активное шумоподавление RNNoise и трансляция экрана получили подсветку акцентным цветом темы (`--accent`).\n• 📱 **Гармонизация шапки и мобильной верстки (<1024px):** кнопки действий в шапке переведены на чистый `ghost`-стиль, устранены изолированные рамки и исправлена кликабельная зона 44px (WCAG 2.1 AA).\n• 💎 **100% монолитные поверхности (Solid OKLCH Surface Panels):** шапка `PanelHeader` и футер `PanelFooter` переведены на 100% непрозрачный токен `bg-(--surface)` (`oklch(0.19 0.035 255)`), устранено паразитное затемнение и эффект «грязного стекла».\n• 🧹 **Очистка от паразитных теней и сырых цветов:** из мобильного чата, видеопотока и карточки участников удалены устаревшие тени `shadow-2xl shadow-black/40`, сырой статический класс `shadow-cyan-950/40` и декоративные неоновые свечения.",
+  "pub_date": "2026-10-27T13:28:51.872Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUUXBRQ09zd3c3SGlDZEpXMkNIQnJhNHZ1aFFrVGFBSTVKWENEb1E3NXdPMzNyK0dRMnMzN3dhdmUwT0E3bnFRZU1ra0EyUzAwSXRJNVpWZGVGWXJINDZDSjJzQlFPaVFrPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkwMTc2Mjk5CWZpbGU6dGVtcF9Wb2ljZUNoYXRfMC4wLjQ1X3g2NC5leGUJdmVyc2lvbjowLjAuNDUKdngzd1dHSGJveUpxeDVVRTZERWx4VGZqTDUzL0MwbnV6SnZ1dnlpU1dNUUNEWGhzbVUveXMyQWI1K1BMZWtBR3YzWDVycmp5U2JjbmxCaEZNaXM2Q1E9PQo=",
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.1/RVxis_0.2.1_x64-setup.exe",
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.2/RVxis_0.2.2_x64-setup.exe",
       "size": 4703402,
       "sha256": "4a33f68806ceb42a8822955e13e27cf4ba13442a741b58d8d9bd63b77c686112"
     }
   },
   "portable": {
     "windows-x86_64": {
-      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.1/RVxis.exe",
+      "url": "https://github.com/railenine/voice-chat/releases/download/v0.2.2/RVxis.exe",
       "size": 17463808,
       "sha256": "b3d6a61e24a933470fb6f692495db98dcd7a09ab348be01eb0efc551d20880fe",
       "signature": ""
     }
   },
-  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.2.1/RVxis.exe"
+  "portable_url": "https://github.com/railenine/voice-chat/releases/download/v0.2.2/RVxis.exe"
 }
