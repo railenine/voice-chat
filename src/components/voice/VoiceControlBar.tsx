@@ -113,7 +113,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
           position="top"
         >
           <Button
-            variant={isSharingScreen ? 'success' : 'glass'}
+            variant={isSharingScreen ? 'accent' : 'glass'}
             size="icon"
             onClick={onScreenShareClick}
             disabled={isConnectingScreen}
@@ -121,7 +121,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
             className={buttonClassName}
           >
             {isSharingScreen ? (
-              <ScreenShareOff className="w-5 h-5 text-(--success)" />
+              <ScreenShareOff className="w-5 h-5 text-(--accent)" />
             ) : (
               <ScreenShare className="w-5 h-5 text-(--fg)" />
             )}
