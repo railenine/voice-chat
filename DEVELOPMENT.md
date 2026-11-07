@@ -45,6 +45,8 @@ the deployment script refuses to move legacy directories or copy secrets for you
 Do not change the nginx document-root path: keep the configured path as the
 stable symlink. Ensure the deploy account owns those links and release directory,
 and can run Node 22.22+, npm and PM2. Port 3101 is reserved for candidate probing.
+The deploy script checks Node before installing/switching and passes the exact
+interpreter path to PM2. Candidate probes bind only to loopback.
 
 Application deployment uploads a new release, installs locked runtime packages,
 probes its health, switches symlinks and restarts PM2. A failed activation restores
@@ -141,3 +143,27 @@ checksum metadata. It does not sign, publish, tag or deploy. Keep the existing S
 tunnel running on each Windows test PC and close other room clients during tests.
 This build does not validate production-channel self-update; that is a separate
 controlled test with signed artifacts and explicit publication boundaries.
+
+### Isolated delivery/rollback check on the application VPS
+
+Run `bash scripts/test-deploy-isolated.sh` from the dedicated delivery-check
+archive on the application VPS. It uses the separately installed staging Node
+22.22 runtime, not a global Node upgrade. Ports 3200/3201 must be free. A private
+`/opt/rvxis-deploy-smoke/run-<random>` tree and PM2_HOME hold all fixture state;
+inherited account secrets are not passed to fixture PM2. No production .env,
+nginx, Coturn, LiveKit or global PM2 configuration is changed. The working port
+3000 health/PID and frontend/backend paths are read before/after for comparison.
+
+The harness replaces only a marked constants block in a temporary copy of
+deploy-candidate.sh, retaining the same install/probe/symlink/restart/rollback
+control flow. It refuses changed markers, escaping roots or residual production
+paths/process names. Fixtures cover rollback to legacy health without releaseId,
+successful activation, candidate probe failure and post-activation failure. An
+isolated PM2 daemon is stopped in cleanup; fixture logs/result.json are retained
+under the private test tree for inspection. A concurrent/stale .active lock
+stops another run; inspect it instead of deleting unknown state blindly.
+
+Success requires four passed cases, unchanged working PID/paths and released
+test ports. This validates delivery control flow with synthetic health servers;
+it does not itself test nginx, real application media sessions, the one-time
+production directory migration or desktop self-update.

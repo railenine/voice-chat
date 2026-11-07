@@ -194,3 +194,24 @@ runs staging Rust tests and verifies embedded bundle/identifier/guard bytes.
 Final staging EXE build metadata and native staging test results are recorded
 separately in outputs. No production publication or deployed code changes.
 
+
+## Isolated delivery/rollback harness (2026-11-08)
+
+User confirmed native global hotkeys in the background. Basic staging desktop
+voice/media/device/hotkey block is complete by user report; installer and real
+update channel are still not tested. Prepared a Linux delivery harness with
+private /opt/rvxis-deploy-smoke/run-<random>, PM2_HOME, loopback 3200/3201.
+Only a marked deployment constants block is substituted in a temporary script;
+the probe/symlink/restart/rollback control flow stays identical. Isolation guards
+reject production leftovers, escaping roots or changed markers. Fixtures cover
+legacy health rollback, successful activation, rejected probe and activation
+rollback. Real production health/PID/paths are compared read-only before/after.
+Only private PM2 is stopped; fixture logs persist; inherited secrets are cleared.
+Production script now checks Node 22.22+ before install/switch, probes loopback
+and explicitly passes the validated Node interpreter to PM2. This matters for
+the existing host's system Node 20; no global runtime is changed by the test.
+111 JS tests/typecheck/build/manifests passed; shell sources plus generated
+copy parsed by shfmt and CI validated by actionlint. Actual Linux/PM2 execution
+remains pending user run. This is control-flow testing with health fixtures,
+not a production migration/nginx/media or desktop updater certification.
+

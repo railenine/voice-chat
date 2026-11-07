@@ -31,7 +31,10 @@ jobs:
         run: npm run typecheck
 
       - name: Shell syntax
-        run: bash -n scripts/deploy-candidate.sh && bash -n scripts/setup-coturn.sh
+        run: |
+          for file in scripts/*.sh; do
+            bash -n "$file"
+          done
 
       - name: Unit & Integration Tests
         run: npm test
