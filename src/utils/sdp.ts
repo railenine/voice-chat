@@ -13,15 +13,9 @@ export function optimizeAudioSdp(sdp: string): string {
 
   if (fmtpRegex.test(sdp)) {
     return sdp.replace(fmtpRegex, (_m, prefix, params) => {
-      const clean = params
-        .replace(/maxaveragebitrate=\d+;?/gi, '')
-        .replace(/stereo=[01];?/gi, '')
-        .replace(/sprop-stereo=[01];?/gi, '')
-        .replace(/useinbandfec=[01];?/gi, '')
-        .replace(/cbr=[01];?/gi, '')
-        .replace(/usedtx=[01];?/gi, '')
-        .replace(/;\s*$/, '')
-        .trim();
+      const controlled = new Set(['maxaveragebitrate', 'stereo', 'sprop-stereo', 'useinbandfec', 'cbr', 'usedtx']);
+      const clean = params.split(';').map((part: string) => part.trim())
+        .filter((part: string) => part && !controlled.has(part.split('=')[0].trim().toLowerCase())).join(';');
       const sep = clean.length > 0 && !clean.endsWith(';') ? ';' : '';
       return `${prefix}${clean}${sep}${customParams}`;
     });

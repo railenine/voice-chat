@@ -253,7 +253,7 @@ export function useVoiceChat({
 
   const onSignal = useCallback(
     (from: string, data: WebRTCSignalData) => {
-      handleSignal(from, data);
+      if (peersInfoRef.current.has(from)) handleSignal(from, data);
     },
     [handleSignal]
   );
