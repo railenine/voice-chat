@@ -28,6 +28,23 @@ elif [ -f /var/www/voice-chat-backend/.env ]; then
   set +a
 fi
 
+COTURN_USER="${COTURN_USER:-voicechat}"
+# Exactly one credential mechanism must be configured on both services.
+if [ -n "$COTURN_SHARED_SECRET" ] && [ -n "$COTURN_PASSWORD" ]; then
+  echo "Choose COTURN_SHARED_SECRET or COTURN_PASSWORD, not both." >&2
+  exit 1
+elif [ -n "$COTURN_SHARED_SECRET" ]; then
+  AUTH_CONFIG="use-auth-secret
+static-auth-secret=$COTURN_SHARED_SECRET"
+elif [ -n "$COTURN_PASSWORD" ]; then
+  AUTH_CONFIG="lt-cred-mech
+user=$COTURN_USER:$COTURN_PASSWORD"
+else
+  echo "A TURN credential mechanism is required." >&2
+  exit 1
+fi
+
+
 # 1. Установка coturn
 echo "📦 1. Установка пакета coturn..."
 $SUDO apt-get update -qq
@@ -39,7 +56,7 @@ $SUDO mkdir -p /etc/coturn/certs
 $SUDO mkdir -p /var/log/turnserver
 
 # 3. Настройка SSL/TLS сертификатов
-DOMAIN="rvxis.site"
+DOMAIN="${COTURN_DOMAIN:-rvxis.site}"
 CERT_DIR="/etc/letsencrypt/live/$DOMAIN"
 
 if [ -f "$CERT_DIR/fullchain.pem" ] && [ -f "$CERT_DIR/privkey.pem" ]; then
@@ -55,19 +72,12 @@ $SUDO chmod 644 /etc/coturn/certs/fullchain.pem
 $SUDO chmod 600 /etc/coturn/certs/privkey.pem
 $SUDO chown -R turnserver:turnserver /etc/coturn /var/log/turnserver || true
 
-COTURN_USER="${COTURN_USER:-voicechat}"
-if [ -z "$COTURN_PASSWORD" ]; then
-  echo "❌ Ошибка: Переменная окружения COTURN_PASSWORD не задана!"
-  echo "Перед запуском задайте пароль: export COTURN_PASSWORD='<ваш_надежный_пароль>'"
-  exit 1
-fi
-
 # 4. Создание конфигурации turnserver.conf
 echo "⚙️ 4. Запись конфигурации /etc/turnserver.conf..."
 $SUDO bash -c "cat > /etc/turnserver.conf" << EOF
 # Основные порты
-listening-port=3478
-tls-listening-port=5349
+listening-port=${COTURN_PORT:-3478}
+tls-listening-port=${COTURN_TLS_PORT:-5349}
 alt-listening-port=3479
 alt-tls-listening-port=5350
 
@@ -77,10 +87,9 @@ max-port=65535
 
 # Аутентификация
 fingerprint
-lt-cred-mech
-user=${COTURN_USER}:${COTURN_PASSWORD}
-realm=rvxis.site
-server-name=rvxis.site
+${AUTH_CONFIG}
+realm=${DOMAIN}
+server-name=${DOMAIN}
 
 # Сертификаты для TURNS (TLS)
 cert=/etc/coturn/certs/fullchain.pem
@@ -93,7 +102,9 @@ no-multicast-peers
 
 # Логирование
 log-file=/var/log/turnserver/turnserver.log
-verbose
+total-quota=256
+user-quota=256
+no-tcp-relay
 EOF
 
 # 5. Активация автозапуска в /etc/default/coturn

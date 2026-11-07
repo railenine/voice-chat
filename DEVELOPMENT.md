@@ -1,0 +1,59 @@
+# Development and release checks
+
+Use Node.js 22.22 or newer (CI and Docker use the Node 22 line). Run `npm ci`.
+Start the API with `npm start` in one terminal, and Vite with `npm run dev` in
+another. The API listens on 3000; the browser UI is http://localhost:5173, with
+same-origin API/WebSocket proxying. Tauri development opens Vite on 5173 and uses
+the local API. Production Tauri builds use the production server unless the
+explicit manual-testing flag is enabled.
+
+Checks:
+
+```
+npm test
+npm run typecheck
+npm run build
+npm run test:signaling
+npm run test:browser
+cargo test --manifest-path src-tauri/Cargo.toml --lib
+node scripts/generate-latest-json.js --validate-only
+```
+
+The browser test uses real Chromium WebRTC and a generated fake microphone.
+Install a browser with `npx playwright-core install chromium` on machines without
+Chrome/Edge, or set RVXIS_BROWSER_EXECUTABLE. This checks local audio transport;
+it does not certify NAT/TURN, mobile background audio or actual screen capture.
+The old test:mesh name is retained as an alias for signaling compatibility.
+
+## Production rollout preparation
+
+Push to main deploys automatically; a v* tag builds/publishes a desktop release.
+Keep fixes on a review branch until the paired client/backend change is ready.
+Run the release command without --push to prepare versions, inspect its diff,
+then publish only after the required checks and explicit deployment approval.
+
+Before the first hardened deployment, prepare `/var/www/voice-chat-releases`
+and `/var/www/voice-chat-shared/.env`. The existing frontend path (TARGET_DIR)
+and `/var/www/voice-chat-backend` must be symlinks to a retained working release.
+This one-time migration requires deliberate host maintenance and a backup;
+the deployment script refuses to move legacy directories or copy secrets for you.
+Do not change the nginx document-root path: keep the configured path as the
+stable symlink. Ensure the deploy account owns those links and release directory,
+and can run Node 22.22+, npm and PM2. Port 3101 is reserved for candidate probing.
+
+Application deployment uploads a new release, installs locked runtime packages,
+probes its health, switches symlinks and restarts PM2. A failed activation restores
+the previous links/service. Frontend and backend switches are separate filesystem
+operations; this is not a transaction across both services. Long-lived calls
+are interrupted by backend restart. Retain previous releases for rollback.
+
+Provision Coturn separately using setup-coturn.sh, with exactly one of
+COTURN_SHARED_SECRET (HMAC) or COTURN_PASSWORD (static). The application and
+Coturn must use the same mechanism/domain. Test relay with real clients after
+host changes. The script does not run on normal application deploys.
+
+Desktop publication creates/updates a draft and publishes only after all assets
+have uploaded. It refuses to replace an already published tag. The generator
+requires actual installer and portable files with verified signatures; a previous
+manifest cannot supply signatures for new binaries. Unsigned old portable clients
+and anonymous credential API clients need a coordinated upgrade path.

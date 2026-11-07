@@ -30,6 +30,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Shell syntax
+        run: bash -n scripts/deploy-candidate.sh && bash -n scripts/setup-coturn.sh
+
       - name: Unit & Integration Tests
         run: npm test
 
@@ -38,3 +41,9 @@ jobs:
 
       - name: Build Web Bundle
         run: npm run build
+
+      - name: Install browser for media smoke test
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Browser media smoke test
+        run: npm run test:browser

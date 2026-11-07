@@ -6,6 +6,7 @@ export async function loadComponent(entry, { livekitStub } = {}) {
   const result = await build({
     entryPoints: [entry], bundle: true, write: false, platform: 'node', format: 'cjs',
     external: ['react', 'react-dom', 'livekit-client'],
+    define: { 'import.meta.env.DEV': 'false', 'import.meta.env': '{}' },
     plugins: [{ name: 'test-worklet-boundary', setup(builder) {
       if (livekitStub) {
         builder.onResolve({ filter: /^livekit-client$/ }, () => ({ path: 'livekit-client', namespace: 'sdk-boundary' }));

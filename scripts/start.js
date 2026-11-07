@@ -6,7 +6,7 @@ import { join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = join(fileURLToPath(import.meta.url), '..');
+const __dirname = fileURLToPath(new URL('../', import.meta.url));
 
 // Check if dist folder exists
 const distPath = join(__dirname, 'dist');

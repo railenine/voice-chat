@@ -16,29 +16,14 @@ export const isTauri = (): boolean =>
 
 export function getBackendBaseUrl(): string {
   if (isTauri()) {
-    return USE_LOCAL_SERVER_FOR_TAURI_TESTS ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
-  }
-  const isDev =
-    typeof window !== 'undefined' &&
-    (window.location.port === '5173' || window.location.port === '5174');
-
-  if (isDev) {
-    return `http://${window.location.hostname}:3000`;
+    return (import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
   }
   return typeof window !== 'undefined' ? window.location.origin : PRODUCTION_SERVER;
 }
 
 export function getWebSocketUrl(): string {
   if (isTauri()) {
-    return USE_LOCAL_SERVER_FOR_TAURI_TESTS ? LOCAL_DEV_WS : PRODUCTION_WS;
-  }
-  const isDev =
-    window.location.port === '5173' ||
-    window.location.port === '5174' ||
-    (window.location.port === '3000' && window.location.hostname === 'localhost');
-
-  if (isDev) {
-    return `ws://${window.location.hostname}:3000/peerjs/ws`;
+    return (import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_WS : PRODUCTION_WS;
   }
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${wsProtocol}//${window.location.host}/peerjs/ws`;
@@ -46,7 +31,7 @@ export function getWebSocketUrl(): string {
 
 export function getShareUrl(roomId: string): string {
   if (isTauri()) {
-    const base = USE_LOCAL_SERVER_FOR_TAURI_TESTS ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
+    const base = (import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
     return `${base}?room=${roomId}`;
   }
   return `${window.location.origin}?room=${roomId}`;

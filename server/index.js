@@ -65,6 +65,7 @@ app.get(['/health', '/peerjs/health'], (req, res) => {
     timestamp: new Date().toISOString(),
     service: 'rvxis-server',
     version: APP_VERSION,
+    releaseId: process.env.RVXIS_RELEASE || null,
     minClientVersion: MIN_CLIENT_VERSION
   });
 });
@@ -553,7 +554,7 @@ app.get('/peerjs/ice-servers', (req, res) => {
 // Status endpoint: tells clients if LiveKit SFU is enabled and configured
 app.get(['/api/livekit/status', '/peerjs/livekit/status'], (req, res) => {
   res.json({
-    available: Boolean(LIVEKIT_API_SECRET && LIVEKIT_API_KEY),
+    available: process.env.DISABLE_LIVEKIT !== '1' && Boolean(LIVEKIT_API_SECRET && LIVEKIT_API_KEY),
     url: LIVEKIT_URL,
   });
 });
@@ -624,7 +625,7 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
   // Graceful check if SFU credentials are configured
   const currentKey = process.env.LIVEKIT_API_KEY || '';
   const currentSecret = process.env.LIVEKIT_API_SECRET || '';
-  if (!currentSecret || !currentKey) {
+  if (process.env.DISABLE_LIVEKIT === '1' || !currentSecret || !currentKey) {
     return res.status(503).json({
       error: 'livekit_not_configured',
       message: 'LiveKit SFU screen sharing is not configured on this server'

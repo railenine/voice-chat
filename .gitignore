@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.test-tmp/
 yarn.lock
 pnpm-lock.yaml
 

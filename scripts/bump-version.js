@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { extractReleaseNotes } from './generate-latest-json.js';
+import { isNewerVersion } from '../src/utils/semver.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +25,18 @@ function main() {
   if (!/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(cleanVersion)) {
     console.error(`Invalid version format: "${targetVersion}". Expected format like "0.0.46"`);
     process.exit(1);
+  }
+
+  if (shouldPush) {
+    const branch = execFileSync('git', ['branch', '--show-current'], { cwd: rootDir, encoding: 'utf8' }).trim();
+    const dirty = execFileSync('git', ['status', '--porcelain'], { cwd: rootDir, encoding: 'utf8' }).trim();
+    if (branch !== 'main' || dirty) throw new Error('--push requires a clean main branch before preparing the release');
+  }
+  if (!isNewerVersion(cleanVersion, JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8')).version)) {
+    throw new Error('Release version must increase');
+  }
+  if (execFileSync('git', ['tag', '--list', `v${cleanVersion}`], { cwd: rootDir, encoding: 'utf8' }).trim()) {
+    throw new Error('Release tag already exists');
   }
 
   console.log(`\n🚀 Bumping project version to: v${cleanVersion}\n`);
@@ -67,6 +80,14 @@ function main() {
     cargo = cargo.replace(/version\s*=\s*"[^"]+"/, `version = "${cleanVersion}"`);
     fs.writeFileSync(cargoTomlPath, cargo, 'utf8');
     console.log(`  ✓ src-tauri/Cargo.toml: -> ${cleanVersion}`);
+  }
+  const cargoLockPath = path.join(rootDir, 'src-tauri', 'Cargo.lock');
+  if (fs.existsSync(cargoLockPath)) {
+    const lock = fs.readFileSync(cargoLockPath, 'utf8');
+    const updated = lock.replace(/(\[\[package\]\]\r?\nname = "voice-chat"\r?\nversion = ")[^"]+("\r?\n)/,
+      (_match, prefix, suffix) => `${prefix}${cleanVersion}${suffix}`);
+    if (updated === lock) throw new Error('Could not update root package in Cargo.lock');
+    fs.writeFileSync(cargoLockPath, updated, 'utf8');
   }
 
   // 4. src/config.ts
@@ -127,6 +148,10 @@ function main() {
       try {
         const m = JSON.parse(fs.readFileSync(mPath, 'utf8'));
         m.version = cleanVersion;
+        // These fields belong to actual bytes, not a version template.
+        for (const asset of [...Object.values(m.platforms || {}), ...Object.values(m.portable || {})]) {
+          delete asset.signature; delete asset.sha256; delete asset.size;
+        }
         m.notes = releaseNotes;
         m.pub_date = new Date().toISOString();
         m.portable_url = `https://github.com/railenine/voice-chat/releases/download/v${cleanVersion}/RVxis.exe`;
@@ -150,10 +175,17 @@ function main() {
   if (shouldPush) {
     console.log('\n📦 Creating git commit, tag, and pushing to origin...');
     try {
-      execSync('git add -A', {
-        cwd: rootDir,
-        stdio: 'inherit',
-      });
+      for (const args of [
+        ['node_modules/typescript/bin/tsc', '--noEmit'],
+        ['--test', 'test/unit/*.test.js', 'test/integration/*.test.js'],
+        ['node_modules/vite/bin/vite.js', 'build'],
+        ['scripts/browser-smoke.js'],
+      ]) {
+        execFileSync(process.execPath, args, { cwd: rootDir, stdio: 'inherit' });
+      }
+      execFileSync('git', ['add', '--', 'package.json', 'package-lock.json', 'src-tauri/tauri.conf.json',
+        'src-tauri/Cargo.toml', 'src-tauri/Cargo.lock', 'src/config.ts', 'server/index.js', 'public/health',
+        path.relative(rootDir, historyPath), 'latest.json', 'public/api/updater/latest.json', 'server/latest.json'], { cwd: rootDir, stdio: 'inherit' });
       execSync(`git commit -m "chore(release): v${cleanVersion}"`, { cwd: rootDir, stdio: 'inherit' });
       execSync(`git tag -a "v${cleanVersion}" -m "Release v${cleanVersion}"`, { cwd: rootDir, stdio: 'inherit' });
       execSync('git push origin main', { cwd: rootDir, stdio: 'inherit' });
@@ -170,7 +202,7 @@ function main() {
     console.log(`  2. Commit: git commit -am "chore(release): v${cleanVersion}"`);
     console.log(`  3. Tag:    git tag -a v${cleanVersion} -m "Release v${cleanVersion}"`);
     console.log(`  4. Push:   git push origin main && git push origin v${cleanVersion}`);
-    console.log(`  (Or run again with --push to do this automatically)`);
+    console.log('  --push is only for preparing a new version from an initially clean main branch.');
   }
 }
 
