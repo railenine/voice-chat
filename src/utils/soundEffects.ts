@@ -4,17 +4,18 @@
  */
 
 let soundsMuted = false;
+let ordinarySoundGain: GainNode | null = null;
 export function setSoundMuted(muted: boolean) {
   soundsMuted = muted;
-  if (sfxAudioElement) sfxAudioElement.muted = muted;
+  if (ordinarySoundGain) ordinarySoundGain.gain.value = muted ? 0 : 1;
 }
 let fallbackAudioCtx: AudioContext | null = null;
 let currentOutputSinkId: string = '';
 let sfxAudioElement: HTMLAudioElement | null = null;
 let sfxDestinationNode: MediaStreamAudioDestinationNode | null = null;
 
-function getFallbackAudioContext(): AudioContext | null {
-  if (soundsMuted || typeof window === 'undefined') return null;
+function getFallbackAudioContext(transitionCue = false): AudioContext | null {
+  if ((soundsMuted && !transitionCue) || typeof window === 'undefined') return null;
   try {
     const AudioContextClass =
       window.AudioContext || (window as any).webkitAudioContext;
@@ -29,7 +30,7 @@ function getFallbackAudioContext(): AudioContext | null {
   }
 }
 
-function getSfxDestination(ctx: AudioContext): AudioNode {
+function getOutputDestination(ctx: AudioContext): AudioNode {
   if (typeof document === 'undefined') {
     return ctx.destination;
   }
@@ -39,7 +40,7 @@ function getSfxDestination(ctx: AudioContext): AudioNode {
     }
     if (!sfxAudioElement) {
       sfxAudioElement = document.createElement('audio');
-      sfxAudioElement.muted = soundsMuted;
+      sfxAudioElement.muted = false;
       sfxAudioElement.autoplay = true;
       (sfxAudioElement as any).playsInline = true;
       sfxAudioElement.setAttribute('playsinline', 'true');
@@ -65,6 +66,19 @@ function getSfxDestination(ctx: AudioContext): AudioNode {
     console.warn('[SoundEffects] Fallback to ctx.destination:', e);
     return ctx.destination;
   }
+}
+
+function getSfxDestination(ctx: AudioContext, transitionCue = false): AudioNode {
+  const output = getOutputDestination(ctx);
+  // Only explicit deafen/undeafen confirmations bypass the ordinary SFX mute.
+  // Neither route contains participant audio, screen audio or chat media.
+  if (transitionCue) return output;
+  if (!ordinarySoundGain || ordinarySoundGain.context !== ctx) {
+    ordinarySoundGain = ctx.createGain();
+    ordinarySoundGain.gain.value = soundsMuted ? 0 : 1;
+    ordinarySoundGain.connect(output);
+  }
+  return ordinarySoundGain;
 }
 
 // User-gesture unlocker
@@ -117,7 +131,8 @@ function playHarmonicChime(
   startTime: number,
   duration: number,
   volume = 0.25,
-  type: OscillatorType = 'sine'
+  type: OscillatorType = 'sine',
+  transitionCue = false
 ) {
   try {
     const gain = ctx.createGain();
@@ -137,7 +152,7 @@ function playHarmonicChime(
       osc.stop(startTime + duration + 0.02);
     });
 
-    const dest = getSfxDestination(ctx);
+    const dest = getSfxDestination(ctx, transitionCue);
     gain.connect(dest);
   } catch (e) {
     console.warn('[SoundEffects] playHarmonicChime error:', e);
@@ -310,7 +325,7 @@ export async function playTestSound() {
  * Heavy descending three-tone cue: A5 (880Hz) -> D5 (587Hz) -> G4 (392Hz)
  */
 export async function playDeafenSound() {
-  const ctx = getFallbackAudioContext();
+  const ctx = getFallbackAudioContext(true);
   if (!ctx) return;
 
   try {
@@ -318,9 +333,9 @@ export async function playDeafenSound() {
       await ctx.resume();
     }
     const now = ctx.currentTime;
-    playHarmonicChime(ctx, [880.0, 1760.0], now, 0.07, 0.38, 'sine');
-    playHarmonicChime(ctx, [587.33, 1174.66], now + 0.065, 0.07, 0.40, 'sine');
-    playHarmonicChime(ctx, [392.0, 784.0], now + 0.13, 0.16, 0.42, 'sine');
+    playHarmonicChime(ctx, [880.0, 1760.0], now, 0.07, 0.38, 'sine', true);
+    playHarmonicChime(ctx, [587.33, 1174.66], now + 0.065, 0.07, 0.40, 'sine', true);
+    playHarmonicChime(ctx, [392.0, 784.0], now + 0.13, 0.16, 0.42, 'sine', true);
   } catch (e) {
     console.warn('[SoundEffects] playDeafenSound error:', e);
   }
@@ -331,7 +346,7 @@ export async function playDeafenSound() {
  * Bright ascending three-tone cue: G4 (392Hz) -> D5 (587Hz) -> A5 (880Hz)
  */
 export async function playUndeafenSound() {
-  const ctx = getFallbackAudioContext();
+  const ctx = getFallbackAudioContext(true);
   if (!ctx) return;
 
   try {
@@ -339,9 +354,9 @@ export async function playUndeafenSound() {
       await ctx.resume();
     }
     const now = ctx.currentTime;
-    playHarmonicChime(ctx, [392.0, 784.0], now, 0.07, 0.38, 'sine');
-    playHarmonicChime(ctx, [587.33, 1174.66], now + 0.065, 0.07, 0.40, 'sine');
-    playHarmonicChime(ctx, [880.0, 1760.0], now + 0.13, 0.18, 0.44, 'sine');
+    playHarmonicChime(ctx, [392.0, 784.0], now, 0.07, 0.38, 'sine', true);
+    playHarmonicChime(ctx, [587.33, 1174.66], now + 0.065, 0.07, 0.40, 'sine', true);
+    playHarmonicChime(ctx, [880.0, 1760.0], now + 0.13, 0.18, 0.44, 'sine', true);
   } catch (e) {
     console.warn('[SoundEffects] playUndeafenSound error:', e);
   }

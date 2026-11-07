@@ -11,7 +11,7 @@ and not deployed. The app version has deliberately not been bumped for release.
 | 2 | Publisher signature verification for portable, verified release assets | 111cb52 |
 | 3 | Cancellation of stale microphone initialization/switch/meter requests | 833c2f4 |
 | 4 | Single-owner stream audio attach/detach | 779be29 |
-| 5 | Preserve manual mute; deafen voice, screen, media viewer and cues | 3134518 |
+| 5 | Preserve manual mute; deafen voice, screen, media viewer and ordinary notifications | 3134518 |
 | 6 | Compatible dependency updates; unused uuid removed | de0b003 |
 | 7 | Upload concurrency/storage budgets, socket/room/backpressure limits | 417aa98 |
 | 8 | Preserve same-name participants | e88ff30 |
@@ -60,4 +60,15 @@ Before publishing:
   are not certified by this core-fix series; no new global quality score is claimed.
 
 Publication, pushes, tags and live deployment require their separately agreed stage.
+
+
+## Staging finding: deafen confirmation cues (2026-11-07)
+
+Manual testing found that muting the shared SFX output also suppressed the
+deafen confirmation and could suppress undeafen before React effects ran.
+Ordinary SFX now use a muted gain route; only explicit deafen/undeafen cues
+use the selected SFX output directly. Participant/stream/media routes stay muted.
+Regression test failed before the change and passed after; all 88 tests,
+typecheck, web build, manifests and browser voice smoke passed. Actual sound
+on the staging user's output device still needs a repeat check.
 
