@@ -22,6 +22,7 @@ import { Button, Badge } from './ui';
 import { Tooltip } from './Tooltip';
 
 interface ScreenShareViewProps {
+  isDeafened?: boolean;
   activeStreams: RemoteScreenShare[];
   localVideoTrack: LocalVideoTrack | null;
   localAudioTrack: LocalAudioTrack | null;
@@ -38,6 +39,7 @@ interface ScreenShareViewProps {
 
 export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
   activeStreams,
+  isDeafened = false,
   localVideoTrack,
   localAudioTrack,
   isSharing,
@@ -230,7 +232,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
           <RemoteVideoPlayer
             key={focusedRemoteStream.participantId}
             stream={focusedRemoteStream}
-            volume={isClosing ? 0 : (streamVolumes[focusedRemoteStream.participantId] ?? 100)}
+            volume={isClosing || isDeafened ? 0 : (streamVolumes[focusedRemoteStream.participantId] ?? 100)}
             onVolumeChange={(vol) => onVolumeChange(focusedRemoteStream.participantId, vol)}
             audioOutputDeviceId={audioOutputDeviceId}
           />

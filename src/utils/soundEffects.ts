@@ -3,13 +3,18 @@
  * Uses Web Audio API oscillator synthesis - zero external audio files required, zero latency.
  */
 
+let soundsMuted = false;
+export function setSoundMuted(muted: boolean) {
+  soundsMuted = muted;
+  if (sfxAudioElement) sfxAudioElement.muted = muted;
+}
 let fallbackAudioCtx: AudioContext | null = null;
 let currentOutputSinkId: string = '';
 let sfxAudioElement: HTMLAudioElement | null = null;
 let sfxDestinationNode: MediaStreamAudioDestinationNode | null = null;
 
 function getFallbackAudioContext(): AudioContext | null {
-  if (typeof window === 'undefined') return null;
+  if (soundsMuted || typeof window === 'undefined') return null;
   try {
     const AudioContextClass =
       window.AudioContext || (window as any).webkitAudioContext;
@@ -34,6 +39,7 @@ function getSfxDestination(ctx: AudioContext): AudioNode {
     }
     if (!sfxAudioElement) {
       sfxAudioElement = document.createElement('audio');
+      sfxAudioElement.muted = soundsMuted;
       sfxAudioElement.autoplay = true;
       (sfxAudioElement as any).playsInline = true;
       sfxAudioElement.setAttribute('playsinline', 'true');

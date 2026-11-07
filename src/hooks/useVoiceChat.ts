@@ -1,3 +1,4 @@
+import { setSoundMuted } from '../utils/soundEffects';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getBackendBaseUrl } from '../config';
 import {
@@ -40,6 +41,11 @@ export function useVoiceChat({
 }: UseVoiceChatOptions) {
   const [isDeafened, setIsDeafened] = useState(false);
   const isDeafenedRef = useRef(false);
+  const preDeafenMutedRef = useRef(false);
+  useEffect(() => {
+    setSoundMuted(isDeafened);
+    return () => setSoundMuted(false);
+  }, [isDeafened]);
   useEffect(() => {
     isDeafenedRef.current = isDeafened;
   }, [isDeafened]);
@@ -405,6 +411,7 @@ export function useVoiceChat({
     setIsDeafened(nextDeafened);
 
     if (nextDeafened) {
+      preDeafenMutedRef.current = isMutedRef.current;
       setMicrophoneMuted(true);
       stopSpeaking();
       applyDeafenToRemoteAudio(true);
@@ -412,10 +419,10 @@ export function useVoiceChat({
       sendWsMessage({ type: 'update-mute', isMuted: true });
       playDeafenSound();
     } else {
-      setMicrophoneMuted(false);
+      setMicrophoneMuted(preDeafenMutedRef.current);
       applyDeafenToRemoteAudio(false);
       sendWsMessage({ type: 'update-deafen', isDeafened: false });
-      sendWsMessage({ type: 'update-mute', isMuted: false });
+      sendWsMessage({ type: 'update-mute', isMuted: preDeafenMutedRef.current });
       playUndeafenSound();
     }
   }, [setMicrophoneMuted, stopSpeaking, applyDeafenToRemoteAudio, sendWsMessage]);

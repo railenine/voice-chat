@@ -25,6 +25,13 @@ it('keeps the current audio attached when the stream list refreshes', async () =
     assert.equal(detaches, 0);
     assert.equal(attaches, 1);
     assert.equal(volume, 1);
+    await act(async () => renderer.update(React.createElement(ScreenShareView, { ...props, isDeafened: true })));
+    assert.equal(volume, 0);
+    await act(async () => renderer.update(React.createElement(ScreenShareView, { ...props, isDeafened: true, streamVolumes: { alice: 50 } })));
+    assert.equal(volume, 0);
+    await act(async () => renderer.update(React.createElement(ScreenShareView, { ...props, isDeafened: false, streamVolumes: { alice: 50 } })));
+    assert.equal(volume, 0.5);
+    assert.equal(attaches, 1);
   } finally { await act(async () => renderer.unmount()); }
   assert.equal(detaches, 1);
 });

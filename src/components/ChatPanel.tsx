@@ -40,6 +40,7 @@ interface StagedAttachment {
 }
 
 interface ChatPanelProps {
+  isDeafened?: boolean;
   roomId: string;
   messages: ChatMessage[];
   myPeerId: string;
@@ -59,6 +60,7 @@ interface ChatPanelProps {
 
 export const ChatPanel: React.FC<ChatPanelProps> = memo(({
   roomId,
+  isDeafened = false,
   messages,
   myPeerId,
   onSendMessage,
@@ -875,7 +877,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       </form>
 
       {/* Media Viewer Modal */}
-      <MediaViewerModal
+      <MediaViewerModal isDeafened={isDeafened}
         item={viewingMedia}
         onClose={() => setViewingMedia(null)}
       />

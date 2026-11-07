@@ -423,13 +423,7 @@ export function useScreenShare({
     const clamped = Math.max(0, Math.min(100, volume));
     setStreamVolumes((prev) => ({ ...prev, [participantId]: clamped }));
 
-    // Find remote audio track and apply volume
-    const stream = activeStreams.find((s) => s.participantId === participantId);
-    if (stream && stream.audioTrack) {
-      // livekit-client setVolume takes 0.0 to 1.0 (with headroom up to 2.0)
-      stream.audioTrack.setVolume(clamped / 100);
-    }
-  }, [activeStreams]);
+  }, []);
 
   return {
     isAvailable,

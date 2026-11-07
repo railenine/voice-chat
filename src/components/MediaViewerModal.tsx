@@ -14,12 +14,14 @@ export interface MediaViewerItem {
 }
 
 export interface MediaViewerModalProps {
+  isDeafened?: boolean;
   item: MediaViewerItem | null;
   onClose: () => void;
 }
 
 export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
   item,
+  isDeafened = false,
   onClose,
 }) => {
   const [copied, setCopied] = useState(false);
@@ -72,6 +74,8 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
         <Modal.Body className="p-2 sm:p-4 bg-(--bg) flex items-center justify-center min-h-60 max-h-[calc(92vh-140px)] overflow-hidden">
           {item.type === 'video' ? (
             <video
+              muted={isDeafened}
+              onVolumeChange={(event) => { if (isDeafened) event.currentTarget.muted = true; }}
               src={resolvedUrl}
               controls
               autoPlay

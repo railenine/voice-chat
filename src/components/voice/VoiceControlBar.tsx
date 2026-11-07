@@ -63,7 +63,7 @@ export const VoiceControlBar: React.FC<VoiceControlBarProps> = memo(({
         content={isDeafened ? 'Включить звук (Deafen)' : 'Заглушить всё (Deafen)'}
         description={
           isDeafened
-            ? 'Вернуть звук собеседников и включить микрофон'
+            ? 'Вернуть звук и прежнее состояние микрофона'
             : 'Полностью отключить весь входящий звук и микрофон'
         }
         hotkey={deafenHotkeyLabel}
