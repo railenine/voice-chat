@@ -1,0 +1,63 @@
+# Audit fixes — local implementation, 2026-11-07
+
+Repository: D:/voice-chat (D:/voice-chat-main is a junction).
+Branch: fix/sequential-audit-fixes. Baseline: 9f7e8be, version 0.2.2.
+The user explicitly approved implementation. These changes are local, unpublished
+and not deployed. The app version has deliberately not been bumped for release.
+
+| Order | Change | Commit |
+| --- | --- | --- |
+| 1 | Guest session ownership, reconnect secret, protected media APIs, exact Origin policy | ed2925e |
+| 2 | Publisher signature verification for portable, verified release assets | 111cb52 |
+| 3 | Cancellation of stale microphone initialization/switch/meter requests | 833c2f4 |
+| 4 | Single-owner stream audio attach/detach | 779be29 |
+| 5 | Preserve manual mute; deafen voice, screen, media viewer and cues | 3134518 |
+| 6 | Compatible dependency updates; unused uuid removed | de0b003 |
+| 7 | Upload concurrency/storage budgets, socket/room/backpressure limits | 417aa98 |
+| 8 | Preserve same-name participants | e88ff30 |
+| 9 | Stable LiveKit room across nickname updates; expose errors | b312f19 |
+| 10 | Room vs per-peer media status; truthful updater errors | a8a8c84 |
+| 11 | Serial bounded SDP handling, exact Opus parameters, no rebuild resurrection | 8c99708 |
+| Review | Late callbacks/answers from disposed connections ignored | 82e67bc |
+| 12 | Dev proxy/runtime, staged delivery, separate Coturn provisioning, browser gate | 851f672 |
+| Cleanup | Seven copied frontend-policy tests removed in favor of production tests | 9a1f824 |
+
+Verification completed:
+- 86 Node tests pass; seven copied-policy tests were removed, not treated as production coverage.
+- TypeScript, web build, three legacy manifest schema checks and git diff --check pass.
+- 72 WebSocket signaling checks pass; this remains a signaling suite.
+- Chrome 156.0.8078.81: two real WebRTC peers with identical names, bidirectional
+  inbound RTP bytes and nonzero audio energy, manual mute/deafen, WS disconnect
+  and audio recovery pass with a generated fake microphone and local server.
+- Two Rust security tests pass, including authentic signature/tampering/wrong key
+  and update serialization.
+- Tauri CLI --no-bundle builds the Windows application. Confirmed that the
+  executable contains the current VoiceChatScreen frontend asset. A plain cargo
+  build alone is insufficient evidence of a bundled release UI.
+- npm audit reports zero vulnerabilities at this check.
+- GitHub workflows pass actionlint; both Bash scripts parse with shfmt in Bash mode.
+  Native Git Bash was blocked by the Windows sandbox; Linux CI includes bash -n.
+- Release preflight runs in an isolated fixture: unsafe push rejected before
+  version mutation, version/Cargo.lock synchronized, stale asset metadata cleared.
+
+Run checks as documented in DEVELOPMENT.md. Node 22.22+ is required. In the Codex
+sandbox a workspace-local Node 22.22.0 was used because the system NVM shim had
+no active version. No global Node configuration was changed.
+
+Before publishing:
+- Coordinate a new desktop/web/backend version. Protected HTTP/reconnect and
+  portable-signature contracts differ from old published clients.
+- Prepare the explicit VPS symlink/shared-env migration in DEVELOPMENT.md.
+  The deployment script refuses to silently move legacy production directories.
+- Review retained release directories, permissions, reserved port 3101 and nginx.
+- Real VPS/PM2/nginx/Coturn execution, cross-network NAT/TURN, physical microphones,
+  mobile background behavior and actual screen capture/system audio remain
+  platform/rollout checks. Installer execution and in-place self-update were not
+  run on the user's installed app.
+- Download media URLs remain bearer links; this is stated in SECURITY_MODEL.md.
+  Already issued LiveKit tokens/sessions are not instantly revoked by WS leave.
+- Lower-priority UI/accessibility and cleanup observations from the broader audit
+  are not certified by this core-fix series; no new global quality score is claimed.
+
+Publication, pushes, tags and live deployment require their separately agreed stage.
+
