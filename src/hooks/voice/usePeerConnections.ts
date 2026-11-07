@@ -131,6 +131,7 @@ export function usePeerConnections({
       };
 
       pc.onicecandidate = ({ candidate }) => {
+        if (peerConnectionsRef.current.get(remotePeerId) !== pc || pc!.connectionState === 'closed') return;
         if (candidate) {
           sendWsMessage({
             type: 'signal',
@@ -141,6 +142,7 @@ export function usePeerConnections({
       };
 
       pc.ontrack = (event) => {
+        if (peerConnectionsRef.current.get(remotePeerId) !== pc || pc!.connectionState === 'closed') return;
         console.log(`[WebRTC] ontrack event from ${remotePeerId}`);
         const remoteStream = event.streams[0] || new MediaStream([event.track]);
         handleRemoteStream(remotePeerId, remoteStream);
@@ -328,6 +330,7 @@ export function usePeerConnections({
             console.log(`[WebRTC] Flushing ${queue.length} queued ICE candidates for ${from}`);
             pendingCandidatesRef.current.delete(from);
             for (const cand of queue) {
+              if (peerConnectionsRef.current.get(from) !== pc) return;
               try {
                 await pc.addIceCandidate(cand);
               } catch (err) {
@@ -338,6 +341,7 @@ export function usePeerConnections({
 
           if (description.type === 'offer') {
             await pc.setLocalDescription();
+            if (peerConnectionsRef.current.get(from) !== pc) return;
             const sdp = pc.localDescription?.sdp
               ? optimizeAudioSdp(pc.localDescription.sdp)
               : undefined;

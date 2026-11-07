@@ -27,7 +27,7 @@ it('does not resurrect connections after rebuild followed by leaving', async () 
 });
 
 it('serializes incoming SDP and cancels queued work when leaving', async () => {
-  browserEnvironment(); let api, renderer, release, active = 0, maximum = 0, calls = 0, deferNext = true;
+  browserEnvironment(); let api, renderer, release, releaseLocal, active = 0, maximum = 0, calls = 0, deferNext = true, deferLocal = false;
   const sent = [];
   globalThis.RTCPeerConnection = class {
     connectionState = 'new'; signalingState = 'stable'; remoteDescription = null;
@@ -37,7 +37,10 @@ it('serializes incoming SDP and cancels queued work when leaving', async () => {
       if (deferNext) { deferNext = false; await new Promise(resolve => { release = resolve; }); }
       this.remoteDescription = description; active--;
     }
-    async setLocalDescription() { this.localDescription = { type: 'answer', sdp: '' }; }
+    async setLocalDescription() {
+      if (deferLocal) { deferLocal = false; await new Promise(resolve => { releaseLocal = resolve; }); }
+      this.localDescription = { type: 'answer', sdp: '' };
+    }
   };
   const { usePeerConnections } = await loadComponent('src/hooks/voice/usePeerConnections.ts');
   const connections = { current: new Map() };
@@ -57,5 +60,10 @@ it('serializes incoming SDP and cancels queued work when leaving', async () => {
     api.clearAllPeerConnections(); const count = sent.length; release();
     await Promise.all([third, fourth]);
     assert.equal(calls, 3); assert.equal(sent.length, count); assert.equal(connections.current.size, 0);
+    deferLocal = true;
+    const lateAnswer = api.handleSignal('remote', offer);
+    await new Promise(resolve => setImmediate(resolve));
+    api.clearAllPeerConnections(); releaseLocal(); await lateAnswer;
+    assert.equal(sent.length, count, 'a late local description must not signal after leaving');
   } finally { api.clearAllPeerConnections(); await act(async () => renderer.unmount()); }
 });
