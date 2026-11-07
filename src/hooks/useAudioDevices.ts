@@ -37,6 +37,7 @@ export function useAudioDevices() {
   const [micVolume, setMicVolume] = useState<number>(0);
 
   const testStreamRef = useRef<MediaStream | null>(null);
+  const testGenerationRef = useRef(0);
   const testAudioCtxRef = useRef<AudioContext | null>(null);
   const testAnimFrameRef = useRef<number | null>(null);
 
@@ -120,6 +121,7 @@ export function useAudioDevices() {
 
   // Start / stop microphone test meter
   const stopMicTest = useCallback(() => {
+    testGenerationRef.current++;
     if (testAnimFrameRef.current) {
       cancelAnimationFrame(testAnimFrameRef.current);
       testAnimFrameRef.current = null;
@@ -138,6 +140,7 @@ export function useAudioDevices() {
 
   const startMicTest = useCallback(async () => {
     stopMicTest();
+    const generation = testGenerationRef.current;
     try {
       let stream: MediaStream;
       try {
@@ -146,8 +149,13 @@ export function useAudioDevices() {
         };
         stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (err) {
+        if (generation !== testGenerationRef.current) return;
         console.warn('[AudioDevices] Failed with selectedInput, falling back to default mic:', err);
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      if (generation !== testGenerationRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
       }
       testStreamRef.current = stream;
 

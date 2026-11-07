@@ -507,6 +507,7 @@ export function useVoiceChat({
     myPeerIdRef.current = initialPeerId;
     setMyPeerId(initialPeerId);
 
+    let cancelled = false;
     const init = async () => {
       initRef.current = init;
       try {
@@ -518,9 +519,11 @@ export function useVoiceChat({
 
         setConnectionStatus('Запрос доступа к микрофону...');
         await initLocalAudio(audioInputDeviceIdRef.current);
+        if (cancelled) return;
         startVad();
         connectWs();
       } catch (err: any) {
+        if (cancelled || err?.name === 'AbortError') return;
         console.error('Init error:', err);
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setError('Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.');
@@ -537,6 +540,7 @@ export function useVoiceChat({
     init();
 
     return () => {
+      cancelled = true;
       stopVad();
       disconnectWs();
       clearAllPeerConnections();
