@@ -41,3 +41,16 @@ restores the original path; this is not a transactional rollback after an
 arbitrary later crash of the new process. Keep deployment recovery artifacts.
 Previously published unsigned portable manifests cannot be installed by the
 hardened client; prepare a signed paired release before rollout.
+
+## Resource budgets
+
+Raw uploads are authorized and rate limited before parsing, with at most four
+concurrent 25 MiB buffers and a 30-second read timeout. Stored uploads are bounded
+to 150 MiB globally and 50 MiB per room; a full budget rejects new files rather
+than evicting another room's files. Media responses use no-store.
+
+The signaling server limits rooms to 64, sockets to 256 globally and 64 per
+direct remote IP. This IP is the trusted TCP peer, not a caller-supplied forwarded
+header. A reverse proxy installation must account for this shared connection
+budget. All outgoing messages enforce a 512 KiB buffered-output guard; raw
+messages, including malformed JSON, have a hard per-socket rate limit.

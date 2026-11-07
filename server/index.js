@@ -1,4 +1,5 @@
 import express from 'express';
+import { createUploadGate } from './resourceLimits.js';
 import { claimSession, releaseSession, authorizeSession, isAllowedOrigin } from './access.js';
 import http from 'http';
 import path from 'path';
@@ -228,12 +229,10 @@ function validateMediaBuffer(buffer) {
 // Ephemeral Media Upload API (In-RAM only)
 app.post(
   '/api/upload',
-  (req, res, next) => {
-    if (!authorizeSession(req, req.headers['x-room-id'], req.headers['x-peer-id'])) {
-      return res.status(401).json({ error: 'unauthorized' });
-    }
-    next();
-  },
+  createUploadGate({
+    authorize: req => authorizeSession(req, req.headers['x-room-id'], req.headers['x-peer-id']),
+    rateLimit: key => checkUploadRateLimit(key),
+  }),
   express.raw({
     type: ['image/*', 'video/*'],
     limit: '25mb',
@@ -243,13 +242,6 @@ app.post(
       if (!authorizeSession(req, req.headers['x-room-id'], req.headers['x-peer-id'])) {
         return res.status(401).json({ error: 'unauthorized' });
       }
-      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
-      if (!checkUploadRateLimit(clientIp)) {
-        return res.status(429).json({
-          error: 'Файл не отправлен: превышен лимит загрузок (не более 15 файлов в минуту). Попробуйте позже.',
-        });
-      }
-
       const roomId = req.headers['x-room-id'];
       if (!roomId || !rooms.has(roomId)) {
         return res.status(400).json({ error: 'Файл не отправлен: активная комната не найдена или закрыта' });
@@ -301,13 +293,10 @@ app.post(
         });
       }
 
-      if (totalUploadsBytes + size > MAX_TOTAL_RAM_UPLOADS) {
-        const sorted = Array.from(ephemeralUploads.entries()).sort((a, b) => a[1].createdAt - b[1].createdAt);
-        for (const [oldId, oldUpload] of sorted) {
-          totalUploadsBytes -= oldUpload.size;
-          ephemeralUploads.delete(oldId);
-          if (totalUploadsBytes + size <= MAX_TOTAL_RAM_UPLOADS) break;
-        }
+      const roomBytes = [...ephemeralUploads.values()].filter(upload => upload.roomId === roomId)
+        .reduce((sum, upload) => sum + upload.size, 0);
+      if (roomBytes + size > 50 * 1024 * 1024 || totalUploadsBytes + size > MAX_TOTAL_RAM_UPLOADS) {
+        return res.status(507).json({ error: 'Лимит хранения вложений достигнут. Попробуйте позже.' });
       }
 
       const fileId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -349,7 +338,7 @@ app.get('/api/media/:fileId/:filename?', (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.setHeader('Cache-Control', 'no-store');
 
   const encodedName = encodeURIComponent(upload.filename);
   res.setHeader('Content-Disposition', `inline; filename="${encodedName}"; filename*=UTF-8''${encodedName}`);
@@ -701,6 +690,10 @@ function safeSend(socket, payload) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     try {
       const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      if (socket.bufferedAmount > 512 * 1024) {
+        socket.close(1013, 'Output buffer limit exceeded');
+        return false;
+      }
       socket.send(data);
       return true;
     } catch (err) {
@@ -758,11 +751,16 @@ server.on('upgrade', (request, socket, head) => {
     socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
     return;
   }
+  if (wss.clients.size >= 256 || [...wss.clients].filter(client => client.remoteIp === request.socket.remoteAddress).length >= 64) {
+    socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
+    return;
+  }
   const pathname = request.url ? new URL(request.url, 'http://localhost').pathname : '';
 
   // Accept both /peerjs/ws and /peerjs (and any subpath like /peerjs/peerjs for compatibility)
   if (pathname.startsWith('/peerjs')) {
     wss.handleUpgrade(request, socket, head, (ws) => {
+      ws.remoteIp = request.socket.remoteAddress;
       wss.emit('connection', ws, request);
     });
   } else {
@@ -788,13 +786,18 @@ wss.on('connection', (ws) => {
     ws.isAlive = true;
   });
 
+  let rawCount = 0, rawResetAt = Date.now();
   ws.on('message', async (raw) => {
+    if (Date.now() - rawResetAt >= 1000) { rawCount = 0; rawResetAt = Date.now(); }
+    if (++rawCount > RATE_LIMIT_HARD_CAP) {
+      ws.close(1008, 'Message rate limit exceeded');
+      return;
+    }
     let rawMsg;
     try {
       rawMsg = JSON.parse(raw.toString());
     } catch (e) {
-      const rawSnippet = String(raw).slice(0, 100);
-      console.warn('[WS] Invalid JSON received:', rawSnippet);
+      // Do not echo untrusted payloads (or credentials) into logs.
       safeSend(ws, createProtocolError('invalid_message', 'Invalid JSON syntax'));
       return;
     }
@@ -837,6 +840,10 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      if (!rooms.has(roomId) && rooms.size >= 64) {
+        safeSend(ws, createProtocolError('server_full', 'Server room capacity reached'));
+        return;
+      }
       const room = getRoom(roomId);
 
       // Check if room already has a client with the same peerId (evict stale duplicate)
@@ -859,6 +866,7 @@ wss.on('connection', (ws) => {
 
       const session = claimSession(roomId, peerId, msg.sessionToken, ws);
       if (!session) {
+        if (room.size === 0) rooms.delete(roomId);
         safeSend(ws, createProtocolError('identity_in_use', 'This identity belongs to another session'));
         return;
       }
