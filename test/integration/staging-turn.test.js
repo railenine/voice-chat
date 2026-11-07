@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { readStaticTurnCredentials } from '../../scripts/staging-turn-config.js';
+import { readStaticTurnCredentials, readLiveKitCredentials } from '../../scripts/staging-turn-config.js';
 
 test('staging reads only static TURN fields without executing or returning other secrets', () => {
   const result = readStaticTurnCredentials('LIVEKIT_API_SECRET=not-for-staging\nCOTURN_USER="test-user"\nCOTURN_PASSWORD=\'literal-$value=123#abc\'\nPORT=3000');
@@ -67,6 +67,25 @@ test('relay probe forces policy on construction/reconfiguration and reports actu
 
 test('TURN entry refuses a non-loopback launch before reading production credentials', () => {
   const result = spawnSync(process.execPath, [fileURLToPath(new URL('../../scripts/staging-turn.js', import.meta.url))], {
+    env: { ...process.env, HOST: '0.0.0.0', PORT: '3102', DISABLE_LIVEKIT: '1' }, encoding: 'utf8',
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /isolated test/);
+});
+
+test('LiveKit staging loads only its required fields and rejects unsafe endpoints', () => {
+  const content = 'LIVEKIT_URL=wss://livekit.example.test\nLIVEKIT_API_KEY=test-only\nLIVEKIT_API_SECRET=test-only-secret\nOTHER_SECRET=not-for-staging';
+  assert.deepEqual(readLiveKitCredentials(content), { LIVEKIT_URL: 'wss://livekit.example.test',
+    LIVEKIT_API_KEY: 'test-only', LIVEKIT_API_SECRET: 'test-only-secret' });
+  for (const url of ['http://livekit.example.test', 'wss://user:password@livekit.example.test',
+    'https://livekit.example.test?token=not-for-staging']) {
+    assert.throws(() => readLiveKitCredentials(content.replace('wss://livekit.example.test', url)), /HTTPS\/WSS/);
+  }
+  assert.throws(() => readLiveKitCredentials('LIVEKIT_URL=wss://livekit.example.test'), /missing/);
+});
+
+test('LiveKit entry refuses non-loopback execution before reading credentials', () => {
+  const result = spawnSync(process.execPath, [fileURLToPath(new URL('../../scripts/staging-livekit.js', import.meta.url))], {
     env: { ...process.env, HOST: '0.0.0.0', PORT: '3102', DISABLE_LIVEKIT: '1' }, encoding: 'utf8',
   });
   assert.equal(result.status, 1);

@@ -76,4 +76,30 @@ describe('Session ownership and protected resources', () => {
     reconnected.ws.send(JSON.stringify({ type: 'leave' })); reconnected.ws.close(); await leaveAck;
     assert.equal((await fetch(base + ice, { headers })).status, 401);
   });
+  it('binds staging LiveKit grants to the server namespace and ignores a requested override', async () => {
+    const owner = await join('namespace-peer');
+    const fields = ['LIVEKIT_API_KEY', 'LIVEKIT_API_SECRET', 'LIVEKIT_ROOM_PREFIX', 'DISABLE_LIVEKIT'];
+    const previous = Object.fromEntries(fields.map(key => [key, process.env[key]]));
+    Object.assign(process.env, { LIVEKIT_API_KEY: 'test-key', LIVEKIT_API_SECRET: 'test-only-secret-at-least-32-characters',
+      LIVEKIT_ROOM_PREFIX: 'rvxis-staging-test-', DISABLE_LIVEKIT: '0' });
+    try {
+      const options = { method: 'POST', headers: { 'content-type': 'application/json', Authorization: `Bearer ${owner.message.sessionToken}` },
+        body: JSON.stringify({ roomId: 'secure-room', peerId: 'namespace-peer', room: 'working-room', prefix: '' }) };
+      const response = await fetch(base + '/api/livekit/token', options);
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      const jwt = JSON.parse(Buffer.from(result.token.split('.')[1], 'base64url'));
+      assert.equal(result.room, 'rvxis-staging-test-secure-room');
+      assert.equal(jwt.video.room, result.room);
+      assert.equal(jwt.video.roomJoin, true);
+      assert.equal(jwt.video.roomAdmin, undefined);
+      assert.deepEqual(jwt.video.canPublishSources, ['screen_share', 'screen_share_audio']);
+      process.env.LIVEKIT_ROOM_PREFIX = 'invalid/prefix';
+      assert.equal((await fetch(base + '/api/livekit/token', options)).status, 500);
+    } finally {
+      for (const key of fields) {
+        if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
+      }
+    }
+  });
 });

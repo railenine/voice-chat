@@ -316,7 +316,7 @@ export function useScreenShare({
         connectedRef.current = true;
         setConnectionState('connected');
         await room.localParticipant.setName(nicknameRef.current);
-        console.log('[LiveKit] Successfully connected to SFU room:', roomId);
+        console.log('[LiveKit] Successfully connected to SFU room:', room.name);
         if (!isCancelled) {
           syncRemoteStreams(room);
         }

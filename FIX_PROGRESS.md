@@ -158,3 +158,22 @@ No claim of real TCP/TLS reachability until user reports. Reference for distingu
 protocol from relayProtocol: https://www.w3.org/TR/webrtc-stats/#dom-rtcicecandidatestats-relayprotocol .
 Production frontend code and backend services unchanged in this step.
 
+
+## LiveKit staging preparation (2026-11-07)
+
+User diagnostics confirmed LiveKit 1.13.7, Docker host network, image digest
+sha256:6fd3b7088874c4d119160dd688798dfec852bc014786d392caad15f6f63912a3,
+HTTP/WSS backend 7880, RTC TCP 7881, RTC UDP range 50000-60000 and external IP
+advertisement. Config is file-mounted, container env shows PATH only; Caddyfile
+/opt/livekit/Caddyfile, persistent Caddy volumes, UFW inactive. No changes on SFU.
+Prepared --livekit staging on the application VPS: existing credentials loaded
+only into process memory, normal frontend without relay probe, HTTPS/WSS URL
+validation, stable revision-specific LiveKit room prefix signed by the backend.
+Default production room names are unchanged when prefix is unset. Client-supplied
+room/prefix overrides do not escape the signed namespace; invalid prefix fails.
+This is logical naming separation on a shared SFU, not tenant/resource isolation.
+Namespace regression failed before and passes after. All 106 tests, typecheck,
+web build, manifest checks and browser voice smoke pass; Bash parsed shfmt.
+Actual LiveKit authentication, publishing, subscription and screen/system audio
+still require the user's two-device test. No production deploy or SFU restart.
+

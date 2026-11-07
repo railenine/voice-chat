@@ -556,6 +556,7 @@ app.get(['/api/livekit/status', '/peerjs/livekit/status'], (req, res) => {
   res.json({
     available: process.env.DISABLE_LIVEKIT !== '1' && Boolean(LIVEKIT_API_SECRET && LIVEKIT_API_KEY),
     url: LIVEKIT_URL,
+    roomPrefix: process.env.LIVEKIT_ROOM_PREFIX || '',
   });
 });
 
@@ -633,7 +634,9 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
   }
 
   try {
-    const cleanRoom = roomId.trim();
+    const prefix = process.env.LIVEKIT_ROOM_PREFIX || '';
+    if (!/^[a-zA-Z0-9_-]{0,64}$/.test(prefix)) throw new Error('Invalid LiveKit room prefix');
+    const cleanRoom = `${prefix}${roomId.trim()}`;
     const cleanNick = rooms.get(session.roomId)?.get(session.peerId)?.nickname || 'User';
     const identity = (peerId && typeof peerId === 'string' ? peerId.trim() : crypto.randomUUID()).slice(0, 64);
 

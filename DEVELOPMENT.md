@@ -103,3 +103,23 @@ local candidate's `relayProtocol` to match the requested profile. `protocol` can
 still be UDP because it describes the relay candidate, not client-to-TURN TLS/TCP.
 `/?turn=udp` is also available; missing profile retains the all-transports check.
 Unknown profiles fail closed with no ICE servers and cannot pass.
+
+### LiveKit staging check
+
+Use a normal frontend archive (no relay probe), extracted into
+`/opt/rvxis-staging/app-<revision>-livekit`, and run `staging-local.sh --livekit`.
+The wrapper requires loopback 3102, loads existing TURN/LiveKit settings into
+memory from the backend .env, validates HTTPS/WSS endpoint settings and enables
+LiveKit. No .env copy, key output, Docker changes or SFU restart is performed.
+The wrapper derives `LIVEKIT_ROOM_PREFIX=rvxis-staging-<revision>-`. The backend
+signs only the prefixed room grant, ignoring client room/prefix overrides.
+An unset prefix retains the existing production room names. Invalid prefixes
+fail token issuance. Public LiveKit status exposes the prefix, never the keys.
+
+This is logical naming separation on a shared SFU, not a separate tenant or
+security boundary: CPU/network and account authority remain shared, and an
+independently authorized issuer could mint tokens for the same room names.
+Use small test sessions and avoid production room IDs. Validate actual screen
+video, screen audio, output devices, deafen, stream changes and stopping capture
+on two devices before any production rollout. The LiveKit connect log now uses
+the actual SDK room name to support verification without printing tokens.

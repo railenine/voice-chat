@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Foreground staging only. No PM2, nginx, firewall, production files or SFU keys.
+# Foreground staging only. No PM2, nginx, firewall or production file changes.
 set -Eeuo pipefail
 umask 077
 entry=server/index.js
-if [[ $# -gt 1 || ( $# -eq 1 && "$1" != --turn ) ]]; then
-  echo 'Usage: staging-local.sh [--turn]' >&2; exit 1;
+if [[ $# -gt 1 ]]; then
+  echo 'Usage: staging-local.sh [--turn|--livekit]' >&2; exit 1;
 fi
-if [[ "${1:-}" == --turn ]]; then entry=scripts/staging-turn.js; fi
+case "${1:-}" in
+  '') ;;
+  --turn) entry=scripts/staging-turn.js ;;
+  --livekit) entry=scripts/staging-livekit.js ;;
+  *) echo 'Usage: staging-local.sh [--turn|--livekit]' >&2; exit 1 ;;
+esac
 app=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 root=/opt/rvxis-staging
 [[ "$app" == "$root"/app-* && -f "$app/dist/index.html" ]] || {
@@ -48,8 +53,10 @@ env -i PATH="$runtime/bin:/usr/bin:/bin" \
 echo 'Staging: 127.0.0.1:3102. Keep this terminal open; Ctrl+C stops it.'
 if [[ "$entry" == server/index.js ]]; then
   echo 'No LiveKit/TURN credentials: screen sharing and relay are outside this first check.'
-else
+elif [[ "$entry" == scripts/staging-turn.js ]]; then
   echo 'Relay-only test: existing TURN credentials in memory, no production service changes.'
+else
+  echo 'LiveKit test: prefixed rooms on the existing SFU; credentials in memory only.'
 fi
 exec env -i PATH="$runtime/bin:/usr/bin:/bin" NODE_ENV=production \
   HOST=127.0.0.1 PORT=3102 DISABLE_LIVEKIT=1 \
