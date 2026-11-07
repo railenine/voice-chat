@@ -1141,6 +1141,7 @@ if (fs.existsSync(distPath)) {
 
 // Start server
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || undefined;
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -1156,7 +1157,7 @@ const isTestEnvironment =
   process.argv.some(arg => typeof arg === 'string' && (arg.includes('test') || arg.includes('unit-tests')));
 
 if (!isTestEnvironment) {
-  server.listen(PORT, () => {
+  server.listen(PORT, HOST, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║

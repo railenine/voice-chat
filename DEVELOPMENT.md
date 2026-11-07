@@ -1,6 +1,8 @@
 # Development and release checks
 
 Use Node.js 22.22 or newer (CI and Docker use the Node 22 line). Run `npm ci`.
+`HOST` optionally restricts the backend listen address; use `HOST=127.0.0.1`
+for a staging backend reached through an SSH tunnel. Unset keeps Node's default.
 Start the API with `npm start` in one terminal, and Vite with `npm run dev` in
 another. The API listens on 3000; the browser UI is http://localhost:5173, with
 same-origin API/WebSocket proxying. Tauri development opens Vite on 5173 and uses
@@ -57,3 +59,19 @@ have uploaded. It refuses to replace an already published tag. The generator
 requires actual installer and portable files with verified signatures; a previous
 manifest cannot supply signatures for new binaries. Unsigned old portable clients
 and anonymous credential API clients need a coordinated upgrade path.
+
+## First staging check over SSH
+
+`scripts/staging-local.sh` starts an extracted source plus built frontend archive
+under `/opt/rvxis-staging/app-<commit>`, on loopback port 3102 in the foreground.
+It verifies the checksum of a separate official Node 22.22.0 download, installs
+locked runtime dependencies without lifecycle scripts, rejects a copied `.env`,
+and starts with a cleared environment. It does not configure PM2/nginx/firewalls
+or reuse production SFU/TURN credentials. Stop it with Ctrl+C.
+
+From Windows, open `ssh -N -o ExitOnForwardFailure=yes -L
+127.0.0.1:3000:127.0.0.1:3102 root@<host>` and visit `http://localhost:3000`.
+This first pass checks browser voice, session behavior and file sharing using
+STUN only. It does not validate relay or screen sharing. Shared browser profiles
+also do not reproduce two independent devices/networks. A separately isolated
+LiveKit setup and a desktop test build remain required before release.
