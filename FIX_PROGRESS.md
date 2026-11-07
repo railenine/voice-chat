@@ -72,3 +72,18 @@ Regression test failed before the change and passed after; all 88 tests,
 typecheck, web build, manifests and browser voice smoke passed. Actual sound
 on the staging user's output device still needs a repeat check.
 
+
+## Staging finding: shutdown with active WebSockets (2026-11-07)
+
+Manual Ctrl+C left the server waiting for open browser sockets. A regression
+test reproduced the hang. SIGINT/SIGTERM now close both transports, send
+WebSocket close code 1001 and force remaining connections closed after 5s.
+Repeated signals are idempotent. Tests exercise production handlers via child
+process signal events with real sockets (Windows kill does not deliver Unix
+signal handlers); actual Linux Ctrl+C still needs a staging repeat check.
+The reported external-link button issue did not reproduce: added tests verify
+the actual confirmation click synchronously calls window.open before onClose,
+and unsafe schemes are rejected. Navigation code unchanged; OS browser launch
+from an installed Tauri build remains unverified. All 92 tests, typecheck,
+web build and manifest checks pass.
+

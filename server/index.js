@@ -1174,24 +1174,37 @@ if (!isTestEnvironment) {
   });
 }
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
+// HTTP close alone leaves upgraded WebSockets open. Close both transports,
+// with a deadline for clients that never finish the close handshake.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received. Shutting down gracefully...`);
   clearInterval(pingInterval);
-  server.close(() => {
+  const deadline = setTimeout(() => {
+    console.warn('[Server] Shutdown deadline reached; closing remaining connections');
+    for (const ws of wss.clients) ws.terminate();
+    server.closeAllConnections();
+    process.exit(0);
+  }, 5000).unref();
+  let httpClosed = false;
+  let webSocketsClosed = false;
+  const finish = () => {
+    if (!httpClosed || !webSocketsClosed) return;
+    clearTimeout(deadline);
     console.log('Server closed');
     process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down gracefully...');
-  clearInterval(pingInterval);
+  };
+  wss.close(() => { webSocketsClosed = true; finish(); });
+  for (const ws of wss.clients) ws.close(1001, 'Server shutting down');
   server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
+    httpClosed = true;
+    finish();
   });
-});
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 export {
   app,

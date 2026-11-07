@@ -3,6 +3,9 @@
 Use Node.js 22.22 or newer (CI and Docker use the Node 22 line). Run `npm ci`.
 `HOST` optionally restricts the backend listen address; use `HOST=127.0.0.1`
 for a staging backend reached through an SSH tunnel. Unset keeps Node's default.
+SIGINT/SIGTERM stop HTTP and WebSocket listeners, notify connected clients with
+WebSocket code 1001, and force-close remaining connections after five seconds.
+Foreground staging does not automatically restart; rerun its script after stopping.
 Start the API with `npm start` in one terminal, and Vite with `npm run dev` in
 another. The API listens on 3000; the browser UI is http://localhost:5173, with
 same-origin API/WebSocket proxying. Tauri development opens Vite on 5173 and uses
