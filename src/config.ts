@@ -1,4 +1,5 @@
 export const APP_VERSION = '0.2.2';
+export const IS_STAGING_BUILD = import.meta.env?.VITE_RVXIS_STAGING === '1';
 export const PRODUCTION_SERVER = 'https://rvxis.site';
 export const PRODUCTION_WS = 'wss://rvxis.site/peerjs/ws';
 
@@ -16,14 +17,14 @@ export const isTauri = (): boolean =>
 
 export function getBackendBaseUrl(): string {
   if (isTauri()) {
-    return (import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
+    return (IS_STAGING_BUILD || import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
   }
   return typeof window !== 'undefined' ? window.location.origin : PRODUCTION_SERVER;
 }
 
 export function getWebSocketUrl(): string {
   if (isTauri()) {
-    return (import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_WS : PRODUCTION_WS;
+    return (IS_STAGING_BUILD || import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_WS : PRODUCTION_WS;
   }
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${wsProtocol}//${window.location.host}/peerjs/ws`;
@@ -31,7 +32,7 @@ export function getWebSocketUrl(): string {
 
 export function getShareUrl(roomId: string): string {
   if (isTauri()) {
-    const base = (import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
+    const base = (IS_STAGING_BUILD || import.meta.env?.DEV || USE_LOCAL_SERVER_FOR_TAURI_TESTS) ? LOCAL_DEV_SERVER : PRODUCTION_SERVER;
     return `${base}?room=${roomId}`;
   }
   return `${window.location.origin}?room=${roomId}`;

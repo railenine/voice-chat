@@ -6,6 +6,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub const MAX_UPDATE_BYTES: u64 = 128 * 1024 * 1024;
 static UPDATING: AtomicBool = AtomicBool::new(false);
 
+pub fn ensure_updates_enabled() -> Result<(), String> {
+    if cfg!(feature = "staging") {
+        return Err("Updates are disabled in the staging build".into());
+    }
+    Ok(())
+}
+
 pub struct UpdateGuard;
 impl UpdateGuard {
     pub fn acquire() -> Result<Self, String> {
@@ -42,6 +49,10 @@ pub fn verify_download(path: &std::path::Path, signature: &str) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn staging_update_guard_matches_build_mode() {
+        assert_eq!(ensure_updates_enabled().is_err(), cfg!(feature = "staging"));
+    }
     // Public prehashed test vector from minisign-verify (ISC license).
     const KEY: &str = "untrusted comment: test key\nRWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3";
     const SIG: &str = "untrusted comment: signature from minisign secret key\nRUQf6LRCGA9i559r3g7V1qNyJDApGip8MfqcadIgT9CuhV3EMhHoN1mGTkUidF/z7SrlQgXdy8ofjb7bNJJylDOocrCo8KLzZwo=\ntrusted comment: timestamp:1556193335\tfile:test\ny/rUw2y8/hOUYjZU71eHp/Wo1KZ40fGy2VJEDl34XMJM+TX48Ss/17u3IvIfbVR1FkZZSNCisQbuQY+bHwhEBg==";

@@ -5,6 +5,9 @@ description = "RVxis - P2P WebRTC Voice Chat"
 authors = ["railenine"]
 edition = "2021"
 
+[features]
+staging = []
+
 [lib]
 name = "voice_chat_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]

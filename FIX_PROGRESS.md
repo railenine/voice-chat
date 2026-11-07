@@ -177,3 +177,20 @@ web build, manifest checks and browser voice smoke pass; Bash parsed shfmt.
 Actual LiveKit authentication, publishing, subscription and screen/system audio
 still require the user's two-device test. No production deploy or SFU restart.
 
+
+## Windows staging build preparation (2026-11-08)
+
+User confirmed LiveKit image/restart, tab audio, selected output/deafen/viewer
+closure, then full-screen Windows system audio independent of microphone and
+clean stop. These are manual two-device reports, not a load or endurance test.
+Next is a dedicated desktop build. VITE_RVXIS_STAGING routes native clients to
+localhost:3000 and disables updater checks/install and URL mocks; STAGING label
+is visible. Cargo staging feature omits updater plugin and denies portable
+updates before network/file operations. Application ID differs from production.
+The build script uses a clean committed snapshot, enables the local testing
+flag only in that copy, builds without installer, reuses dependency caches,
+runs staging Rust tests and verifies embedded bundle/identifier/guard bytes.
+108 JS tests/typecheck/build/manifests and 3 ordinary-mode Rust tests passed.
+Final staging EXE build metadata and native staging test results are recorded
+separately in outputs. No production publication or deployed code changes.
+

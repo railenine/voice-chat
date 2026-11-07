@@ -123,3 +123,21 @@ Use small test sessions and avoid production room IDs. Validate actual screen
 video, screen audio, output devices, deafen, stream changes and stopping capture
 on two devices before any production rollout. The LiveKit connect log now uses
 the actual SDK room name to support verification without printing tokens.
+
+### Standalone Windows staging build
+
+Run `node scripts/build-staging-desktop.js --work-dir <scratch> --output-dir <outputs>`
+on Windows with installed dependencies, Rust/SDK and cached locked Cargo packages.
+It archives a clean committed source snapshot, links or copies existing node_modules and
+sets the manual local-server flag only in that snapshot. The main checkout stays
+production-configured. VITE_RVXIS_STAGING=1 selects localhost:3000, displays a
+STAGING label and disables updater checks/installation and mock update modes.
+The Cargo staging feature omits the updater plugin and refuses native portable
+updates before network/file operations. The builder combines both flags, changes
+the application identifier to com.railenine.voicechat.staging (separate webview
+data), builds without an installer, runs native staging tests and verifies the
+embedded frontend/app identifier/update guard before writing a versioned EXE and
+checksum metadata. It does not sign, publish, tag or deploy. Keep the existing SSH
+tunnel running on each Windows test PC and close other room clients during tests.
+This build does not validate production-channel self-update; that is a separate
+controlled test with signed artifacts and explicit publication boundaries.

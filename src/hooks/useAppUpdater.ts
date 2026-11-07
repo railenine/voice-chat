@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { isTauri, getBackendBaseUrl, APP_VERSION } from '../config';
+import { isTauri, getBackendBaseUrl, APP_VERSION, IS_STAGING_BUILD } from '../config';
 import { isNewerVersion, parseSemver } from '../utils/semver';
 import { UpdateInfo, UpdateStatus } from '../utils/updaterTypes';
 import { shouldAutoOpenUpdateModal, buildUpdaterUrl } from '../utils/updaterPolicy';
@@ -14,6 +14,7 @@ const DISMISSED_VERSION_KEY = 'rvxis_dismissed_update_version';
 
 // Optional dev/test mock: enabled ONLY if explicitly requested via URL (?mock_update=true)
 const isMockUpdateEnabled = (): boolean =>
+  !IS_STAGING_BUILD &&
   typeof window !== 'undefined' &&
   (new URLSearchParams(window.location.search).has('mock_update') ||
    new URLSearchParams(window.location.search).has('mock-update'));
@@ -29,7 +30,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
   const isInRoom = !!options?.isInRoom;
   const [status, setStatus] = useState<UpdateStatus>(isMockUpdateEnabled() ? 'available' : 'idle');
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(isMockUpdateEnabled() ? MOCK_UPDATE_INFO : null);
-  const [isPortable, setIsPortable] = useState<boolean>(false);
+  const [isPortable, setIsPortable] = useState<boolean>(IS_STAGING_BUILD);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [downloadedBytes, setDownloadedBytes] = useState<number>(0);
   const [totalBytes, setTotalBytes] = useState<number>(0);
@@ -39,6 +40,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
 
   // Check if running in portable mode on desktop
   useEffect(() => {
+    if (IS_STAGING_BUILD) return;
     if (isTauri()) {
       import('@tauri-apps/api/core')
         .then(({ invoke }) => {
@@ -51,6 +53,12 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
   }, []);
 
   const checkForUpdates = useCallback(async (manual = false) => {
+    if (IS_STAGING_BUILD) {
+      setError('Обновления отключены в тестовой сборке');
+      setStatus('error');
+      if (manual) setIsModalOpen(true);
+      return;
+    }
     if (isMockUpdateEnabled()) {
       setStatus('available');
       setUpdateInfo(MOCK_UPDATE_INFO);
@@ -260,6 +268,11 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
 
   // Install update: supports both 'portable' in-place swap and 'installer' setup
   const installUpdate = useCallback(async (mode?: 'portable' | 'installer') => {
+    if (IS_STAGING_BUILD) {
+      setError('Обновления отключены в тестовой сборке');
+      setStatus('error');
+      return;
+    }
     if (isMockUpdateEnabled()) {
       setStatus('downloading');
       setDownloadProgress(20);
@@ -373,6 +386,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
 
   // Auto-check on startup + periodic check every 30 minutes
   useEffect(() => {
+    if (IS_STAGING_BUILD) return;
     const timer = setTimeout(() => {
       checkForUpdates(false);
     }, 4000);

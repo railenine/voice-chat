@@ -169,6 +169,7 @@ async fn apply_portable_update(
     use tauri::Emitter;
     use tokio::io::AsyncWriteExt;
 
+    portable_security::ensure_updates_enabled()?;
     let _guard = portable_security::UpdateGuard::acquire()?;
     if !download_url.starts_with("https://") || signature.trim().is_empty() {
         return Err("Обновление требует HTTPS и подписи издателя".into());
@@ -331,10 +332,12 @@ async fn apply_portable_update(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
+    #[cfg(not(feature = "staging"))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    builder
         .setup(|app| {
             // Clean up any leftover .old and .update.tmp files from previous portable updates
             if let Ok(current_exe) = std::env::current_exe() {
