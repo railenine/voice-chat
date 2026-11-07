@@ -1,3 +1,4 @@
+import { roomAuthorization } from '../utils/roomSession';
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   MessageSquare,
@@ -281,6 +282,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       method: 'POST',
       headers: {
         'Content-Type': file.type || 'application/octet-stream',
+        ...roomAuthorization(roomId),
         'x-room-id': roomId,
         'x-peer-id': myPeerId,
         'x-filename': encodeURIComponent(file.name),

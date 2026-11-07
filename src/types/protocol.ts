@@ -56,6 +56,7 @@ export type ProtocolErrorCode =
 
 export interface JoinMessage {
   type: 'join';
+  sessionToken?: string;
   roomId: string;
   peerId: string;
   nickname?: string;
@@ -116,6 +117,7 @@ export type ClientMessage =
 
 export interface RoomStateMessage {
   type: 'room-state';
+  sessionToken: string;
   peers: PeerInfo[];
   messages: ChatMessage[];
   iceServers: RTCIceServer[];

@@ -516,22 +516,6 @@ export function useVoiceChat({
           );
         }
 
-        // Pre-fetch ICE servers from backend
-        try {
-          const iceRes = await fetch(`${getBackendBaseUrl()}/peerjs/ice-servers`);
-          if (iceRes.ok) {
-            const iceData = await iceRes.json();
-            if (Array.isArray(iceData?.iceServers) && iceData.iceServers.length > 0) {
-              iceServersRef.current = iceData.iceServers;
-              console.log(
-                `[ICE] Pre-fetched ${iceData.iceServers.length} ICE servers (Coturn TURN ready)`
-              );
-            }
-          }
-        } catch (iceErr) {
-          console.warn('[ICE] Pre-fetch failed, will use room-state or fallback:', iceErr);
-        }
-
         setConnectionStatus('Запрос доступа к микрофону...');
         await initLocalAudio(audioInputDeviceIdRef.current);
         startVad();

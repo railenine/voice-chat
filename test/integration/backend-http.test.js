@@ -68,7 +68,7 @@ describe('Backend HTTP Integration Tests (Real Server & Endpoints)', () => {
     assert.strictEqual(data.error, 'invalid_room_id');
   });
 
-  it('POST /api/livekit/token returns 503 when LiveKit secret is missing in env', async () => {
+  it('POST /api/livekit/token rejects unauthenticated requests even when LiveKit is unconfigured', async () => {
     const origKey = process.env.LIVEKIT_API_KEY;
     const origSecret = process.env.LIVEKIT_API_SECRET;
     delete process.env.LIVEKIT_API_KEY;
@@ -84,9 +84,9 @@ describe('Backend HTTP Integration Tests (Real Server & Endpoints)', () => {
           nickname: 'Alice',
         }),
       });
-      assert.strictEqual(res.status, 503);
+      assert.strictEqual(res.status, 401);
       const data = await res.json();
-      assert.strictEqual(data.error, 'livekit_not_configured');
+      assert.strictEqual(data.error, 'unauthorized');
     } finally {
       if (origKey) process.env.LIVEKIT_API_KEY = origKey;
       if (origSecret) process.env.LIVEKIT_API_SECRET = origSecret;

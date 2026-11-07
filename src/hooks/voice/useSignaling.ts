@@ -1,3 +1,4 @@
+import { getRoomToken, setRoomToken } from '../../utils/roomSession';
 import { useState, useRef, useCallback, useEffect, type MutableRefObject } from 'react';
 import { getWebSocketUrl } from '../../config';
 import { playJoinSound, playLeaveSound } from '../../utils/soundEffects';
@@ -136,6 +137,7 @@ export function useSignaling({
         ws.send(
           JSON.stringify({
             type: 'join',
+            sessionToken: getRoomToken(roomId),
             roomId,
             peerId: myPeerIdRef.current,
             nickname: currentNicknameRef.current,
@@ -169,6 +171,7 @@ export function useSignaling({
 
         // Initial room state: list of existing peers
         if (type === 'room-state') {
+          setRoomToken(roomId, msg.sessionToken);
           console.log(`[WS] Received room-state with ${msg.peers?.length || 0} peers`);
           playJoinSound();
           wasConnectedRef.current = true;

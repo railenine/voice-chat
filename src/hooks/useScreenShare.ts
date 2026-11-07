@@ -1,3 +1,4 @@
+import { roomAuthorization } from '../utils/roomSession';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Room,
@@ -238,7 +239,7 @@ export function useScreenShare({
         // Request token from backend
         const tokenRes = await fetch(`${getBackendBaseUrl()}/peerjs/livekit/token`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...roomAuthorization(roomId) },
           body: JSON.stringify({ roomId, nickname, peerId }),
         });
 

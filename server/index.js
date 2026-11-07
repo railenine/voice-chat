@@ -1,4 +1,5 @@
 import express from 'express';
+import { claimSession, releaseSession, authorizeSession, isAllowedOrigin } from './access.js';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,7 +7,7 @@ import cors from 'cors';
 import fs from 'fs';
 import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import { AccessToken } from 'livekit-server-sdk';
+import { AccessToken, TrackSource } from 'livekit-server-sdk';
 import {
   ROOM_ID_REGEX,
   PEER_ID_REGEX,
@@ -43,54 +44,13 @@ const IS_PROD = NODE_ENV === 'production';
 const app = express();
 const server = http.createServer(app);
 
-// CORS configuration: support whitelist via CORS_ORIGIN env, with sensible safe defaults
-const rawCorsOrigin = process.env.CORS_ORIGIN;
-let corsMiddleware;
+// Apply the same exact Origin policy to HTTP and WebSocket upgrades.
+app.use((req, res, next) => {
+  if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: 'origin_not_allowed' });
+  next();
+});
+app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }));
 
-if (rawCorsOrigin && rawCorsOrigin !== '*') {
-  const allowedOrigins = rawCorsOrigin.split(',').map((s) => s.trim().toLowerCase());
-  corsMiddleware = cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, server-to-server)
-      if (!origin) return callback(null, true);
-      const lower = origin.toLowerCase();
-      const isAllowed = allowedOrigins.some((allowed) => {
-        return (
-          lower === allowed ||
-          lower.startsWith('tauri://') ||
-          lower.startsWith('http://tauri.') ||
-          (!IS_PROD && (lower.includes('localhost') || lower.includes('127.0.0.1')))
-        );
-      });
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-  });
-} else if (IS_PROD) {
-  // Production default when CORS_ORIGIN is not explicitly specified
-  corsMiddleware = cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const lower = origin.toLowerCase();
-      if (
-        lower.includes('rvxis.site') ||
-        lower.startsWith('tauri://') ||
-        lower.startsWith('http://tauri.')
-      ) {
-        return callback(null, true);
-      }
-      return callback(new Error('Not allowed by CORS'));
-    },
-  });
-} else {
-  // Development / Test mode default: permissive
-  corsMiddleware = cors();
-}
-
-app.use(corsMiddleware);
 // Body parser: strictly limit payload size to 10kb to prevent memory DoS attacks
 app.use(express.json({ limit: '10kb' }));
 
@@ -268,12 +228,21 @@ function validateMediaBuffer(buffer) {
 // Ephemeral Media Upload API (In-RAM only)
 app.post(
   '/api/upload',
+  (req, res, next) => {
+    if (!authorizeSession(req, req.headers['x-room-id'], req.headers['x-peer-id'])) {
+      return res.status(401).json({ error: 'unauthorized' });
+    }
+    next();
+  },
   express.raw({
     type: ['image/*', 'video/*'],
     limit: '25mb',
   }),
   (req, res) => {
     try {
+      if (!authorizeSession(req, req.headers['x-room-id'], req.headers['x-peer-id'])) {
+        return res.status(401).json({ error: 'unauthorized' });
+      }
       const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
       if (!checkUploadRateLimit(clientIp)) {
         return res.status(429).json({
@@ -587,7 +556,8 @@ function getIceServers(peerId = 'voicechat') {
 }
 
 app.get('/peerjs/ice-servers', (req, res) => {
-  const peerId = typeof req.query.peerId === 'string' ? req.query.peerId : 'client';
+  const { roomId, peerId } = req.query;
+  if (!authorizeSession(req, roomId, peerId)) return res.status(401).json({ error: 'unauthorized' });
   res.json({ iceServers: getIceServers(peerId) });
 });
 
@@ -659,6 +629,9 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
     }
   }
 
+  const session = authorizeSession(req, roomId.trim(), typeof peerId === 'string' ? peerId.trim() : '');
+  if (!session) return res.status(401).json({ error: 'unauthorized' });
+
   // Graceful check if SFU credentials are configured
   const currentKey = process.env.LIVEKIT_API_KEY || '';
   const currentSecret = process.env.LIVEKIT_API_SECRET || '';
@@ -671,13 +644,13 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
 
   try {
     const cleanRoom = roomId.trim();
-    const cleanNick = sanitizeNickname(nickname);
+    const cleanNick = rooms.get(session.roomId)?.get(session.peerId)?.nickname || 'User';
     const identity = (peerId && typeof peerId === 'string' ? peerId.trim() : crypto.randomUUID()).slice(0, 64);
 
     const at = new AccessToken(currentKey, currentSecret, {
       identity,
       name: cleanNick,
-      ttl: '12h',
+      ttl: '10m',
     });
 
     at.addGrant({
@@ -685,7 +658,8 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
       room: cleanRoom,
       canPublish: true,
       canSubscribe: true,
-      canPublishData: true,
+      canPublishData: false,
+      canPublishSources: [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO],
     });
 
     const token = await at.toJwt();
@@ -749,11 +723,12 @@ function broadcastToRoom(roomId, message, excludePeerId = null) {
   }
 }
 
-function removeClientFromRoom(ws) {
+function removeClientFromRoom(ws, intentional = false) {
   const meta = clientMeta.get(ws);
   if (!meta) return;
 
   const { roomId, peerId } = meta;
+  releaseSession(roomId, peerId, ws, intentional);
   clientMeta.delete(ws);
 
   const room = rooms.get(roomId);
@@ -779,6 +754,10 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
 // Handle upgrade for paths starting with /peerjs
 server.on('upgrade', (request, socket, head) => {
+  if (!isAllowedOrigin(request.headers.origin)) {
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+    return;
+  }
   const pathname = request.url ? new URL(request.url, 'http://localhost').pathname : '';
 
   // Accept both /peerjs/ws and /peerjs (and any subpath like /peerjs/peerjs for compatibility)
@@ -853,8 +832,10 @@ wss.on('connection', (ws) => {
     if (msg.type === 'join') {
       const { roomId, peerId, nickname, isMuted, isDeafened } = msg;
 
-      // Cleanup any previous room for this socket
-      removeClientFromRoom(ws);
+      if (clientMeta.has(ws)) {
+        safeSend(ws, createProtocolError('already_joined', 'Leave the current room before joining again'));
+        return;
+      }
 
       const room = getRoom(roomId);
 
@@ -873,6 +854,12 @@ wss.on('connection', (ws) => {
             `Комната заполнена (максимум ${MAX_ROOM_PEERS} участников для прямого P2P-аудио)`
           )
         );
+        return;
+      }
+
+      const session = claimSession(roomId, peerId, msg.sessionToken, ws);
+      if (!session) {
+        safeSend(ws, createProtocolError('identity_in_use', 'This identity belongs to another session'));
         return;
       }
 
@@ -917,6 +904,7 @@ wss.on('connection', (ws) => {
       // Send existing peers, in-memory messages, and iceServers to joining client
       safeSend(ws, {
         type: 'room-state',
+        sessionToken: session.token,
         peers: existingPeers,
         messages: room.messages || [],
         iceServers: getIceServers(peerId),
@@ -1079,7 +1067,7 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.type === 'leave') {
-      removeClientFromRoom(ws);
+      removeClientFromRoom(ws, true);
       return;
     }
   });
