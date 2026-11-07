@@ -225,14 +225,6 @@ export function useVoiceChat({
       if (Array.isArray(msg.iceServers) && msg.iceServers.length > 0) {
         iceServersRef.current = msg.iceServers;
       }
-      if (msg.peer.nickname && msg.peer.nickname !== 'Аноним') {
-        for (const [oldId, oldInfo] of peersInfoRef.current.entries()) {
-          if (oldId !== msg.peer.peerId && oldInfo.nickname === msg.peer.nickname) {
-            console.log(`[WebRTC] Removing duplicate old peer ${oldId} for ${msg.peer.nickname}`);
-            cleanupPeer(oldId);
-          }
-        }
-      }
       peersInfoRef.current.set(msg.peer.peerId, msg.peer);
       const savedVol = getSavedVolume(msg.peer.peerId, msg.peer.nickname);
       peerVolumesRef.current.set(msg.peer.peerId, savedVol);
