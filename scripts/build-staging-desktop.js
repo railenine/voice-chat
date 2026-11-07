@@ -7,9 +7,11 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
 const options = {};
-for (let i = 0; i < args.length; i += 2) {
+for (let i = 0; i < args.length; i += 1) {
+  if (args[i] === '--installer') { options.installer = true; continue; }
   if (!['--work-dir', '--output-dir'].includes(args[i]) || !args[i + 1]) throw new Error('Use --work-dir <path> --output-dir <path>');
   options[args[i]] = path.resolve(args[i + 1]);
+  i += 1;
 }
 if (process.platform !== 'win32' || !options['--work-dir'] || !options['--output-dir']) throw new Error('Windows and explicit work/output directories are required.');
 const run = (command, arguments_, cwd = root, env = process.env) => execFileSync(command, arguments_, { cwd, env, stdio: 'inherit' });
@@ -47,14 +49,17 @@ run(process.execPath, [path.join(source, 'node_modules/vite/bin/vite.js'), 'buil
 const base = JSON.parse(fs.readFileSync(path.join(source, 'src-tauri/tauri.conf.json'), 'utf8'));
 const override = {
   productName: 'RVxis Staging', identifier: 'com.railenine.voicechat.staging',
+  mainBinaryName: 'rvxis-staging',
+  bundle: { createUpdaterArtifacts: false, useLocalToolsDir: true, windows: { nsis: { installMode: 'currentUser' } } },
   // An absolute Windows path can deserialize as a C: URL, disabling embedding.
   build: { beforeBuildCommand: '', frontendDist: '../dist' },
   app: { windows: base.app.windows.map(window => ({ ...window, title: 'RVxis Staging — test only' })) },
 };
-run(process.execPath, [path.join(source, 'node_modules/@tauri-apps/cli/tauri.js'), 'build', '--no-bundle',
+const buildStarted = Date.now();
+run(process.execPath, [path.join(source, 'node_modules/@tauri-apps/cli/tauri.js'), 'build', ...(options.installer ? ['--bundles', 'nsis'] : ['--no-bundle']),
   '--features', 'staging', '--config', JSON.stringify(override), '--', '--locked', '--offline'], path.join(source, 'src-tauri'), env);
 run('cargo', ['test', '--manifest-path', path.join(source, 'src-tauri/Cargo.toml'), '--lib', '--features', 'staging', '--release', '--locked', '--offline'], source, env);
-const binary = fs.readFileSync(path.join(env.CARGO_TARGET_DIR, 'release/voice-chat.exe'));
+const binary = fs.readFileSync(path.join(env.CARGO_TARGET_DIR, 'release/rvxis-staging.exe'));
 const html = fs.readFileSync(path.join(source, 'dist/index.html'), 'utf8');
 const asset = html.match(/assets\/(index-[^"/]+\.js)/)?.[1];
 if (!asset || !binary.includes(Buffer.from(asset)) || !binary.includes(Buffer.from('com.railenine.voicechat.staging')) ||
@@ -64,6 +69,16 @@ fs.writeFileSync(path.join(options['--output-dir'], file), binary);
 const metadata = { sourceCommit: revision, file, bytes: binary.length,
   sha256: crypto.createHash('sha256').update(binary).digest('hex'), identifier: override.identifier,
   backend: 'http://localhost:3000', websocket: 'ws://localhost:3000/peerjs/ws',
-  updatesEnabled: false, installerBuilt: false, productionPublished: false };
-fs.writeFileSync(path.join(options['--output-dir'], 'staging-desktop-metadata.json'), JSON.stringify(metadata, null, 2));
+  binaryName: override.mainBinaryName, updatesEnabled: false, installerBuilt: false, productionPublished: false };
+if (options.installer) {
+  const directory = path.join(env.CARGO_TARGET_DIR, 'release/bundle/nsis');
+  const candidates = fs.readdirSync(directory).filter(name => /staging.*setup\.exe$/i.test(name) && fs.statSync(path.join(directory, name)).mtimeMs >= buildStarted);
+  if (candidates.length !== 1) throw new Error('Expected exactly one freshly built staging installer.');
+  const installer = fs.readFileSync(path.join(directory, candidates[0]));
+  metadata.installer = { file: `RVxis-Staging-Setup-${short}.exe`, bytes: installer.length,
+    sha256: crypto.createHash('sha256').update(installer).digest('hex'), installMode: 'currentUser' };
+  fs.writeFileSync(path.join(options['--output-dir'], metadata.installer.file), installer);
+  metadata.installerBuilt = true;
+}
+fs.writeFileSync(path.join(options['--output-dir'], options.installer ? 'staging-installer-metadata.json' : 'staging-desktop-metadata.json'), JSON.stringify(metadata, null, 2));
 console.log(JSON.stringify(metadata, null, 2));

@@ -215,3 +215,15 @@ copy parsed by shfmt and CI validated by actionlint. Actual Linux/PM2 execution
 remains pending user run. This is control-flow testing with health fixtures,
 not a production migration/nginx/media or desktop updater certification.
 
+User subsequently reported all four delivery cases passed on Node v22.22.0,
+productionPidAndPathsUnchanged=true and isolatedPm2Stopped=true, private root
+/opt/rvxis-deploy-smoke/run-3ae19da8ffcc84ae. This is user-run evidence.
+
+## Separate staging installer preparation (2026-11-08)
+
+Extended the isolated desktop builder with optional NSIS/currentUser packaging,
+unique rvxis-staging.exe process name and disabled updater artifacts. Kept
+separate product/identifier and added fresh-artifact selection plus installer
+checksum metadata. Build and manual install evidence are recorded in outputs.
+No production publication, deployment or installer execution is performed.
+

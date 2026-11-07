@@ -167,3 +167,15 @@ Success requires four passed cases, unchanged working PID/paths and released
 test ports. This validates delivery control flow with synthetic health servers;
 it does not itself test nginx, real application media sessions, the one-time
 production directory migration or desktop self-update.
+
+### Separate Windows staging installer
+
+Add `--installer` to `scripts/build-staging-desktop.js` with the same explicit
+work/output directories. It builds an NSIS current-user installer, disables
+updater artifact creation and uses `rvxis-staging.exe`, product `RVxis Staging`
+and identifier `com.railenine.voicechat.staging`. These separate the process,
+default install directory, uninstall entry and WebView profile from production.
+Keep the default staging installation path. The builder accepts only one freshly
+generated staging setup file and writes its SHA-256 to separate installer metadata.
+The normal checkout retains its production configuration. Installing, uninstalling
+and production-channel self-update require separate manual verification.
