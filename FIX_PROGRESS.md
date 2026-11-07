@@ -143,3 +143,18 @@ parsed by shfmt. Real Chromium 156 verified the forced policy and nonpassing
 empty-media report. Actual TURN allocations/audio and individual UDP/TCP/TLS
 paths remain untested until the user runs the two-device staging check.
 
+
+## UDP relay confirmed; TCP/TLS profiles prepared (2026-11-07)
+
+User supplied reports from both Windows PCs: relay policy, connected, selected
+local/remote relay candidates, relayProtocol udp, nonzero incoming/outgoing RTP
+bytes, passed true. This confirms the selected UDP TURN path in those networks.
+Added separate ?turn=udp|tcp|tls profiles to the isolated probe, filtering ICE
+server URLs on construction and setConfiguration. Passed requires the actual
+relayProtocol to match the requested profile; invalid profiles have no servers.
+The 4 targeted staging tests pass. Native Chromium 156 independently verified
+all 3 URL filters and fail-closed unknown profile without allocating media.
+No claim of real TCP/TLS reachability until user reports. Reference for distinguishing
+protocol from relayProtocol: https://www.w3.org/TR/webrtc-stats/#dom-rtcicecandidatestats-relayprotocol .
+Production frontend code and backend services unchanged in this step.
+

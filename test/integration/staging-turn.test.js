@@ -20,13 +20,14 @@ test('relay probe forces policy on construction/reconfiguration and reports actu
   class FakePeer {
     connectionState = 'connected';
     localType = 'relay';
+    relayProtocol = 'udp';
     constructor(configuration) { this.configuration = configuration; }
     setConfiguration(configuration) { this.configuration = configuration; }
     getConfiguration() { return this.configuration; }
     async getStats() { return new Map([
       ['transport', { type: 'transport', selectedCandidatePairId: 'pair' }],
       ['pair', { type: 'candidate-pair', localCandidateId: 'local', remoteCandidateId: 'remote' }],
-      ['local', { candidateType: this.localType, protocol: 'udp', relayProtocol: 'udp', address: 'not-for-report' }],
+      ['local', { candidateType: this.localType, protocol: 'udp', relayProtocol: this.relayProtocol, address: 'not-for-report' }],
       ['remote', { candidateType: 'relay', address: 'not-for-report' }],
       ['in', { type: 'inbound-rtp', kind: 'audio', bytesReceived: 123 }],
       ['out', { type: 'outbound-rtp', kind: 'audio', bytesSent: 456 }],
@@ -34,7 +35,7 @@ test('relay probe forces policy on construction/reconfiguration and reports actu
   }
   const window = { RTCPeerConnection: FakePeer };
   vm.runInNewContext(fs.readFileSync(new URL('../../scripts/staging-relay-probe.js', import.meta.url), 'utf8'),
-    { window, console: { info() {} } });
+    { window, URL, URLSearchParams, console: { info() {} } });
   const peer = new window.RTCPeerConnection({ iceTransportPolicy: 'all', iceServers: [{ credential: 'not-for-report' }] });
   assert.equal(peer.getConfiguration().iceTransportPolicy, 'relay');
   peer.setConfiguration({ iceTransportPolicy: 'all', iceServers: [{ credential: 'not-for-report' }] });
@@ -47,6 +48,21 @@ test('relay probe forces policy on construction/reconfiguration and reports actu
   assert.equal(report[0].passed, false);
   peer.connectionState = 'closed';
   assert.equal((await window.rvxTurnReport()).length, 0);
+  const urls = ['stun:rvxis.site:3478', 'turn:rvxis.site:3478?transport=udp',
+    'turn:rvxis.site:3478?transport=tcp', 'turns:rvxis.site:5349?transport=tcp'];
+  for (const [profile, expected] of [['udp', urls[1]], ['tcp', urls[2]], ['tls', urls[3]]]) {
+    const isolated = { RTCPeerConnection: FakePeer, location: { search: `?turn=${profile}` } };
+    vm.runInNewContext(fs.readFileSync(new URL('../../scripts/staging-relay-probe.js', import.meta.url), 'utf8'),
+      { window: isolated, URL, URLSearchParams, console: { info() {} } });
+    const config = { iceServers: [{ urls, credential: 'not-for-report' }] };
+    const pc = new isolated.RTCPeerConnection(config);
+    assert.equal(JSON.stringify(pc.getConfiguration().iceServers[0].urls), JSON.stringify([expected]));
+    pc.setConfiguration(config);
+    assert.equal(JSON.stringify(pc.getConfiguration().iceServers[0].urls), JSON.stringify([expected]));
+    if (profile !== 'udp') assert.equal((await isolated.rvxTurnReport())[0].passed, false);
+    pc.relayProtocol = profile;
+    assert.equal((await isolated.rvxTurnReport())[0].passed, true);
+  }
 });
 
 test('TURN entry refuses a non-loopback launch before reading production credentials', () => {

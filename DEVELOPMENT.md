@@ -95,3 +95,11 @@ policy, both selected candidates of type relay, nonzero incoming/outgoing audio
 bytes and passed=true. Empty results do not constitute success. The report omits
 addresses, ICE configuration and credentials. This first check certifies only
 the selected transport: it does not separately certify UDP, TCP and TLS paths.
+
+For separate transport checks, open `/?turn=tcp` or `/?turn=tls` on both devices
+before joining. The probe filters ICE servers to that exact transport on both
+construction and reconfiguration. `passed` additionally requires the selected
+local candidate's `relayProtocol` to match the requested profile. `protocol` can
+still be UDP because it describes the relay candidate, not client-to-TURN TLS/TCP.
+`/?turn=udp` is also available; missing profile retains the all-transports check.
+Unknown profiles fail closed with no ICE servers and cannot pass.
