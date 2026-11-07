@@ -2,11 +2,15 @@ import { build } from 'esbuild';
 import Module from 'node:module';
 import path from 'node:path';
 
-export async function loadComponent(entry) {
+export async function loadComponent(entry, { livekitStub } = {}) {
   const result = await build({
     entryPoints: [entry], bundle: true, write: false, platform: 'node', format: 'cjs',
     external: ['react', 'react-dom', 'livekit-client'],
     plugins: [{ name: 'test-worklet-boundary', setup(builder) {
+      if (livekitStub) {
+        builder.onResolve({ filter: /^livekit-client$/ }, () => ({ path: 'livekit-client', namespace: 'sdk-boundary' }));
+        builder.onLoad({ filter: /.*/, namespace: 'sdk-boundary' }, () => ({ contents: livekitStub }));
+      }
       builder.onResolve({ filter: /^@sapphi-red\// }, args => ({ path: args.path, namespace: 'audio-boundary' }));
       builder.onLoad({ filter: /.*/, namespace: 'audio-boundary' }, args => ({ contents: args.path.includes('?url')
         ? 'export default "test-worklet"'

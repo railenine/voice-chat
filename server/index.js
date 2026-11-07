@@ -648,6 +648,7 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
       canPublish: true,
       canSubscribe: true,
       canPublishData: false,
+      canUpdateOwnMetadata: true,
       canPublishSources: [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO],
     });
 

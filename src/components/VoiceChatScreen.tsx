@@ -399,7 +399,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             isNoiseSuppression={isNoiseSuppression}
             canShareScreen={screenShare.isAvailable && screenShare.canShareScreen}
             isSharingScreen={screenShare.isSharing}
-            isConnectingScreen={screenShare.isConnecting}
+            isConnectingScreen={screenShare.isConnecting || screenShare.connectionState !== 'connected'}
             muteHotkeyLabel={muteHotkey.label}
             deafenHotkeyLabel={deafenHotkey.label}
             toggleMute={toggleMute}
@@ -438,6 +438,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               handleRetry={handleRetry}
               className="flex-1 min-h-0"
               streamView={
+                <>
+                {screenShare.error && <p role="alert" className="p-3 text-sm text-(--danger) bg-(--danger-soft)">{screenShare.error}</p>}
                 <ScreenShareView
                   isDeafened={isDeafened}
                   activeStreams={screenShare.activeStreams}
@@ -453,6 +455,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   onVolumeChange={screenShare.setStreamVolume}
                   audioOutputDeviceId={deviceState?.selectedOutput}
                 />
+                </>
               }
             />
           </main>
@@ -469,7 +472,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             isNoiseSuppression={isNoiseSuppression}
             canShareScreen={screenShare.isAvailable && screenShare.canShareScreen}
             isSharingScreen={screenShare.isSharing}
-            isConnectingScreen={screenShare.isConnecting}
+            isConnectingScreen={screenShare.isConnecting || screenShare.connectionState !== 'connected'}
             muteHotkeyLabel={muteHotkey.label}
             deafenHotkeyLabel={deafenHotkey.label}
             toggleMute={toggleMute}
