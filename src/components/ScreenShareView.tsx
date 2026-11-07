@@ -73,20 +73,6 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
     }
   }, [activeStreams, isSharing, watchedPeerId]);
 
-  // Safety net: when ScreenShareView unmounts, mute and detach all remote audio tracks
-  useEffect(() => {
-    return () => {
-      activeStreams.forEach((s) => {
-        if (s.audioTrack) {
-          try {
-            s.audioTrack.setVolume(0);
-            s.audioTrack.detach();
-          } catch { }
-        }
-      });
-    };
-  }, [activeStreams]);
-
   // Fullscreen toggle handler with universal Mobile/iOS/Android support
   const toggleFullscreen = async () => {
     const el = containerRef.current;
@@ -166,15 +152,6 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
       setIsClosing(false);
     } else if (isRendered) {
       setIsClosing(true);
-      // Immediately silence and detach all audio tracks so audio stops on frame 0
-      activeStreams.forEach((s) => {
-        if (s.audioTrack) {
-          try {
-            s.audioTrack.setVolume(0);
-            s.audioTrack.detach();
-          } catch {}
-        }
-      });
       const timer = setTimeout(() => {
         setIsRendered(false);
         setIsClosing(false);
@@ -253,7 +230,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
           <RemoteVideoPlayer
             key={focusedRemoteStream.participantId}
             stream={focusedRemoteStream}
-            volume={streamVolumes[focusedRemoteStream.participantId] ?? 100}
+            volume={isClosing ? 0 : (streamVolumes[focusedRemoteStream.participantId] ?? 100)}
             onVolumeChange={(vol) => onVolumeChange(focusedRemoteStream.participantId, vol)}
             audioOutputDeviceId={audioOutputDeviceId}
           />
@@ -448,7 +425,6 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
       } catch { }
       try {
         videoTrack.detach(videoEl);
-        videoTrack.detach();
       } catch { }
     };
   }, [stream.videoTrack]);
@@ -479,7 +455,6 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
       try {
         audioTrack.setVolume(0);
         audioTrack.detach(audioEl);
-        audioTrack.detach();
       } catch { }
     };
   }, [stream.audioTrack]);
