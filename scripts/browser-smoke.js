@@ -67,6 +67,22 @@ try {
     }, null, { timeout: 25000 });
   }
   await Promise.all([expectAudio(first), expectAudio(second)]);
+  const output = await first.evaluate(async () => (await navigator.mediaDevices.enumerateDevices())
+    .find(device => device.kind === 'audiooutput' && !['default', 'communications', ''].includes(device.deviceId))
+    ?.toJSON());
+  assert.ok(output, 'Chromium fake devices must expose a nondefault audio output');
+  await first.getByRole('button', { name: 'Настройки', exact: true }).click();
+  await first.locator('[aria-haspopup="listbox"]').nth(1).click();
+  await first.getByRole('option', { name: output.label, exact: true }).click();
+  async function expectSelectedOutput() {
+    await first.waitForFunction(id => {
+      const active = [...document.querySelectorAll('audio')].filter(audio => audio.srcObject && !audio.muted);
+      return active.length > 0 && active.every(audio => audio.sinkId === id);
+    }, output.deviceId, { timeout: 5000 });
+  }
+  await expectSelectedOutput();
+  assert.equal(await first.evaluate(() => localStorage.getItem('voice_chat_audio_output')), output.deviceId);
+  await first.keyboard.press('Escape');
   await first.getByRole('button', { name: 'Выключить микрофон', exact: true }).click();
   await first.getByRole('button', { name: 'Заглушить всё', exact: true }).click();
   await first.getByRole('button', { name: 'Включить звук', exact: true }).click();
@@ -77,8 +93,9 @@ try {
   await second.evaluate(() => window.testSockets.find(ws => ws.readyState === WebSocket.OPEN).close());
   await second.waitForFunction(count => window.testConnections.length > count, oldCount, { timeout: 20000 });
   await Promise.all([expectAudio(first), expectAudio(second)]);
+  await expectSelectedOutput();
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ browser: browser.version(), checks: ['two real peers with identical nicknames', 'bidirectional RTP bytes and audio energy', 'manual mute survives deafen', 'WebSocket reconnect restores real audio'], passed: true }));
+  console.log(JSON.stringify({ browser: browser.version(), checks: ['two real peers with identical nicknames', 'bidirectional RTP bytes and audio energy', 'nondefault output applied to real playback elements through settings', 'manual mute survives deafen', 'WebSocket reconnect restores real audio'], passed: true }));
 } finally {
   await browser?.close();
   for (const ws of wss.clients) ws.terminate();

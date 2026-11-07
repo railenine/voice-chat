@@ -3,6 +3,8 @@
  * Uses Web Audio API oscillator synthesis - zero external audio files required, zero latency.
  */
 
+import { applyAudioOutput } from './audioOutput';
+
 let soundsMuted = false;
 let ordinarySoundGain: GainNode | null = null;
 export function setSoundMuted(muted: boolean) {
@@ -55,9 +57,7 @@ function getOutputDestination(ctx: AudioContext): AudioNode {
     if (sfxAudioElement.srcObject !== sfxDestinationNode.stream) {
       sfxAudioElement.srcObject = sfxDestinationNode.stream;
     }
-    if (typeof (sfxAudioElement as any).setSinkId === 'function') {
-      (sfxAudioElement as any).setSinkId(currentOutputSinkId || '').catch(() => {});
-    }
+    void applyAudioOutput(sfxAudioElement, currentOutputSinkId || '');
     if (sfxAudioElement.paused) {
       sfxAudioElement.play().catch(() => {});
     }
@@ -105,11 +105,7 @@ export function setSoundOutputDevice(sinkId: string) {
   const normalized = normalizeSinkId(sinkId);
   currentOutputSinkId = normalized;
   if (sfxAudioElement && typeof (sfxAudioElement as any).setSinkId === 'function') {
-    try {
-      (sfxAudioElement as any).setSinkId(normalized).catch((err: any) => {
-        console.warn('[SoundEffects] Failed to set sinkId on sfxAudioElement:', err);
-      });
-    } catch {}
+    void applyAudioOutput(sfxAudioElement, normalized);
   }
   const ctx = getFallbackAudioContext();
   if (ctx && typeof (ctx as any).setSinkId === 'function') {

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect, type MutableRefObject } from 
 import type { PeerInfo } from '../../types/protocol';
 import { getSavedPeerVolume, savePeerVolume, clampVolume, calculateVolumeGain } from '../../utils/volumePolicy';
 import { normalizeSinkId } from '../../utils/devicePolicy';
+import { applyAudioOutput } from '../../utils/audioOutput';
 
 const isIOS =
   typeof navigator !== 'undefined' &&
@@ -272,20 +273,12 @@ export function useRemoteAudio({
         document.body.appendChild(audio);
         audioElementsRef.current.set(peerId, audio);
 
-        if (typeof (audio as any).setSinkId === 'function') {
-          (audio as any).setSinkId(sinkId).catch((err: any) => {
-            console.warn(`[Audio] Failed to set sinkId on peer ${peerId}:`, err);
-          });
-        }
+        void applyAudioOutput(audio, sinkId);
       } else {
         audio.muted = isDeafenedRef.current ? true : isMuted;
         audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, currentVol / 100));
 
-        if (typeof (audio as any).setSinkId === 'function') {
-          (audio as any).setSinkId(sinkId).catch((err: any) => {
-            console.warn(`[Audio] Failed to update sinkId on peer ${peerId}:`, err);
-          });
-        }
+        void applyAudioOutput(audio, sinkId);
       }
 
       if (audio.srcObject !== targetStream) {
@@ -470,13 +463,7 @@ export function useRemoteAudio({
   useEffect(() => {
     const sinkId = normalizeSinkId(audioOutputDeviceId);
     audioOutputDeviceIdRef.current = audioOutputDeviceId;
-    audioElementsRef.current.forEach((audio, peerId) => {
-      if (typeof (audio as any).setSinkId === 'function') {
-        (audio as any).setSinkId(sinkId).catch((err: any) => {
-          console.warn(`[Audio] Failed to set sinkId on peer ${peerId}:`, err);
-        });
-      }
-    });
+    audioElementsRef.current.forEach(audio => { void applyAudioOutput(audio, sinkId); });
   }, [audioOutputDeviceId]);
 
   useEffect(() => {

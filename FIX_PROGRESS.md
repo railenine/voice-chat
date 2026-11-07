@@ -87,3 +87,20 @@ and unsafe schemes are rejected. Navigation code unchanged; OS browser launch
 from an installed Tauri build remains unverified. All 92 tests, typecheck,
 web build and manifest checks pass.
 
+
+## Staging finding: browser output selection (2026-11-07)
+
+User confirmed voice between two Windows PCs on different networks (one mobile),
+then reported Chrome voice and chat video following Windows output. Desktop EXE
+not involved. Chat video lacked sink routing; communications was incorrectly
+normalized to the general default. Both reproduced in regression tests and fixed.
+Playback sink requests are serialized; browser rejections are visible in settings;
+rejected selections are not saved and stale selection results are ignored.
+Video receives the device from App through ChatPanel; deafen remains enforced.
+All 97 tests, typecheck/build/manifests pass. Real Chromium settings interaction
+selects a nondefault enumerated fake output and verifies active media elements'
+sinkId, persistence and routing after reconnect. Physical output on the user's
+hardware, Edge and installed Tauri remain unverified; do not claim every cause
+of the reported voice issue is reproduced or resolved.
+API reference: https://www.w3.org/TR/audio-output/ (consulted 2026-11-07).
+

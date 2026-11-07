@@ -424,6 +424,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
           {/* Main Chat & Stream Area */}
           <main className="flex-1 flex flex-col min-w-0 p-2 pt-2 sm:p-4 sm:pt-3 lg:p-0 overflow-hidden lg:gap-0">
             <ChatPanel
+              audioOutputDeviceId={deviceState?.selectedOutput}
               isDeafened={isDeafened}
               roomId={roomId}
               messages={messages}

@@ -18,6 +18,7 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
     audioOutputs,
     selectedInput,
     selectedOutput,
+    outputError,
     hasPermission,
     isSinkSupported,
     isTestingMic,
@@ -142,6 +143,7 @@ export const AudioDeviceSettings: React.FC<AudioDeviceSettingsProps> = memo(({
             Вывод звука управляется системными настройками Windows / браузера.
           </p>
         )}
+        {outputError && <p role="alert" className="text-xs text-(--danger)">{outputError}</p>}
       </div>
     </div>
   );

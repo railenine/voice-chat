@@ -98,12 +98,13 @@ export function detectIsSmartphone(env: DeviceEnv = {}): boolean {
 /**
  * Normalizes an audio output sinkId for HTMLMediaElement.setSinkId / AudioContext.setSinkId.
  * W3C specification dictates that the default device is represented by an empty string ("").
- * If passed "default", "communications", null, or undefined, returns "".
+ * Only "default", null and undefined map to "". Other enumerated IDs,
+ * including Chromium's "communications", must retain their own routing.
  */
 export function normalizeSinkId(sinkId?: string | null): string {
   if (!sinkId) return '';
   const trimmed = sinkId.trim();
-  if (trimmed === 'default' || trimmed === 'communications') {
+  if (trimmed === 'default') {
     return '';
   }
   return trimmed;

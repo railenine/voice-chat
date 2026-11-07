@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
+import { applyAudioOutput } from '../utils/audioOutput';
 import {
   RemoteVideoTrack,
   RemoteAudioTrack,
@@ -441,9 +442,7 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
     audioTrack.setVolume(volume / 100);
 
     const targetSinkId = normalizeSinkId(audioOutputDeviceId);
-    if (typeof (audioEl as any).setSinkId === 'function') {
-      (audioEl as any).setSinkId(targetSinkId).catch(() => {});
-    }
+    void applyAudioOutput(audioEl, targetSinkId);
 
     audioEl.play().catch(() => { });
 
@@ -466,11 +465,7 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
     const audioEl = audioRef.current;
     if (!audioEl) return;
     const targetSinkId = normalizeSinkId(audioOutputDeviceId);
-    if (typeof (audioEl as any).setSinkId === 'function') {
-      (audioEl as any).setSinkId(targetSinkId).catch((err: any) => {
-        console.warn('[ScreenShare] Error setting sinkId on audio element:', err);
-      });
-    }
+    void applyAudioOutput(audioEl, targetSinkId);
   }, [audioOutputDeviceId]);
 
   // Update volume when slider moves
