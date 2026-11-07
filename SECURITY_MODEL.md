@@ -25,3 +25,19 @@ origins for other deployments. Development defaults allow localhost/loopback.
 This changes the HTTP/reconnect contract. Older desktop clients must be updated
 alongside the backend; do not restore anonymous credential endpoints as a
 compatibility workaround. Validate a paired web/desktop candidate before rollout.
+
+## Portable updates
+
+Portable installation requires an HTTPS URL, bounded expected size, SHA-256 and
+a prehashed Minisign signature verified against the bundled public key in Rust.
+The release generator signs and verifies both installer and portable binaries;
+it rejects missing binaries/signatures instead of copying a previous signature.
+Signing passwords are passed as process arguments, never shell-interpolated or
+included in command failure logs. Temporary CI key files are deleted in finally.
+
+Only one installation can run at a time. Download time and size are bounded.
+Verification finishes before renaming the running executable. A spawn error
+restores the original path; this is not a transactional rollback after an
+arbitrary later crash of the new process. Keep deployment recovery artifacts.
+Previously published unsigned portable manifests cannot be installed by the
+hardened client; prepare a signed paired release before rollout.

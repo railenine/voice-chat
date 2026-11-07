@@ -113,6 +113,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
               date: update.date,
               portableUrl,
               portableSha256: rawPortable.sha256,
+              portableSignature: rawPortable.signature,
               portableSize: rawPortable.size,
               installerUrl: rawPlatform.url,
               installerSha256: rawPlatform.sha256,
@@ -162,6 +163,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
                     manifest.portable_url ||
                     `https://github.com/railenine/voice-chat/releases/download/v${manifest.version}/RVxis.exe`,
                   portableSha256: rawPortable.sha256,
+              portableSignature: rawPortable.signature,
                   portableSize: rawPortable.size,
                   installerUrl: rawPlatform.url,
                   installerSha256: rawPlatform.sha256,
@@ -301,6 +303,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
             downloadUrl,
             expectedSha256: updateInfo?.portableSha256 || null,
             expectedSize: updateInfo?.portableSize || null,
+            signature: updateInfo?.portableSignature || '',
           });
 
           setStatus('restart-required');

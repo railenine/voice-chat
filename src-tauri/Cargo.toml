@@ -23,5 +23,7 @@ reqwest = { version = "0.13", features = ["stream"] }
 futures-util = "0.3"
 tokio = { version = "1", features = ["fs", "io-util"] }
 sha2 = "0.10"
+base64 = "0.22"
+minisign-verify = "0.3"
 
 

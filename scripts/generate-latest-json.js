@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { execSync } from 'child_process';
+import os from 'node:os';
+import { signArtifact, validateReleaseAssets } from './release-security.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -184,80 +185,25 @@ function main() {
     console.warn('[Updater] Portable binary not found in release folder; metadata will be populated without local size/hash.');
   }
 
-  // 4. Obtain Tauri Signature for installer
-  let signature = '';
-  const sigFile = installerPath ? `${installerPath}.sig` : null;
-
+  // A release must contain both binaries; never reuse a previous binary's signature.
+  if (!installerPath || !fs.existsSync(portablePath)) throw new Error('Missing installer or portable artifact');
+  const encodedKey = JSON.parse(fs.readFileSync(path.join(rootDir, 'src-tauri', 'tauri.conf.json'), 'utf8')).plugins.updater.pubkey;
   const privateKey = process.env.TAURI_SIGNING_PRIVATE_KEY;
-  const privateKeyPassword = process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD;
-  const localKeyPath = path.join(rootDir, 'src-tauri', 'voicechat.key');
-
-  let keyToUse = null;
-  let tempKeyPath = null;
-
-  if (privateKey) {
-    tempKeyPath = path.join(rootDir, 'src-tauri', 'temp_ci_voicechat.key');
-    fs.writeFileSync(tempKeyPath, privateKey.trim(), 'utf8');
-    keyToUse = tempKeyPath;
-    console.log('[Updater] Using private key from environment variable.');
-  } else if (fs.existsSync(localKeyPath)) {
-    keyToUse = localKeyPath;
-    console.log('[Updater] Using local private key at src-tauri/voicechat.key.');
-  }
-
-  if (keyToUse && !privateKeyPassword) {
-    console.warn('[Updater] TAURI_SIGNING_PRIVATE_KEY_PASSWORD is not set; skipping live signing to avoid stdin prompt, using existing signature/fallback.');
-    keyToUse = null;
-  }
-
+  let keyDir;
+  let keyPath;
+  let signature;
+  let portableSignature;
   try {
-    if (keyToUse && installerPath && fs.existsSync(installerPath)) {
-      console.log(`[Updater] Signing ${installerFile} with Tauri signer...`);
-      const signCmd = `npx @tauri-apps/cli signer sign -f "${keyToUse}" --password "${privateKeyPassword}" --app-version "${version}" "${installerPath}"`;
-      const output = execSync(signCmd, {
-        cwd: rootDir,
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-
-      if (sigFile && fs.existsSync(sigFile)) {
-        const rawSig = fs.readFileSync(sigFile, 'utf8').trim();
-        signature = Buffer.from(rawSig).toString('base64');
-        console.log('[Updater] Extracted signature from generated .sig file.');
-      } else {
-        const match = output.match(/Public signature:\s*([A-Za-z0-9+/=]+)/);
-        if (match && match[1]) {
-          signature = match[1].trim();
-          console.log('[Updater] Extracted signature from signer command output.');
-        }
-      }
-    } else if (sigFile && fs.existsSync(sigFile)) {
-      const rawSig = fs.readFileSync(sigFile, 'utf8').trim();
-      signature = Buffer.from(rawSig).toString('base64');
-      console.log('[Updater] Found existing .sig file.');
+    if (privateKey) {
+      keyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rvxis-sign-'));
+      keyPath = path.join(keyDir, 'key');
+      fs.writeFileSync(keyPath, privateKey.trim(), { mode: 0o600 });
     }
-  } catch (err) {
-    console.warn('[Updater] Signing warning/fallback:', err.message);
+    signature = signArtifact(installerPath, keyPath, process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD, version, encodedKey);
+    portableSignature = signArtifact(portablePath, keyPath, process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD, version, encodedKey);
   } finally {
-    if (tempKeyPath && fs.existsSync(tempKeyPath)) {
-      try {
-        fs.unlinkSync(tempKeyPath);
-      } catch (e) {}
-    }
-  }
-
-  // Fallback to existing signature if available
-  if (!signature) {
-    const existingPath = path.join(rootDir, 'latest.json');
-    if (fs.existsSync(existingPath)) {
-      try {
-        const existing = JSON.parse(fs.readFileSync(existingPath, 'utf8'));
-        if (existing.platforms?.['windows-x86_64']?.signature) {
-          signature = existing.platforms['windows-x86_64'].signature;
-          console.log('[Updater] Retained existing signature as fallback.');
-        }
-      } catch {}
-    }
+    if (keyPath) fs.unlinkSync(keyPath);
+    if (keyDir) fs.rmdirSync(keyDir);
   }
 
   // 5. Extract Release Notes from HISTORY.md (with CHANGELOG.md fallback)
@@ -304,7 +250,7 @@ function main() {
         url: `https://github.com/${repo}/releases/download/${tag}/RVxis.exe`,
         size: portableMeta.size || undefined,
         sha256: portableMeta.sha256 || undefined,
-        signature: '',
+        signature: portableSignature,
       },
     },
     portable_url: `https://github.com/${repo}/releases/download/${tag}/RVxis.exe`,
@@ -312,6 +258,7 @@ function main() {
 
   // 7. Validate Manifest Schema
   validateManifestSchema(manifest);
+  validateReleaseAssets(manifest);
   console.log('[Updater] Manifest schema validated successfully.');
 
   const jsonStr = JSON.stringify(manifest, null, 2) + '\n';
