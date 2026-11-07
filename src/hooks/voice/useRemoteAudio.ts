@@ -42,6 +42,39 @@ export function useRemoteAudio({
 
   const audioOutputDeviceIdRef = useRef(audioOutputDeviceId);
   audioOutputDeviceIdRef.current = audioOutputDeviceId;
+  const playbackRequestsRef = useRef(new WeakMap<HTMLAudioElement, number>());
+
+  const startRemotePlayback = useCallback(async (peerId: string, audio: HTMLAudioElement, stream: MediaStream) => {
+    const request = (playbackRequestsRef.current.get(audio) ?? 0) + 1;
+    playbackRequestsRef.current.set(audio, request);
+    const active = () => audioElementsRef.current.get(peerId) === audio && audio.srcObject === stream &&
+      playbackRequestsRef.current.get(audio) === request;
+    try {
+      const ctx = getAudioContext();
+      if (ctx && typeof (ctx as any).setSinkId === 'function') {
+        const applied = await applyAudioOutput(ctx as any, audioOutputDeviceIdRef.current);
+        if (!applied || !active()) return;
+      }
+      if (ctx?.state === 'suspended') await ctx.resume();
+      if (!active()) return;
+      const applied = await applyAudioOutput(audio, audioOutputDeviceIdRef.current);
+      if (!applied || !active()) return;
+      await audio.play();
+      if (active()) setNeedsAudioUnlock(false);
+    } catch (error) {
+      if (!active()) return;
+      console.warn(`[Audio] Playback could not start for peer ${peerId}:`, error);
+      setNeedsAudioUnlock(true);
+    }
+  }, [getAudioContext, setNeedsAudioUnlock]);
+
+  const startPrimer = useCallback(async (peerId: string, audio: HTMLAudioElement, stream: MediaStream) => {
+    audio.muted = true;
+    audio.volume = 0;
+    const applied = await applyAudioOutput(audio, audioOutputDeviceIdRef.current);
+    if (!applied || peerPrimerAudioRef.current.get(peerId) !== audio || audio.srcObject !== stream) return;
+    if (audio.paused) await audio.play().catch(() => {});
+  }, []);
 
   // Read saved volume for a peer from localStorage (checks peerId first, then optional nickname fallback)
   const getSavedVolume = useCallback((peerId: string, nick?: string): number => {
@@ -156,8 +189,9 @@ export function useRemoteAudio({
         let primerAudio = peerPrimerAudioRef.current.get(peerId);
         if (!primerAudio) {
           primerAudio = document.createElement('audio');
+          primerAudio.setAttribute('data-rvxis-audio-role', 'voice-primer');
           primerAudio.muted = true;
-          primerAudio.autoplay = true;
+          primerAudio.autoplay = false;
           (primerAudio as any).playsInline = true;
           primerAudio.style.position = 'fixed';
           primerAudio.style.top = '-9999px';
@@ -171,9 +205,7 @@ export function useRemoteAudio({
         if (primerAudio.srcObject !== stream) {
           primerAudio.srcObject = stream;
         }
-        if (primerAudio.paused) {
-          primerAudio.play().catch(() => {});
-        }
+        void startPrimer(peerId, primerAudio, stream);
       }
 
       const currentVol = peerVolumesRef.current.get(peerId) ?? 100;
@@ -250,17 +282,15 @@ export function useRemoteAudio({
         ? peerProcessedDestNodesRef.current.get(peerId)!.stream
         : stream;
 
-      const sinkId = normalizeSinkId(audioOutputDeviceIdRef.current);
-
       let audio = audioElementsRef.current.get(peerId);
       if (!audio) {
         audio = document.createElement('audio');
-        audio.autoplay = true;
+        audio.setAttribute('data-rvxis-audio-role', 'voice');
+        audio.autoplay = false;
         (audio as any).playsInline = true;
         (audio as any).webkitPlaysInline = true;
         audio.setAttribute('playsinline', 'true');
         audio.setAttribute('webkit-playsinline', 'true');
-        audio.setAttribute('autoplay', 'true');
         audio.muted = isDeafenedRef.current ? true : isMuted;
         audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, currentVol / 100));
         // Position off-screen so the browser keeps it in the render tree (never use display: none)
@@ -273,32 +303,17 @@ export function useRemoteAudio({
         document.body.appendChild(audio);
         audioElementsRef.current.set(peerId, audio);
 
-        void applyAudioOutput(audio, sinkId);
       } else {
         audio.muted = isDeafenedRef.current ? true : isMuted;
         audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, currentVol / 100));
 
-        void applyAudioOutput(audio, sinkId);
       }
 
       if (audio.srcObject !== targetStream) {
         audio.srcObject = targetStream;
       }
 
-      const playAudio = () => {
-        if (!audio) return;
-        audio
-          .play()
-          .then(() => {
-            console.log(`[Audio] Playing remote audio for peer ${peerId}`);
-            setNeedsAudioUnlock(false);
-          })
-          .catch((err) => {
-            if (err?.name === 'AbortError') return;
-            console.warn(`[Audio] Autoplay blocked for peer ${peerId}:`, err);
-            setNeedsAudioUnlock(true);
-          });
-      };
+      const playAudio = () => { if (audio) void startRemotePlayback(peerId, audio, targetStream); };
 
       playAudio();
 
@@ -318,7 +333,8 @@ export function useRemoteAudio({
       teardownPeerAudioGraph,
       isDeafenedRef,
       registerRemoteAnalyser,
-      setNeedsAudioUnlock,
+      startRemotePlayback,
+      startPrimer,
     ]
   );
 
@@ -386,18 +402,9 @@ export function useRemoteAudio({
       const hasProcessedStream = !isIOS && Boolean(peerProcessedDestNodesRef.current.get(peerId));
       audio.muted = isDeafenedRef.current ? true : pMuted;
       audio.volume = hasProcessedStream ? 1.0 : (isDeafenedRef.current ? 0 : Math.min(1.0, pVol / 100));
-      audio
-        .play()
-        .then(() => {
-          console.log(`[Audio] Unlocked playback for ${peerId}`);
-          setNeedsAudioUnlock(false);
-        })
-        .catch((err) => {
-          if (err?.name === 'AbortError') return;
-          console.warn(`[Audio] Play failed for ${peerId}:`, err);
-        });
+      if (audio.srcObject) void startRemotePlayback(peerId, audio, audio.srcObject as MediaStream);
     });
-  }, [isDeafenedRef, setNeedsAudioUnlock]);
+  }, [isDeafenedRef, startRemotePlayback]);
 
   // Complete cleanup on unmount
   const clearAllRemoteAudio = useCallback(() => {
@@ -463,8 +470,13 @@ export function useRemoteAudio({
   useEffect(() => {
     const sinkId = normalizeSinkId(audioOutputDeviceId);
     audioOutputDeviceIdRef.current = audioOutputDeviceId;
-    audioElementsRef.current.forEach(audio => { void applyAudioOutput(audio, sinkId); });
-  }, [audioOutputDeviceId]);
+    audioElementsRef.current.forEach((audio, peerId) => {
+      if (audio.srcObject) void startRemotePlayback(peerId, audio, audio.srcObject as MediaStream);
+    });
+    peerPrimerAudioRef.current.forEach((audio, peerId) => {
+      if (audio.srcObject) void startPrimer(peerId, audio, audio.srcObject as MediaStream);
+    });
+  }, [audioOutputDeviceId, startRemotePlayback, startPrimer]);
 
   useEffect(() => {
     return () => {

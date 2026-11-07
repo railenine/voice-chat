@@ -31,7 +31,7 @@ test('voice updates the active audio element instead of following the Windows de
     isDeafenedRef: { current: false }, registerRemoteAnalyser() {}, removeRemotePeerActivity() {}, setNeedsAudioUnlock() {} };
   function Probe({ output }) { api = useRemoteAudio({ ...props, audioOutputDeviceId: output }); return null; }
   await act(async () => { renderer = create(React.createElement(Probe, { output: 'headset' })); });
-  api.audioElementsRef.current.set('peer', { setSinkId: async id => calls.push(id), remove() {} });
+  api.audioElementsRef.current.set('peer', { srcObject: {}, play: async () => {}, setSinkId: async id => calls.push(id), remove() {} });
   try {
     await act(async () => renderer.update(React.createElement(Probe, { output: 'speakers' })));
     assert.deepEqual(calls, ['speakers']);

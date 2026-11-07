@@ -5,6 +5,7 @@ import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 import { playMuteSound, playUnmuteSound } from '../../utils/soundEffects';
 import { normalizeSinkId, buildAudioInputConstraints } from '../../utils/device';
+import { applyAudioOutput } from '../../utils/audioOutput';
 
 
 const SILENT_AUDIO_URI =
@@ -111,7 +112,7 @@ export function useLocalAudio({
         }
         const sinkId = normalizeSinkId(audioOutputDeviceIdRef.current);
         if (typeof (audioContextRef.current as any).setSinkId === 'function') {
-          (audioContextRef.current as any).setSinkId(sinkId).catch(() => {});
+          void applyAudioOutput(audioContextRef.current as any, sinkId);
         }
       }
     }
@@ -472,7 +473,7 @@ export function useLocalAudio({
   // Dynamically update audioContext sinkId when output device changes
   useEffect(() => {
     if (audioContextRef.current && typeof (audioContextRef.current as any).setSinkId === 'function') {
-      (audioContextRef.current as any).setSinkId(normalizeSinkId(audioOutputDeviceId)).catch(() => {});
+      void applyAudioOutput(audioContextRef.current as any, audioOutputDeviceId);
     }
   }, [audioOutputDeviceId]);
 

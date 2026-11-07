@@ -104,3 +104,24 @@ hardware, Edge and installed Tauri remain unverified; do not claim every cause
 of the reported voice issue is reproduced or resolved.
 API reference: https://www.w3.org/TR/audio-output/ (consulted 2026-11-07).
 
+
+## Staging finding: voice needs a device toggle after joining (2026-11-07)
+
+User clarified that voice initially stays silent; changing output away and back
+starts it. DOM diagnostics already showed the selected sink on the main voice
+element, so sinkId alone was insufficient evidence of successful first playback.
+A regression test reproduced play() before asynchronous sink initialization.
+Native autoplay could also bypass readiness. Voice and muted primer now disable
+autoplay; bind the stream, await selected output initialization, then play.
+Voice awaits supported AudioContext sink changes/resume as well. Context sink
+changes use the same serialized helper; primer follows the selected output.
+Request identity/stream checks prevent late playback after leave/replacement.
+Unlock and device changes use the same startup path; active play errors are no
+longer silently discarded as AbortError.
+Two new tests failed before and pass after. All 99 tests, typecheck/build and
+manifest checks pass. Chromium smoke pre-saves a nondefault output before room
+join, delays media/context sink initialization, checks ready/playing elements
+before any device toggle, then tests switching and reconnect. The unrestricted
+autoplay flag was removed. Physical USB output confirmation remains pending;
+these tests do not certify the actual speaker signal on user hardware.
+

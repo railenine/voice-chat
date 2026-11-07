@@ -30,12 +30,37 @@ try {
   const base = `http://127.0.0.1:${server.address().port}`;
   browser = await chromium.launch({ executablePath, headless: true, args: [
     '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
-    `--use-file-for-fake-audio-capture=${wav}`, '--autoplay-policy=no-user-gesture-required',
+    `--use-file-for-fake-audio-capture=${wav}`,
   ] });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['microphone'] });
   await context.addInitScript(() => {
     localStorage.setItem('voice_chat_rnnoise', 'false');
     window.testConnections = []; window.testSockets = [];
+    window.voiceStartedBeforeOutputReady = false;
+    const selecting = new WeakMap();
+    const selectingContexts = new Set();
+    const setSink = HTMLMediaElement.prototype.setSinkId;
+    const play = HTMLMediaElement.prototype.play;
+    const setContextSink = AudioContext.prototype.setSinkId;
+    if (setContextSink) AudioContext.prototype.setSinkId = async function(id) {
+      selectingContexts.add(this);
+      try {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return await setContextSink.call(this, id);
+      } finally { selectingContexts.delete(this); }
+    };
+    HTMLMediaElement.prototype.setSinkId = async function(id) {
+      selecting.set(this, true);
+      try {
+        // Model a slow physical-device initialization, including before first play.
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return await setSink.call(this, id);
+      } finally { selecting.delete(this); }
+    };
+    HTMLMediaElement.prototype.play = function() {
+      if (this.dataset.rvxisAudioRole === 'voice' && (selecting.has(this) || selectingContexts.size)) window.voiceStartedBeforeOutputReady = true;
+      return play.call(this);
+    };
     const Peer = window.RTCPeerConnection, Socket = window.WebSocket;
     window.RTCPeerConnection = class extends Peer {
       constructor(config) { super({ ...config, iceServers: [] }); window.testConnections.push(this); }
@@ -45,6 +70,19 @@ try {
     };
   });
   const errors = [];
+  const preflight = await context.newPage();
+  await preflight.goto(base);
+  const output = await preflight.evaluate(async () => {
+    const permission = await navigator.mediaDevices.getUserMedia({ audio: true });
+    permission.getTracks().forEach(track => track.stop());
+    const selected = (await navigator.mediaDevices.enumerateDevices()).find(device =>
+      device.kind === 'audiooutput' && !['default', 'communications', ''].includes(device.deviceId));
+    if (!selected) return null;
+    localStorage.setItem('voice_chat_audio_output', selected.deviceId);
+    return selected.toJSON();
+  });
+  assert.ok(output, 'Chromium fake devices must expose a nondefault audio output');
+  await preflight.close();
   async function join() {
     const page = await context.newPage();
     page.on('pageerror', error => errors.push(error.message));
@@ -67,21 +105,28 @@ try {
     }, null, { timeout: 25000 });
   }
   await Promise.all([expectAudio(first), expectAudio(second)]);
-  const output = await first.evaluate(async () => (await navigator.mediaDevices.enumerateDevices())
-    .find(device => device.kind === 'audiooutput' && !['default', 'communications', ''].includes(device.deviceId))
-    ?.toJSON());
-  assert.ok(output, 'Chromium fake devices must expose a nondefault audio output');
+  async function expectSelectedOutput(sinkId = output.deviceId) {
+    await first.waitForFunction(id => {
+      const voice = [...document.querySelectorAll('audio[data-rvxis-audio-role="voice"]')];
+      const streams = [...document.querySelectorAll('audio')].filter(audio => audio.srcObject);
+      return voice.length > 0 && voice.every(audio => !audio.paused && audio.readyState >= 2) &&
+        streams.every(audio => audio.sinkId === id);
+    }, sinkId, { timeout: 5000 });
+  }
+  // This assertion runs before visiting settings or switching any device.
+  await expectSelectedOutput();
+  assert.equal(await first.evaluate(() => window.voiceStartedBeforeOutputReady), false);
+  assert.equal(await first.evaluate(() => localStorage.getItem('voice_chat_audio_output')), output.deviceId);
+  const defaultOutput = await first.evaluate(async () => (await navigator.mediaDevices.enumerateDevices())
+    .find(device => device.kind === 'audiooutput' && device.deviceId === 'default')?.toJSON());
+  assert.ok(defaultOutput);
   await first.getByRole('button', { name: 'Настройки', exact: true }).click();
   await first.locator('[aria-haspopup="listbox"]').nth(1).click();
+  await first.getByRole('option', { name: defaultOutput.label, exact: true }).click();
+  await expectSelectedOutput('');
+  await first.locator('[aria-haspopup="listbox"]').nth(1).click();
   await first.getByRole('option', { name: output.label, exact: true }).click();
-  async function expectSelectedOutput() {
-    await first.waitForFunction(id => {
-      const active = [...document.querySelectorAll('audio')].filter(audio => audio.srcObject && !audio.muted);
-      return active.length > 0 && active.every(audio => audio.sinkId === id);
-    }, output.deviceId, { timeout: 5000 });
-  }
   await expectSelectedOutput();
-  assert.equal(await first.evaluate(() => localStorage.getItem('voice_chat_audio_output')), output.deviceId);
   await first.keyboard.press('Escape');
   await first.getByRole('button', { name: 'Выключить микрофон', exact: true }).click();
   await first.getByRole('button', { name: 'Заглушить всё', exact: true }).click();
@@ -94,8 +139,9 @@ try {
   await second.waitForFunction(count => window.testConnections.length > count, oldCount, { timeout: 20000 });
   await Promise.all([expectAudio(first), expectAudio(second)]);
   await expectSelectedOutput();
+  assert.equal(await first.evaluate(() => window.voiceStartedBeforeOutputReady), false);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ browser: browser.version(), checks: ['two real peers with identical nicknames', 'bidirectional RTP bytes and audio energy', 'nondefault output applied to real playback elements through settings', 'manual mute survives deafen', 'WebSocket reconnect restores real audio'], passed: true }));
+  console.log(JSON.stringify({ browser: browser.version(), checks: ['two real peers with identical nicknames', 'bidirectional RTP bytes and audio energy', 'saved nondefault output on initial voice playback without device toggling', 'voice waits for slow sink initialization', 'manual mute survives deafen', 'WebSocket reconnect restores real audio'], passed: true }));
 } finally {
   await browser?.close();
   for (const ws of wss.clients) ws.terminate();
