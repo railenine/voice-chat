@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { isTauri, getBackendBaseUrl, APP_VERSION } from '../config';
-import { isNewerVersion } from '../utils/semver';
+import { isNewerVersion, parseSemver } from '../utils/semver';
 import { UpdateInfo, UpdateStatus } from '../utils/updaterTypes';
 import { shouldAutoOpenUpdateModal, buildUpdaterUrl } from '../utils/updaterPolicy';
 
@@ -85,6 +85,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
       }
     };
 
+    let successfulCheck = false;
     try {
       if (isTauri()) {
         let tauriFound = false;
@@ -93,6 +94,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
         try {
           const { check } = await import('@tauri-apps/plugin-updater');
           const update = await check();
+          successfulCheck = true;
           if (update && update.available) {
             await waitMinDisplay();
             tauriUpdateObjRef.current = update;
@@ -149,6 +151,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
             });
             if (res.ok) {
               const manifest = await res.json();
+              if (parseSemver(manifest.version)) successfulCheck = true;
               if (manifest.version && isNewerVersion(manifest.version, APP_VERSION)) {
                 await waitMinDisplay();
                 const rawPortable = manifest.portable?.['windows-x86_64'] || {};
@@ -210,6 +213,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
             }
           }
 
+          if (parseSemver(serverVersion)) successfulCheck = true;
           if (serverVersion && isNewerVersion(serverVersion, APP_VERSION)) {
             await waitMinDisplay();
             setUpdateInfo({
@@ -235,6 +239,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
         }
       }
 
+      if (!successfulCheck) throw new Error('Не удалось получить корректную версию с сервера обновлений');
       await waitMinDisplay();
       setStatus('up-to-date');
       if (manual) {
@@ -269,6 +274,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
       const targetMode = mode || (isPortable ? 'portable' : 'installer');
 
       if (targetMode === 'portable') {
+        let unlistenProgress: (() => void) | null = null;
         // Portable mode: download standalone RVxis.exe and swap in-place
         try {
           setStatus('downloading');
@@ -279,7 +285,6 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
           const { invoke } = await import('@tauri-apps/api/core');
           const { listen } = await import('@tauri-apps/api/event');
 
-          let unlistenProgress: (() => void) | null = null;
           try {
             unlistenProgress = await listen('portable-update-progress', (event: any) => {
               const { downloaded, total } = event.payload || {};
@@ -307,12 +312,13 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
           });
 
           setStatus('restart-required');
-          if (unlistenProgress) unlistenProgress();
         } catch (err: any) {
           console.error('[Updater] Portable update error:', err);
           setStatus('error');
           const msg = typeof err === 'string' ? err : err?.message || (err ? String(err) : 'Ошибка портативного обновления');
           setError(msg);
+        } finally {
+          unlistenProgress?.();
         }
       } else if (tauriUpdateObjRef.current) {
         // Installer mode: run standard NSIS installer

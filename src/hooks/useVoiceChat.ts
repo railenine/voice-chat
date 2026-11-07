@@ -62,7 +62,6 @@ export function useVoiceChat({
   const initDoneRef = useRef(false);
   const initRef = useRef<() => void>(() => {});
   const unlockAllRemoteAudioRef = useRef<() => void>(() => {});
-  const markConnectedRef = useRef<() => void>(() => {});
 
   // 1. Room participants hook
   const {
@@ -102,7 +101,6 @@ export function useVoiceChat({
   });
 
   // 3. Remote peer audio elements & Web Audio mixer hook
-  const isConnectedRefContainer = useRef(false);
   const {
     peerVolumes,
     setPeerVolumes,
@@ -127,8 +125,6 @@ export function useVoiceChat({
       removeRemotePeerActivity(peerId);
     },
     setNeedsAudioUnlock,
-    markConnected: () => markConnectedRef.current(),
-    isConnectedRef: isConnectedRefContainer,
   });
 
   unlockAllRemoteAudioRef.current = unlockAllRemoteAudio;
@@ -159,6 +155,14 @@ export function useVoiceChat({
     sendWsMessageRef: sendWsMessageProxyRef,
   });
 
+  const onPeerState = useCallback((peerId: string, state: 'connected' | 'reconnecting' | 'disconnected') => {
+    const peer = peersInfoRef.current.get(peerId);
+    if (peer && peer.connectionState !== state) {
+      peersInfoRef.current.set(peerId, { ...peer, connectionState: state });
+      updatePeersState();
+    }
+  }, [peersInfoRef, updatePeersState]);
+
   // 5. Peer connections hook (W3C Perfect Negotiation, Opus SDP, ICE restart, coordinated recovery)
   const {
     iceServersRef,
@@ -175,8 +179,7 @@ export function useVoiceChat({
     teardownPeerAudioGraph,
     cleanupRemotePeerAudio,
     removeParticipant,
-    markConnected: () => markConnectedRef.current(),
-    isConnectedRef: isConnectedRefContainer,
+    onPeerState,
     peerConnectionsRef,
   });
 
@@ -363,8 +366,6 @@ export function useVoiceChat({
     onWsDisconnectCleanup,
   });
 
-  isConnectedRefContainer.current = isConnected;
-  markConnectedRef.current = markConnected;
   sendWsMessageProxyRef.current = sendWsMessage;
 
   // 7. Room chat hook

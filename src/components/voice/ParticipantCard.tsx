@@ -6,6 +6,7 @@ import { getInitials } from './voiceUtils';
 
 export interface ParticipantCardProps {
   nickname: string;
+  connectionState?: 'connected' | 'reconnecting' | 'disconnected';
   isSpeaking?: boolean;
   isMuted?: boolean;
   isDeafened?: boolean;
@@ -32,6 +33,7 @@ export interface ParticipantCardProps {
 
 export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
   nickname,
+  connectionState,
   isSpeaking,
   isMuted,
   isDeafened,
@@ -54,6 +56,9 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
   className = '',
 }) => {
   const isActivelySpeaking = isSpeaking && !isMuted && !isDeafened;
+
+  const mediaStatus = !isSelf && connectionState && connectionState !== 'connected'
+    ? <span role="status" className="text-xs text-(--warning)">{connectionState === 'reconnecting' ? 'Соединение звука…' : 'Нет связи'}</span> : null;
 
   // Avatar markup shared across both layout modes
   const renderAvatar = (sizeClass: string) => (
@@ -138,6 +143,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
               {nickname}
             </span>
 
+            {mediaStatus}
             <div className="flex items-center gap-1">
               {isSelf ? (
                 <>
@@ -254,6 +260,7 @@ export const ParticipantCard: React.FC<ParticipantCardProps> = memo(({
             </span>
           )}
 
+          {mediaStatus}
           {/* Subtitle / Status Tags */}
           <div className="flex items-center gap-1.5 mt-0.5">
             {isStreaming && (

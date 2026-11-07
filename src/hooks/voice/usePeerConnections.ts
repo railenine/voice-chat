@@ -13,8 +13,7 @@ export interface UsePeerConnectionsProps {
   teardownPeerAudioGraph: (peerId: string) => void;
   cleanupRemotePeerAudio: (peerId: string) => void;
   removeParticipant: (peerId: string) => void;
-  markConnected: () => void;
-  isConnectedRef: MutableRefObject<boolean>;
+  onPeerState: (peerId: string, state: 'connected' | 'reconnecting' | 'disconnected') => void;
   peerConnectionsRef?: MutableRefObject<Map<string, RTCPeerConnection>>;
 }
 
@@ -26,8 +25,7 @@ export function usePeerConnections({
   teardownPeerAudioGraph,
   cleanupRemotePeerAudio,
   removeParticipant,
-  markConnected,
-  isConnectedRef,
+  onPeerState,
   peerConnectionsRef: externalPeerConnectionsRef,
 }: UsePeerConnectionsProps) {
   const localPeerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
@@ -92,6 +90,7 @@ export function usePeerConnections({
         iceCandidatePoolSize: 2,
       });
       peerConnectionsRef.current.set(remotePeerId, pc);
+      onPeerState(remotePeerId, 'reconnecting');
 
       const polite = myPeerIdRef.current > remotePeerId;
 
@@ -143,6 +142,8 @@ export function usePeerConnections({
       const checkStateAndRecover = () => {
         const connState = pc!.connectionState;
         const iceState = pc!.iceConnectionState;
+        onPeerState(remotePeerId, connState === 'connected' ? 'connected'
+          : connState === 'failed' || connState === 'closed' ? 'disconnected' : 'reconnecting');
         console.log(`[WebRTC] Peer ${remotePeerId} state: conn=${connState}, ice=${iceState}`);
 
         if (
@@ -159,12 +160,6 @@ export function usePeerConnections({
           if (discTimer) {
             clearTimeout(discTimer);
             disconnectedTimersRef.current.delete(remotePeerId);
-          }
-          if (!isConnectedRef.current) {
-            console.log(
-              `[WebRTC] Peer ${remotePeerId} reached connected state, completing reconnection`
-            );
-            markConnected();
           }
           return;
         }
@@ -235,7 +230,7 @@ export function usePeerConnections({
 
       return pc;
     },
-    [myPeerIdRef, streamRef, sendWsMessage, handleRemoteStream, isConnectedRef, markConnected]
+    [myPeerIdRef, streamRef, sendWsMessage, handleRemoteStream, onPeerState]
   );
 
   const rebuildPeer = useCallback(

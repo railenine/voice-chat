@@ -16,8 +16,6 @@ export interface UseRemoteAudioProps {
   registerRemoteAnalyser: (peerId: string, analyser: AnalyserNode) => void;
   removeRemotePeerActivity: (peerId: string) => void;
   setNeedsAudioUnlock: (needs: boolean) => void;
-  markConnected: () => void;
-  isConnectedRef: MutableRefObject<boolean>;
 }
 
 export function useRemoteAudio({
@@ -28,8 +26,6 @@ export function useRemoteAudio({
   registerRemoteAnalyser,
   removeRemotePeerActivity,
   setNeedsAudioUnlock,
-  markConnected,
-  isConnectedRef,
 }: UseRemoteAudioProps) {
   const [peerVolumes, setPeerVolumes] = useState<Record<string, number>>({});
   const peerVolumesRef = useRef<Map<string, number>>(new Map());
@@ -313,11 +309,6 @@ export function useRemoteAudio({
 
       playAudio();
 
-      if (!isConnectedRef.current) {
-        console.log(`[Audio] Received audio track from peer ${peerId}, completing reconnection`);
-        markConnected();
-      }
-
       stream.getAudioTracks().forEach((track) => {
         track.onunmute = () => {
           console.log(`[Audio] Track unmuted for peer: ${peerId}`);
@@ -335,8 +326,6 @@ export function useRemoteAudio({
       isDeafenedRef,
       registerRemoteAnalyser,
       setNeedsAudioUnlock,
-      markConnected,
-      isConnectedRef,
     ]
   );
 

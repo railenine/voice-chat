@@ -61,6 +61,7 @@ export const VoiceMobileParticipants: React.FC<VoiceMobileParticipantsProps> = m
               layout="compact"
               peerId={peer.peerId}
               nickname={peer.nickname}
+                connectionState={peer.connectionState}
               isSpeaking={peer.isSpeaking}
               isMuted={peer.isMuted}
               isDeafened={peer.isDeafened}

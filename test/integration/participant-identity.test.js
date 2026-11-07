@@ -8,6 +8,7 @@ it('retains both participants and connections when their nicknames match', async
   browserEnvironment();
   let socket, api, renderer;
   const closed = [];
+  const connections = [];
   globalThis.WebSocket = class {
     static OPEN = 1;
     readyState = 1;
@@ -17,6 +18,7 @@ it('retains both participants and connections when their nicknames match', async
   };
   globalThis.RTCPeerConnection = class {
     connectionState = 'new';
+    constructor() { connections.push(this); }
     addTrack() {}
     close() { closed.push(this); }
   };
@@ -31,5 +33,11 @@ it('retains both participants and connections when their nicknames match', async
     await act(async () => message({ type: 'user-joined', peer: { peerId: 'second-peer', nickname: 'Alex' } }));
     assert.deepEqual(api.peers.map(peer => peer.peerId).sort(), ['first-peer', 'second-peer']);
     assert.equal(closed.length, 0);
+    assert.equal(api.isConnected, true, 'room membership is acknowledged independently of media');
+    assert.equal(api.peers[0].connectionState, 'reconnecting');
+    await act(async () => { connections[0].connectionState = 'connected'; connections[0].onconnectionstatechange(); });
+    assert.equal(api.peers[0].connectionState, 'connected');
+    await act(async () => { connections[0].connectionState = 'failed'; connections[0].onconnectionstatechange(); });
+    assert.equal(api.peers[0].connectionState, 'disconnected');
   } finally { await act(async () => renderer.unmount()); }
 });
