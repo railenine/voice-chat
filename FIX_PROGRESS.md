@@ -125,3 +125,21 @@ before any device toggle, then tests switching and reconnect. The unrestricted
 autoplay flag was removed. Physical USB output confirmation remains pending;
 these tests do not certify the actual speaker signal on user hardware.
 
+
+## Forced TURN staging preparation (2026-11-07)
+
+User diagnostics: Coturn active, static lt-cred-mech account configured, ports
+3478/5349, relay UDP range 49152-65535, realm rvxis.site, UFW inactive.
+Provided public certificate is Let's Encrypt, valid 2026-09-19 to 2026-12-18.
+These observations do not prove external relay reachability or matching credentials.
+Added optional staging-local.sh --turn, static credential parser (only the two
+TURN fields, in memory, no shell execution/copy/output), and separate relay-only
+frontend probe. Normal application bundles are not injected. Test entry requires
+loopback 3102, LiveKit disabled and the injected frontend. Production unchanged.
+Probe forces relay on construction and setConfiguration, reports selected pair
+types and audio bytes without IPs/credentials. Empty/disconnected/direct paths
+cannot pass. All 103 tests, typecheck, web build and manifests passed; Bash
+parsed by shfmt. Real Chromium 156 verified the forced policy and nonpassing
+empty-media report. Actual TURN allocations/audio and individual UDP/TCP/TLS
+paths remain untested until the user runs the two-device staging check.
+

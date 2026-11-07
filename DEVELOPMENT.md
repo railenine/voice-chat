@@ -78,3 +78,20 @@ This first pass checks browser voice, session behavior and file sharing using
 STUN only. It does not validate relay or screen sharing. Shared browser profiles
 also do not reproduce two independent devices/networks. A separately isolated
 LiveKit setup and a desktop test build remain required before release.
+
+### Forced TURN staging check
+
+Use a separate archive with `scripts/staging-relay-probe.js` copied to dist and
+`<script src="/staging-relay-probe.js"></script>` inserted immediately after the
+opening head tag, before the application bundle. Run `staging-local.sh --turn`.
+This mode reads only COTURN_USER/COTURN_PASSWORD into memory from the existing
+backend .env; it does not copy that file or modify Coturn. It requires loopback
+3102, LiveKit disabled and the relay probe in index.html, or refuses startup.
+The ordinary launch without --turn stays STUN-only. Do not publish the test dist.
+
+On both devices, reload the test page, join the same room and exchange speech.
+`await rvxTurnReport()` in the browser console must show a connected peer, relay
+policy, both selected candidates of type relay, nonzero incoming/outgoing audio
+bytes and passed=true. Empty results do not constitute success. The report omits
+addresses, ICE configuration and credentials. This first check certifies only
+the selected transport: it does not separately certify UDP, TCP and TLS paths.

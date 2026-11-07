@@ -2,6 +2,11 @@
 # Foreground staging only. No PM2, nginx, firewall, production files or SFU keys.
 set -Eeuo pipefail
 umask 077
+entry=server/index.js
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != --turn ) ]]; then
+  echo 'Usage: staging-local.sh [--turn]' >&2; exit 1;
+fi
+if [[ "${1:-}" == --turn ]]; then entry=scripts/staging-turn.js; fi
 app=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 root=/opt/rvxis-staging
 [[ "$app" == "$root"/app-* && -f "$app/dist/index.html" ]] || {
@@ -41,8 +46,12 @@ env -i PATH="$runtime/bin:/usr/bin:/bin" \
   NPM_CONFIG_CACHE="$root/npm-cache" NPM_CONFIG_USERCONFIG=/dev/null \
   NPM_CONFIG_GLOBALCONFIG="$root/npm-global.conf" "$runtime/bin/npm" ci --omit=dev --ignore-scripts
 echo 'Staging: 127.0.0.1:3102. Keep this terminal open; Ctrl+C stops it.'
-echo 'No LiveKit/TURN credentials: screen sharing and relay are outside this first check.'
+if [[ "$entry" == server/index.js ]]; then
+  echo 'No LiveKit/TURN credentials: screen sharing and relay are outside this first check.'
+else
+  echo 'Relay-only test: existing TURN credentials in memory, no production service changes.'
+fi
 exec env -i PATH="$runtime/bin:/usr/bin:/bin" NODE_ENV=production \
   HOST=127.0.0.1 PORT=3102 DISABLE_LIVEKIT=1 \
   CORS_ORIGIN=http://localhost:3000,http://127.0.0.1:3000 \
-  RVXIS_RELEASE="$(basename "$app")" "$runtime/bin/node" server/index.js
+  RVXIS_RELEASE="$(basename "$app")" "$runtime/bin/node" "$entry"
