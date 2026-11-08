@@ -41,8 +41,8 @@ jobs:
           rustc --edition=2021 --test src-tauri/src/installation.rs -o "$RUNNER_TEMP/rvxis-installation-tests"
           "$RUNNER_TEMP/rvxis-installation-tests"
 
-      - name: Migration runtime ownership regression
-        run: sudo "$(command -v node)" --test test/root/migration-runtime.test.js
+      - name: Migration runtime and public frontend regressions
+        run: sudo "$(command -v node)" --test test/root/*.test.js
 
       - name: Unit & Integration Tests
         run: npm test

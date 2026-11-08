@@ -4,6 +4,7 @@ import crypto from 'node:crypto';
 import { spawn, spawnSync, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { productionMigrationTargets, validateMigrationTargets } from './migration-targets.js';
+import { copyFrontendTree, frontendAssets, validateFrontendMime } from './frontend-tree.js';
 
 const exists = file => Boolean(fs.lstatSync(file, { throwIfNoEntry: false }));
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
@@ -45,10 +46,11 @@ async function health(port) {
   if (!response.ok || data.status !== 'ok') throw new Error('Backend health failed');
   return data;
 }
-async function frontendHash(config) {
+async function frontendResource(config, url) {
   const args = ['--fail', '--silent', '--show-error', '--max-time', '5', '--noproxy', '*'];
   if (config.frontendResolve) args.push('--resolve', config.frontendResolve);
-  args.push(config.frontendUrl);
+  const marker = `\nRVXIS_RESOURCE_${crypto.randomBytes(8).toString('hex')}:`;
+  args.push('--write-out', `${marker}%{content_type}`, url);
   return new Promise((resolve, reject) => {
     const child = spawn('curl', args, { stdio: ['ignore', 'pipe', 'ignore'] });
     const chunks = [];
@@ -63,9 +65,23 @@ async function frontendHash(config) {
     child.once('close', code => {
       clearTimeout(deadline);
       if (code !== 0 || oversized) reject(new Error('Frontend HTTP/TLS check failed'));
-      else resolve(hash(Buffer.concat(chunks)));
+      else {
+        const bytes = Buffer.concat(chunks), position = bytes.lastIndexOf(Buffer.from(marker));
+        if (position < 0) { reject(new Error('Missing frontend response metadata')); return; }
+        resolve({ body: bytes.subarray(0, position), contentType: bytes.subarray(position + marker.length).toString() });
+      }
     });
   });
+}
+async function frontendHash(config) {
+  const page = await frontendResource(config, config.frontendUrl);
+  for (const asset of frontendAssets(page.body.toString('utf8'), config.frontendUrl)) {
+    const response = await frontendResource(config, asset.url);
+    validateFrontendMime(response.contentType, asset.css);
+    const file = path.join(config.frontend, asset.relative);
+    if (hash(response.body) !== hash(fs.readFileSync(file))) throw new Error('Frontend asset differs from the on-disk resource');
+  }
+  return hash(page.body);
 }
 function ensureHost(config) {
   validateMigrationTargets(config);
@@ -208,8 +224,7 @@ export async function applyMigration(config, approvedPlanId, testFault) {
     fs.cpSync(config.backend, state.legacy, { recursive: true, dereference: false, force: false, errorOnExist: true,
       filter: file => file !== path.join(config.backend, '.env') });
     fs.chmodSync(state.legacy, 0o755);
-    fs.cpSync(config.frontend, path.join(state.legacy, 'dist'), { recursive: true, dereference: false, force: false, errorOnExist: true });
-    fs.chmodSync(path.join(state.legacy, 'dist'), 0o755);
+    copyFrontendTree(config.frontend, path.join(state.legacy, 'dist'));
     const sharedEnv = path.join(config.shared, '.env');
     fs.copyFileSync(path.join(config.backend, '.env'), sharedEnv, fs.constants.COPYFILE_EXCL); fs.chmodSync(sharedEnv, 0o600);
     fs.symlinkSync(sharedEnv, path.join(state.legacy, '.env'));

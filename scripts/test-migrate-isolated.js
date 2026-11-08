@@ -70,9 +70,15 @@ try {
     const config = isolatedMigrationTargets(root);
     process.env = { ...cleanEnvironment, PM2_HOME: config.pm2Home };
     for (const directory of [config.frontend, path.join(config.backend, 'server'), path.join(config.runtimeSource, 'bin'), config.pm2Home]) fs.mkdirSync(directory, { recursive: true, mode: 0o755 });
-    fs.writeFileSync(path.join(config.frontend, 'index.html'), 'unchanged legacy frontend');
+    fs.writeFileSync(path.join(config.frontend, 'index.html'), '<script src="/assets/app.js"></script><link href="/assets/style.css" rel="stylesheet">');
     fs.chmodSync(config.frontend, 0o755);
     fs.chmodSync(path.join(config.frontend, 'index.html'), 0o644);
+    fs.mkdirSync(path.join(config.frontend, 'assets'));
+    fs.chmodSync(path.join(config.frontend, 'assets'), 0o755);
+    for (const [name, bytes] of [['app.js', 'console.log("legacy");'], ['style.css', 'body{display:block}']]) {
+      const file = path.join(config.frontend, 'assets', name);
+      fs.writeFileSync(file, bytes); fs.chmodSync(file, 0o644);
+    }
     fs.writeFileSync(path.join(config.backend, 'package.json'), JSON.stringify({ name: 'migration-fixture', version: '0.2.2', type: 'module' }));
     fs.writeFileSync(path.join(config.backend, '.env'), 'MIGRATION_FIXTURE_ONLY=not-a-real-secret\n', { mode: 0o644 });
     fs.chmodSync(path.join(config.backend, '.env'), 0o644);
@@ -82,7 +88,22 @@ import http from 'node:http';
 http.createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({status:'ok',version:'0.2.2',sentinel:process.env.MIGRATION_SENTINEL}));}).listen(Number(process.env.PORT),process.env.HOST||'127.0.0.1');
 `);
     const web = http.createServer((req, res) => {
-      try { res.end(fs.readFileSync(path.join(config.frontend, 'index.html'))); } catch { res.writeHead(503).end(); }
+      try {
+        const pathname = new URL(req.url, 'http://127.0.0.1:3302').pathname;
+        if (!['/', '/assets/app.js', '/assets/style.css'].includes(pathname)) { res.writeHead(404).end(); return; }
+        const file = fs.realpathSync(path.join(config.frontend, pathname === '/' ? 'index.html' : pathname.slice(1)));
+        // Emulate nginx's unprivileged access, even though the fixture runs as root.
+        if (!(fs.statSync(file).mode & 0o004)) throw new Error('Unreadable public resource');
+        for (let dir = path.dirname(file); dir !== config.root; dir = path.dirname(dir)) {
+          if (!dir.startsWith(config.root + '/') || !(fs.statSync(dir).mode & 0o001)) throw new Error('Untraversable public directory');
+        }
+        res.setHeader('Content-Type', pathname.endsWith('.js') ? 'application/javascript' : pathname.endsWith('.css') ? 'text/css' : 'text/html');
+        res.end(fs.readFileSync(file));
+      } catch {
+        // Reproduce try_files fallback: status 200 alone must not pass resource checks.
+        try { res.setHeader('Content-Type', 'text/html'); res.end(fs.readFileSync(path.join(config.frontend, 'index.html'))); }
+        catch { res.writeHead(503).end(); }
+      }
     });
     await new Promise(resolve => web.listen(3302, '127.0.0.1', resolve));
     let used = false;
@@ -104,6 +125,7 @@ http.createServer((req,res)=>{res.setHeader('Content-Type','application/json');r
         assert.equal(fs.statSync(config.backups).mode & 0o777, 0o700);
         assert.equal(fs.statSync(config.releases).mode & 0o777, 0o755);
         assert.equal(fs.statSync(path.join(config.frontend, 'index.html')).mode & 0o777, 0o644);
+        assert.equal(fs.statSync(path.join(config.frontend, 'assets')).mode & 0o777, 0o755);
         const active = await state(config);
         assert.equal(active.data.sentinel, 'must-survive');
         assert.equal(active.proc.pm2_env.exec_interpreter, result.interpreter);

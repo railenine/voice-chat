@@ -319,3 +319,19 @@ comes from a separate official SHA-checked archive extracted --no-same-owner und
 /opt/rvxis-migration-input; existing staging runtime is left untouched. Full Linux
 rehearsal must be repeated; the original failure is not counted as a passed case.
 
+## Production frontend permission regression (2026-11-08)
+
+User confirmed migration mechanical post-checks but browser showed blank themed
+screen. External requests proved JS/CSS returned HTML with200. SSH namei/stat
+confirmed copied assets0700, original0755. Native recursive copy under umask077
+did not preserve nested directory accessibility; tests only checked index/root.
+User restored assets mode from original without backend restart; UI recovery and
+external JS/CSS MIME confirmed, then user verified the site works. This was a
+migration defect, not a successful earlier web smoke.
+
+Copy now explicitly restores public directory modes without following links.
+Verification checks entrypoint JS/CSS MIME/exact bytes, rejecting SPA fallback.
+Root CI copies a nested frontend under077 and reads as UID65534; full migration
+fixture emulates nginx traversal and HTML fallback. No new app rollout/release
+authorization is implied by this corrective work.
+

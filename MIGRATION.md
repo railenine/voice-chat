@@ -83,3 +83,16 @@ CI also runs all four migration scenarios with Node22.22.0 and private PM2 6.0.8
 Its --ci mode explicitly reports production comparison as null (not applicable).
 Normal VPS mode still requires the real production snapshot and does not accept
 that omission. The CI fixture run does not replace the VPS rehearsal.
+
+## Public frontend access regression
+
+HTTP verification fetches local JavaScript/CSS entrypoints, requiring correct
+MIME types and bytes. HTTP200 returning SPA HTML fallback is a failure. Directory
+modes are explicitly restored after copy; umask077 must not hide public assets.
+Root CI reads a nested copied asset as UID65534. Migration fixtures emulate nginx
+traversal permissions and fallback HTML instead of bypassing them as root.
+
+Completed migration d8aebd478ec8ecfc exposed the old defect: copied assets0700,
+source0755. Source mode was restored without a backend restart; user verified
+recovery and external JS/CSS MIME checks passed. Do not reuse the old69eea6f
+migrator for a new migration. Its mechanical pass did not certify a working UI.
