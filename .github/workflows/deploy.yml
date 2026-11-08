@@ -65,4 +65,6 @@ jobs:
           port: ${{ secrets.VPS_PORT }}
           key: ${{ secrets.VPS_SSH_KEY }}
           envs: RVXIS_RELEASE,RVXIS_FRONTEND
-          script: bash "/var/www/voice-chat-releases/$RVXIS_RELEASE/scripts/deploy-candidate.sh"
+          script: |
+            export PATH="/opt/rvxis-runtime/current/bin:$PATH"
+            bash "/var/www/voice-chat-releases/$RVXIS_RELEASE/scripts/deploy-candidate.sh"

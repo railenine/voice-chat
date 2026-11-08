@@ -45,6 +45,8 @@ and `/var/www/voice-chat-shared/.env`. The existing frontend path (TARGET_DIR)
 and `/var/www/voice-chat-backend` must be symlinks to a retained working release.
 This one-time migration requires deliberate host maintenance and a backup;
 the deployment script refuses to move legacy directories or copy secrets for you.
+The separate, approval-gated legacy migration and isolated prerequisite are
+documented in [MIGRATION.md](MIGRATION.md); its default operation is read-only.
 Do not change the nginx document-root path: keep the configured path as the
 stable symlink. Ensure the deploy account owns those links and release directory,
 and can run Node 22.22+, npm and PM2. Port 3101 is reserved for candidate probing.

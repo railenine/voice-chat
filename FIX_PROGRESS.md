@@ -290,3 +290,23 @@ TypeScript passed. Browser smoke now inspects actual computed ancestor opacity
 during a delayed first manual check. The previously built installed test pair
 contains the old UI and must be rebuilt to manually confirm the correction.
 
+User confirmed the rebuilt modal opens correctly. Installed updater foreign-key
+and tampered signature errors were confirmed by screenshots; valid update was
+confirmed by user plus installed PE version 0.2.9002. Byte comparison with B
+differs only in the known Tauri NSS/UNK bundle marker. Portable negative/valid
+update and restart checks passed earlier. Production key/CDN remains untested.
+
+## Legacy migration preparation (2026-11-08)
+
+Fresh user diagnostics: current 0.2.2 healthy on system Node20.20.2; verified
+private Node22.22.0 available. Real frontend/backend share one filesystem;
+backend has no dist; .env is 0644; release/shared trees absent. PM2 is one online
+fork without watch/extra args; probe3101 free. Prepared a default-read-only
+plan/apply/rollback tool with strict targets, dedicated runtime, private
+journal/backups, legacy Node22 probe, shared env0600, preserved PM2 record/env,
+health/frontend/interpreter checks and recovery. Isolated tests cover
+success/rollback, probe failure, partial move and post-activation failure.
+SSH workflow selects dedicated runtime PATH; deploy-candidate flow unchanged.
+Linux/PM2 rehearsal and production plan pending; no production apply/restart or
+deployment approval/execution has occurred.
+
