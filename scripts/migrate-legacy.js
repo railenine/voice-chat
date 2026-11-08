@@ -45,13 +45,27 @@ async function health(port) {
   if (!response.ok || data.status !== 'ok') throw new Error('Backend health failed');
   return data;
 }
-function frontendHash(config) {
+async function frontendHash(config) {
   const args = ['--fail', '--silent', '--show-error', '--max-time', '5', '--noproxy', '*'];
   if (config.frontendResolve) args.push('--resolve', config.frontendResolve);
   args.push(config.frontendUrl);
-  const result = spawnSync('curl', args, { timeout: 7000, maxBuffer: 2 * 1024 * 1024 });
-  if (result.status !== 0) throw new Error('Frontend HTTP/TLS check failed');
-  return hash(result.stdout);
+  return new Promise((resolve, reject) => {
+    const child = spawn('curl', args, { stdio: ['ignore', 'pipe', 'ignore'] });
+    const chunks = [];
+    let size = 0, oversized = false;
+    const deadline = setTimeout(() => child.kill('SIGKILL'), 7000);
+    child.stdout.on('data', chunk => {
+      size += chunk.length;
+      if (size > 2 * 1024 * 1024) { oversized = true; child.kill('SIGKILL'); }
+      else chunks.push(chunk);
+    });
+    child.once('error', () => { clearTimeout(deadline); reject(new Error('Frontend HTTP/TLS check failed')); });
+    child.once('close', code => {
+      clearTimeout(deadline);
+      if (code !== 0 || oversized) reject(new Error('Frontend HTTP/TLS check failed'));
+      else resolve(hash(Buffer.concat(chunks)));
+    });
+  });
 }
 function ensureHost(config) {
   validateMigrationTargets(config);
@@ -92,7 +106,7 @@ export async function migrationPlan(config = productionMigrationTargets) {
   const version = JSON.parse(fs.readFileSync(path.join(config.backend, 'package.json'), 'utf8')).version;
   if (baseline.version !== version) throw new Error('Running version differs from on-disk backend');
   const frontendSha = hash(fs.readFileSync(path.join(config.frontend, 'index.html')));
-  if (frontendHash(config) !== frontendSha) throw new Error('Frontend route differs from the expected document root');
+  if (await frontendHash(config) !== frontendSha) throw new Error('Frontend route differs from the expected document root');
   const listener = command(config, 'ss', ['-H', '-ltn', `sport = :${config.probePort}`]).trim();
   if (listener) throw new Error('Candidate probe port is occupied');
   const stats = [config.frontend, config.backend, envFile].map(file => {
@@ -156,7 +170,7 @@ async function restore(config, state) {
   }
   command(config, 'pm2', ['restart', String(state.pmId), '--interpreter', state.oldNode]);
   await waitBackend(config, state.version, state.oldNode);
-  if (frontendHash(config) !== state.frontendSha) throw new Error('Restored frontend verification failed');
+  if (await frontendHash(config) !== state.frontendSha) throw new Error('Restored frontend verification failed');
   command(config, 'pm2', ['save']);
   phase(state, 'rolled-back');
 }
@@ -233,7 +247,7 @@ export async function applyMigration(config, approvedPlanId, testFault) {
     command(config, 'pm2', ['restart', String(state.pmId), '--interpreter', node]);
     if (testFault === 'activation') throw new Error('Injected activation failure');
     await waitBackend(config, state.version, fs.realpathSync(node)); checkAbort();
-    if (frontendHash(config) !== state.frontendSha) throw new Error('Migrated frontend verification failed');
+    if (await frontendHash(config) !== state.frontendSha) throw new Error('Migrated frontend verification failed');
     command(config, 'pm2', ['save']); phase(state, 'complete');
     return { passed: true, id, version: state.version, stateDirectory: directory, interpreter: node, applicationCodeChanged: false };
   } catch (error) {
