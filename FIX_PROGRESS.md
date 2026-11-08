@@ -227,3 +227,16 @@ separate product/identifier and added fresh-artifact selection plus installer
 checksum metadata. Build and manual install evidence are recorded in outputs.
 No production publication, deployment or installer execution is performed.
 
+## CI media browser correction (2026-11-08)
+
+GitHub run 42472712263 on 3bcc789 failed only the browser media smoke step;
+typecheck, shell syntax, unit/integration tests, manifests and build passed.
+Reproduced with pinned Chromium 141 Headless Shell on Windows: the saved fake
+output ID differed from the outputs enumerated in the client page. Full Chromium
+141 passed with the same checks. Changed the default launcher to channel chromium
+(new headless) and removed implicit platform-specific installed-browser selection.
+Explicit RVXIS_BROWSER_EXECUTABLE remains available. Output-assertion failures
+now report saved/expected sinks and media element/track state. No assertion was
+removed, timeout enlarged or application media behavior changed. Local pinned
+new-headless scenario passed; updated GitHub CI must confirm Linux behavior.
+

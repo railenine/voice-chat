@@ -25,8 +25,11 @@ node scripts/generate-latest-json.js --validate-only
 ```
 
 The browser test uses real Chromium WebRTC and a generated fake microphone.
-Install a browser with `npx playwright-core install chromium` on machines without
-Chrome/Edge, or set RVXIS_BROWSER_EXECUTABLE. This checks local audio transport;
+Install the pinned browser with `npx playwright-core install chromium` on every
+test machine, or explicitly set RVXIS_BROWSER_EXECUTABLE to a full Chrome/Edge
+binary. The default uses channel chromium (new headless), consistently across
+Windows and Linux. Headless Shell exposes unstable fake output IDs across pages
+and cannot validate the saved-device scenario. This checks local audio transport;
 it does not certify NAT/TURN, mobile background audio or actual screen capture.
 The old test:mesh name is retained as an alias for signaling compatibility.
 

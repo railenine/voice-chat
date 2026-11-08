@@ -20,15 +20,14 @@ buffer.writeUInt32LE(48000, 24); buffer.writeUInt32LE(96000, 28); buffer.writeUI
 buffer.write('data', 36); buffer.writeUInt32LE(samples * 2, 40);
 for (let i = 0; i < samples; i++) buffer.writeInt16LE(Math.round(5000 * (Math.sin(i * Math.PI * 2 * 180 / 48000) + 0.4 * Math.sin(i * Math.PI * 2 * 360 / 48000))), 44 + i * 2);
 fs.writeFileSync(wav, buffer);
-const executablePath = process.env.RVXIS_BROWSER_EXECUTABLE || [
-  'C:/Program Files/Google/Chrome/Application/chrome.exe',
-  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-].find(file => fs.existsSync(file));
+const executablePath = process.env.RVXIS_BROWSER_EXECUTABLE;
 let browser;
 try {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch({ executablePath, headless: true, args: [
+  // Use the full Chromium browser's new headless mode in CI. Headless Shell
+  // exposes unstable fake output IDs across pages, invalidating a saved selection.
+  browser = await chromium.launch({ executablePath, channel: executablePath ? undefined : 'chromium', headless: true, args: [
     '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream',
     `--use-file-for-fake-audio-capture=${wav}`,
   ] });
@@ -106,12 +105,28 @@ try {
   }
   await Promise.all([expectAudio(first), expectAudio(second)]);
   async function expectSelectedOutput(sinkId = output.deviceId) {
-    await first.waitForFunction(id => {
-      const voice = [...document.querySelectorAll('audio[data-rvxis-audio-role="voice"]')];
-      const streams = [...document.querySelectorAll('audio')].filter(audio => audio.srcObject);
-      return voice.length > 0 && voice.every(audio => !audio.paused && audio.readyState >= 2) &&
-        streams.every(audio => audio.sinkId === id);
-    }, sinkId, { timeout: 5000 });
+    try {
+      await first.waitForFunction(id => {
+        const voice = [...document.querySelectorAll('audio[data-rvxis-audio-role="voice"]')];
+        const streams = [...document.querySelectorAll('audio')].filter(audio => audio.srcObject);
+        return voice.length > 0 && voice.every(audio => !audio.paused && audio.readyState >= 2) &&
+          streams.every(audio => audio.sinkId === id);
+      }, sinkId, { timeout: 5000 });
+    } catch (error) {
+      console.error('Audio output assertion failed', JSON.stringify(await first.evaluate(async id => ({
+        expectedSink: id,
+        savedSink: localStorage.getItem('voice_chat_audio_output'),
+        outputs: (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'audiooutput').map(device => device.toJSON()),
+        audio: [...document.querySelectorAll('audio')].map(audio => ({
+          role: audio.dataset.rvxisAudioRole, sinkId: audio.sinkId, paused: audio.paused,
+          readyState: audio.readyState, muted: audio.muted, stream: Boolean(audio.srcObject),
+          tracks: audio.srcObject instanceof MediaStream ? audio.srcObject.getTracks().map(track => ({
+            kind: track.kind, enabled: track.enabled, muted: track.muted, readyState: track.readyState,
+          })) : [],
+        })),
+      }), sinkId)));
+      throw error;
+    }
   }
   // This assertion runs before visiting settings or switching any device.
   await expectSelectedOutput();
