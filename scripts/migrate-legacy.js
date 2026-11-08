@@ -46,7 +46,7 @@ async function health(port) {
   return data;
 }
 function frontendHash(config) {
-  const args = ['--fail', '--silent', '--show-error', '--max-time', '5'];
+  const args = ['--fail', '--silent', '--show-error', '--max-time', '5', '--noproxy', '*'];
   if (config.frontendResolve) args.push('--resolve', config.frontendResolve);
   args.push(config.frontendUrl);
   const result = spawnSync('curl', args, { timeout: 7000, maxBuffer: 2 * 1024 * 1024 });
