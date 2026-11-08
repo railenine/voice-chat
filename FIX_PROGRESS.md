@@ -276,3 +276,17 @@ TLS server key remains only in scratch. Unit fixture signature/scenario tests
 passed. Build and actual manual update results are tracked separately in outputs.
 Ordinary staging updater is still blocked. See UPDATER_REHEARSAL.md for limits.
 
+## First manual updater check renders blank (2026-11-08)
+
+User confirmed installed test A and the installer update button, but saw a blank
+modal on the first manual version click; closing/reopening recovered it. The
+component regression reproduced the race: the open effect synchronizes status,
+while a second effect sets fading-out and loses its timer when that sync rerenders.
+Also covered rapid changes returning to the displayed state and close/reopen mid
+transition. One effect now owns opening/transitions, always restores visibility
+when status matches, clears its only timer and resets stale height on opening.
+The regressed real-component test failed before and passed after the fix;
+TypeScript passed. Browser smoke now inspects actual computed ancestor opacity
+during a delayed first manual check. The previously built installed test pair
+contains the old UI and must be rebuilt to manually confirm the correction.
+

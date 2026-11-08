@@ -70,7 +70,24 @@ try {
   });
   const errors = [];
   const preflight = await context.newPage();
+  await preflight.route('**/peerjs/info?*', async route => {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await route.continue();
+  });
   await preflight.goto(base);
+  const version = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+  await preflight.getByRole('button', { name: `RVxis v${version}`, exact: true }).click();
+  // Inspect after the old fade-out would have completed, while the request is pending.
+  await preflight.waitForTimeout(350);
+  assert.equal(await preflight.getByText('Проверяем наличие свежих версий...', { exact: true }).evaluate(node => {
+    for (let element = node; element; element = element.parentElement) {
+      if (Number(getComputedStyle(element).opacity) < 0.99) return false;
+      if (element.getAttribute('role') === 'dialog') return true;
+    }
+    return false;
+  }), true, 'First manual update check must show visible content, not a transparent modal');
+  await preflight.getByText('У вас установлена последняя версия', { exact: true }).waitFor();
+  await preflight.getByRole('button', { name: 'Понятно', exact: true }).click();
   const output = await preflight.evaluate(async () => {
     const permission = await navigator.mediaDevices.getUserMedia({ audio: true });
     permission.getTracks().forEach(track => track.stop());
@@ -156,7 +173,7 @@ try {
   await expectSelectedOutput();
   assert.equal(await first.evaluate(() => window.voiceStartedBeforeOutputReady), false);
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ browser: browser.version(), checks: ['two real peers with identical nicknames', 'bidirectional RTP bytes and audio energy', 'saved nondefault output on initial voice playback without device toggling', 'voice waits for slow sink initialization', 'manual mute survives deafen', 'WebSocket reconnect restores real audio'], passed: true }));
+  console.log(JSON.stringify({ browser: browser.version(), checks: ['first manual update check remains visible', 'two real peers with identical nicknames', 'bidirectional RTP bytes and audio energy', 'saved nondefault output on initial voice playback without device toggling', 'voice waits for slow sink initialization', 'manual mute survives deafen', 'WebSocket reconnect restores real audio'], passed: true }));
 } finally {
   await browser?.close();
   for (const ws of wss.clients) ws.terminate();
