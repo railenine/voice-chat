@@ -10,6 +10,9 @@ import { migrationPlan, applyMigration, rollbackMigration } from './migrate-lega
 import { prepareIsolatedRuntimeBinary } from './migration-runtime.js';
 
 if (process.platform !== 'linux' || process.getuid() !== 0) throw new Error('Run on the backend Linux VPS as root');
+const ciMode = process.argv.length === 3 && process.argv[2] === '--ci';
+if (process.argv.length > 2 && !ciMode) throw new Error('Unknown rehearsal option');
+if (ciMode && process.env.GITHUB_ACTIONS !== 'true') throw new Error('CI-only fixture mode requires GitHub Actions');
 if (process.versions.node.split('.').map(Number)[0] < 22) throw new Error('Private Node22 is required');
 process.umask(0o077);
 const parent = '/opt/rvxis-migration-smoke';
@@ -58,7 +61,7 @@ async function ready(config) {
 }
 try {
   for (const port of [3300, 3301, 3302]) await freePort(port);
-  productionBefore = await productionSnapshot();
+  productionBefore = ciMode ? null : await productionSnapshot();
   const disk = fs.statfsSync(parent);
   if (disk.bavail * disk.bsize < 2 * 1024 ** 3) throw new Error('At least 2GiB free is required for retained runtime fixtures');
   for (const scenario of ['success-and-explicit-rollback', 'probe', 'first-move', 'activation']) {
@@ -139,8 +142,9 @@ finally {
   }
   fs.rmdirSync(lock);
 }
-const report = { session, checks, productionPidAndPathsUnchanged: productionUnchanged,
-  isolatedPm2Stopped: privatePm2Stopped, passed: !error && productionUnchanged === true && privatePm2Stopped };
+const report = { mode: ciMode ? 'ci-fixtures-only' : 'vps-production-snapshot', session, checks,
+  productionPidAndPathsUnchanged: productionUnchanged, isolatedPm2Stopped: privatePm2Stopped,
+  passed: !error && (ciMode || productionUnchanged === true) && privatePm2Stopped };
 fs.writeFileSync(path.join(session, 'result.json'), JSON.stringify(report, null, 2));
 console.log(JSON.stringify(report, null, 2));
 if (error) throw error;

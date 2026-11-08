@@ -58,3 +58,20 @@ jobs:
 
       - name: Browser media smoke test
         run: npm run test:browser
+
+  migration-rehearsal:
+    name: Isolated Linux migration and rollback
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup matching migration runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - name: Install isolated PM2 tooling
+        run: npm install --prefix "$RUNNER_TEMP/rvxis-pm2" --ignore-scripts --no-audit --no-fund pm2@6.0.8
+      - name: Rehearse migration and rollback as root in isolated fixtures
+        run: |
+          sudo env -i PATH="$RUNNER_TEMP/rvxis-pm2/node_modules/.bin:$(dirname "$(command -v node)"):/usr/bin:/bin" \
+            GITHUB_ACTIONS=true "$(command -v node)" scripts/test-migrate-isolated.js --ci

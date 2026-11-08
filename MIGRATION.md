@@ -79,3 +79,7 @@ then review exact maintenance/rollback commands before final approval.
 Linux copyFile can preserve the source UID. The fixture helper explicitly assigns
 root ownership to its new copy only; production ownership checks stay strict.
 CI runs a root-only regression with a source owned by UID65534 to cover this.
+CI also runs all four migration scenarios with Node22.22.0 and private PM2 6.0.8.
+Its --ci mode explicitly reports production comparison as null (not applicable).
+Normal VPS mode still requires the real production snapshot and does not accept
+that omission. The CI fixture run does not replace the VPS rehearsal.
