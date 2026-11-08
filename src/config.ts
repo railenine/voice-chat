@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.2.2';
+export const APP_VERSION = '0.2.3';
 export const IS_STAGING_BUILD = import.meta.env?.VITE_RVXIS_STAGING === '1';
 export const PRODUCTION_SERVER = 'https://rvxis.site';
 export const PRODUCTION_WS = 'wss://rvxis.site/peerjs/ws';

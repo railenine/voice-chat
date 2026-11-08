@@ -126,6 +126,7 @@ function main() {
   let version = process.env.TAG_NAME
     ? process.env.TAG_NAME.replace(/^v/, '')
     : pkg.version;
+  if (version !== pkg.version) throw new Error('Tag does not match package version');
   console.log(`Target version: ${version}`);
 
   const repo = process.env.GITHUB_REPOSITORY || 'railenine/voice-chat';
@@ -139,8 +140,7 @@ function main() {
   if (fs.existsSync(nsisDir)) {
     const files = fs.readdirSync(nsisDir);
     installerFile =
-      files.find((f) => f.endsWith('.exe') && !f.endsWith('.sig') && f.includes(version)) ||
-      files.find((f) => f.endsWith('.exe') && !f.endsWith('.sig'));
+      files.find((f) => f === `RVxis_${version}_x64-setup.exe`);
     if (installerFile) {
       installerPath = path.join(nsisDir, installerFile);
     }
@@ -151,7 +151,7 @@ function main() {
     const releaseDir = path.join(rootDir, 'src-tauri', 'target', 'release');
     if (fs.existsSync(releaseDir)) {
       const rFiles = fs.readdirSync(releaseDir);
-      installerFile = rFiles.find((f) => f.endsWith('.exe') && (f.includes('setup') || f.includes(version)));
+      installerFile = rFiles.find((f) => f === `RVxis_${version}_x64-setup.exe`);
       if (installerFile) {
         installerPath = path.join(releaseDir, installerFile);
       }

@@ -55,7 +55,7 @@ app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(orig
 // Body parser: strictly limit payload size to 10kb to prevent memory DoS attacks
 app.use(express.json({ limit: '10kb' }));
 
-const APP_VERSION = '0.2.2';
+const APP_VERSION = '0.2.3';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints

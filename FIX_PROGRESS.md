@@ -335,3 +335,14 @@ Root CI copies a nested frontend under077 and reads as UID65534; full migration
 fixture emulates nginx traversal and HTML fallback. No new app rollout/release
 authorization is implied by this corrective work.
 
+## Release 0.2.3 preparation (2026-11-08)
+
+Version fields and unsigned manifest templates now identify the unpublished
+0.2.3 candidate. Manual desktop workflow signs and verifies portable and NSIS
+without creating a tag/release or deploying. Source guard rejects mismatched
+versions, local test configuration and differing public keys. Report binds
+source commit and artifact hashes/signatures; stale cached installers are
+rejected. Cross-version compatibility and a paired rollout plan remain release
+blockers; see RELEASE_PREPARATION.md. No production signing result is claimed
+until the manual Windows workflow succeeds.
+

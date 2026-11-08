@@ -77,6 +77,22 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
+      - name: Check production release source
+        run: node scripts/release-candidate.js --check-source
+        env:
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+
+      - name: Remove cached release bundles before building
+        shell: pwsh
+        run: |
+          $bundlePath = Join-Path $env:GITHUB_WORKSPACE 'src-tauri/target/release/bundle'
+          if (Test-Path -LiteralPath $bundlePath) {
+            $resolvedBundle = (Resolve-Path -LiteralPath $bundlePath).Path
+            $expectedBundle = [IO.Path]::GetFullPath($bundlePath)
+            if ($resolvedBundle -ne $expectedBundle) { throw 'Unexpected bundle directory' }
+            Remove-Item -LiteralPath $bundlePath -Recurse -Force
+          }
+
       - name: Build Desktop Application (Tauri v2)
         run: npx @tauri-apps/cli build --ignore-version-mismatches
         env:
@@ -99,13 +115,15 @@ jobs:
           fi
 
       - name: Generate and Sign latest.json
-        if: startsWith(github.ref, 'refs/tags/')
         run: node scripts/generate-latest-json.js
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+
+      - name: Verify signed artifacts and record source and hashes
+        run: node scripts/release-candidate.js
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
@@ -117,6 +135,9 @@ jobs:
             src-tauri/target/release/RVxis.exe
             src-tauri/target/release/voice-chat.exe
             latest.json
+            release-candidate.json
+            src-tauri/target/release/RVxis.exe.sig
+            src-tauri/target/release/bundle/nsis/*.sig
           if-no-files-found: error
 
       - name: Refuse to overwrite a published release

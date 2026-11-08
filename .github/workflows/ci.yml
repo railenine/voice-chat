@@ -50,6 +50,9 @@ jobs:
       - name: Validate Update Manifests
         run: node scripts/generate-latest-json.js --validate-only
 
+      - name: Check production release source
+        run: node scripts/release-candidate.js --check-source
+
       - name: Build Web Bundle
         run: npm run build
 
