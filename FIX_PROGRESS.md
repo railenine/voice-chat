@@ -240,3 +240,20 @@ now report saved/expected sinks and media element/track state. No assertion was
 removed, timeout enlarged or application media behavior changed. Local pinned
 new-headless scenario passed; updated GitHub CI must confirm Linux behavior.
 
+The follow-up run 42473423347 on c3c500a completed successfully, including
+the Linux browser media smoke step. Remote/local branches were synchronized.
+
+## Correct installed update mode before updater rehearsal (2026-11-08)
+
+Generated NSIS installer.nsi writes $INSTDIR/uninstall.exe and installs per-user
+under $LOCALAPPDATA/RVxis. Neither that marker nor that default path was detected
+by the old portable heuristic. Extracted installation detection, added the NSIS
+marker and preserved legacy markers/protected paths. Unknown current executable
+path now fails closed. The portable native command independently rejects an
+installed executable before temp-file cleanup, download or replacement, including
+when a caller explicitly requests portable mode. Staging updater stays disabled.
+Regression test failed on uninstall.exe before the marker fix, then all five
+Rust release tests passed in normal and staging builds. CI now compiles/runs the
+dependency-free installation regression module on Linux as well. This fixes mode
+selection/protection; it does not yet certify an actual signed desktop update.
+

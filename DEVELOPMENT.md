@@ -182,3 +182,10 @@ Keep the default staging installation path. The builder accepts only one freshly
 generated staging setup file and writes its SHA-256 to separate installer metadata.
 The normal checkout retains its production configuration. Installing, uninstalling
 and production-channel self-update require separate manual verification.
+
+Installed update mode recognizes NSIS `uninstall.exe` next to the executable,
+legacy uninstallers and protected installation paths. Portable replacement is
+also rejected natively for installed paths, regardless of the requested UI mode.
+The dependency-free installation regression runs in CI; full Rust tests still
+run in the native Windows workflow. A missing/removed uninstaller in a custom
+directory cannot establish installation status; retain installer-managed files.

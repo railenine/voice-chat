@@ -1,4 +1,5 @@
 mod portable_security;
+mod installation;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -142,18 +143,7 @@ fn start_drag(window: tauri::Window) {
 
 #[tauri::command]
 fn is_portable_mode() -> bool {
-    if let Ok(exe_path) = std::env::current_exe() {
-        let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new(""));
-        let has_uninstaller = exe_dir.join("Uninstall VoiceChat.exe").exists()
-            || exe_dir.join("Uninstall RVxis.exe").exists()
-            || exe_dir.join("unins000.exe").exists();
-        let path_str = exe_path.to_string_lossy().to_lowercase();
-        let in_programs = path_str.contains("appdata\\local\\programs")
-            || path_str.contains("program files");
-        !has_uninstaller && !in_programs
-    } else {
-        true
-    }
+    std::env::current_exe().map(|path| installation::is_portable_executable(&path)).unwrap_or(false)
 }
 
 #[tauri::command]
@@ -179,6 +169,7 @@ async fn apply_portable_update(
         return Err("Обновление требует корректных размера и SHA-256".into());
     }
     let current_exe = std::env::current_exe().map_err(|e| format!("Не удалось определить путь к приложению: {e}"))?;
+    installation::ensure_portable_executable(&current_exe)?;
     let parent_dir = current_exe.parent().ok_or("Не удалось определить папку приложения")?;
     let exe_name = current_exe.file_name().ok_or("Не удалось определить имя файла")?.to_string_lossy().to_string();
     let tmp_exe = parent_dir.join(format!("{exe_name}.update.tmp"));

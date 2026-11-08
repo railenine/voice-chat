@@ -36,6 +36,11 @@ jobs:
             bash -n "$file"
           done
 
+      - name: Installer mode regression
+        run: |
+          rustc --edition=2021 --test src-tauri/src/installation.rs -o "$RUNNER_TEMP/rvxis-installation-tests"
+          "$RUNNER_TEMP/rvxis-installation-tests"
+
       - name: Unit & Integration Tests
         run: npm test
 
