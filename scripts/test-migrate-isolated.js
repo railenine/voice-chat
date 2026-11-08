@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { spawnSync, execFileSync } from 'node:child_process';
 import { isolatedMigrationTargets } from './migration-targets.js';
 import { migrationPlan, applyMigration, rollbackMigration } from './migrate-legacy.js';
+import { prepareIsolatedRuntimeBinary } from './migration-runtime.js';
 
 if (process.platform !== 'linux' || process.getuid() !== 0) throw new Error('Run on the backend Linux VPS as root');
 if (process.versions.node.split('.').map(Number)[0] < 22) throw new Error('Private Node22 is required');
@@ -72,8 +73,7 @@ try {
     fs.writeFileSync(path.join(config.backend, 'package.json'), JSON.stringify({ name: 'migration-fixture', version: '0.2.2', type: 'module' }));
     fs.writeFileSync(path.join(config.backend, '.env'), 'MIGRATION_FIXTURE_ONLY=not-a-real-secret\n', { mode: 0o644 });
     fs.chmodSync(path.join(config.backend, '.env'), 0o644);
-    fs.copyFileSync(process.execPath, path.join(config.runtimeSource, 'bin/node'));
-    fs.chmodSync(path.join(config.runtimeSource, 'bin/node'), 0o755);
+    prepareIsolatedRuntimeBinary(process.execPath, config);
     fs.writeFileSync(path.join(config.backend, 'server/index.js'), `
 import http from 'node:http';
 http.createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({status:'ok',version:'0.2.2',sentinel:process.env.MIGRATION_SENTINEL}));}).listen(Number(process.env.PORT),process.env.HOST||'127.0.0.1');

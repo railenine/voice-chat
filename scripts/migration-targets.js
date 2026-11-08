@@ -2,7 +2,7 @@ export const productionMigrationTargets = Object.freeze({
   kind: 'production', frontend: '/var/www/voice-chat', backend: '/var/www/voice-chat-backend',
   releases: '/var/www/voice-chat-releases', shared: '/var/www/voice-chat-shared',
   backups: '/var/www/rvxis-migration-backups', state: '/opt/rvxis-migration',
-  runtime: '/opt/rvxis-runtime', runtimeSource: '/opt/rvxis-staging/node-v22.22.0-linux-x64',
+  runtime: '/opt/rvxis-runtime', runtimeSource: '/opt/rvxis-migration-input/node-v22.22.0-linux-x64',
   pm2Home: '/root/.pm2', processName: 'voicechat-server', port: 3000, probePort: 3101,
   frontendUrl: 'https://rvxis.site/', frontendResolve: 'rvxis.site:443:127.0.0.1',
 });

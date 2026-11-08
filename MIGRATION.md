@@ -7,6 +7,10 @@ The known host runs healthy 0.2.2 on system Node 20.20.2, PM2 voicechat-server,
 fork mode without watch/args. Frontend/backend are root-owned directories on the
 same filesystem; no backend dist or release/shared trees exist. .env is currently
 0644. The verified x64 Node 22.22.0 is cached under /opt/rvxis-staging.
+The test runner can use that cache, but production preparation uses a separate
+root-owned input under /opt/rvxis-migration-input. After the isolated rehearsal,
+prepare it with scripts/prepare-migration-runtime.sh: official HTTPS download,
+SHA256 manifest check and tar --no-same-owner. No running runtime is modified.
 
 ## Plan
 
@@ -71,3 +75,7 @@ interpreter/configuration and released ports/private PM2 stop. Fixtures validate
 control flow, not production dependency compatibility: the real pre-switch legacy
 Node22 probe remains required. First collect this result and production --plan,
 then review exact maintenance/rollback commands before final approval.
+
+Linux copyFile can preserve the source UID. The fixture helper explicitly assigns
+root ownership to its new copy only; production ownership checks stay strict.
+CI runs a root-only regression with a source owned by UID65534 to cover this.

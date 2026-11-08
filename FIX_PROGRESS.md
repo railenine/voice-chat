@@ -310,3 +310,12 @@ SSH workflow selects dedicated runtime PATH; deploy-candidate flow unchanged.
 Linux/PM2 rehearsal and production plan pending; no production apply/restart or
 deployment approval/execution has occurred.
 
+First Linux rehearsal 7f27685 stopped before any migration case: the copied test
+Node retained the archive owner's UID despite mode755. User report confirms
+production PID/paths unchanged and private PM2 stopped. Added isolated copy helper
+that chowns only its newly created fixture, plus a real root Linux CI regression
+with UID65534 source. Production owner guard is unchanged. Production source now
+comes from a separate official SHA-checked archive extracted --no-same-owner under
+/opt/rvxis-migration-input; existing staging runtime is left untouched. Full Linux
+rehearsal must be repeated; the original failure is not counted as a passed case.
+
