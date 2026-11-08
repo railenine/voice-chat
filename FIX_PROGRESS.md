@@ -257,3 +257,22 @@ Rust release tests passed in normal and staging builds. CI now compiles/runs the
 dependency-free installation regression module on Linux as well. This fixes mode
 selection/protection; it does not yet certify an actual signed desktop update.
 
+GitHub run 42473751613 on 6e1dc61 passed all checks, including the new standalone
+installation regression and Linux browser media smoke.
+
+## Isolated signed updater pair tooling (2026-11-08)
+
+Prepared build-updater-fixture.js, loopback-only HTTPS server and scenario tests.
+Only a git-archive copy is patched: separate random test identity/binary/product,
+versions 0.2.9001/0.2.9002, disposable in-memory signing key, app-local seven-day
+CA trust, local backend flag and visible UPDATER TEST badge. The snapshot-only
+check adapter uses the real UpdaterBuilder and returns its resource to the real
+JS Update class; plugin download/signature/install logic is retained. Portable
+download uses the existing native implementation, with local root and an explicit
+test-identity/localhost restriction. No system trust-store or production changes.
+Bad-signature and modified-bytes-with-matching-hash scenarios require signature
+rejection; valid serves the verified target. Private signing keys are never saved;
+TLS server key remains only in scratch. Unit fixture signature/scenario tests
+passed. Build and actual manual update results are tracked separately in outputs.
+Ordinary staging updater is still blocked. See UPDATER_REHEARSAL.md for limits.
+

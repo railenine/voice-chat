@@ -189,3 +189,7 @@ also rejected natively for installed paths, regardless of the requested UI mode.
 The dependency-free installation regression runs in CI; full Rust tests still
 run in the native Windows workflow. A missing/removed uninstaller in a custom
 directory cannot establish installation status; retain installer-managed files.
+
+The isolated signed updater pair is described in [UPDATER_REHEARSAL.md](UPDATER_REHEARSAL.md).
+Its builder/server touch only test snapshots and loopback HTTPS, with a disposable
+signing key and app-local CA trust. They do not enable updates in ordinary staging.
