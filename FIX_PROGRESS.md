@@ -346,3 +346,13 @@ rejected. Cross-version compatibility and a paired rollout plan remain release
 blockers; see RELEASE_PREPARATION.md. No production signing result is claimed
 until the manual Windows workflow succeeds.
 
+Manual Windows run42514296914 built 0.2.3 portable/NSIS/MSI and passed native
+tests, but failed generating the signed manifest. Reproduced using a disposable
+key: inherited TAURI_SIGNING_PRIVATE_KEY becomes --private-key and conflicts with
+explicit --private-key-path (-f). Previous local tests did not include that env.
+Signer child now removes inherited signing credentials and uses the supplied
+file/password arguments. Regression failed before the fix and passes after it;
+cryptographic verification remains mandatory. The failed run did not upload
+candidate artifacts or publish/deploy. Production-key verification awaits a new
+manual run on the corrected commit, not a rerun of the old commit.
+

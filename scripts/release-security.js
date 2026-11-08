@@ -31,9 +31,13 @@ export function verifyArtifact(file, signature, encodedKey) {
 export function signArtifact(file, keyPath, password, version, encodedKey) {
   if (keyPath) {
     const cli = path.resolve('node_modules/@tauri-apps/cli/tauri.js');
+    // Tauri maps this env key to --private-key, conflicting with explicit -f.
+    // Keep credentials out of the child environment; use only the supplied file.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) =>
+      !['TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD'].includes(name.toUpperCase())));
     // Arguments are never interpolated into shell text or echoed on failure.
     try {
-      execFileSync(process.execPath, [cli, 'signer', 'sign', '-f', keyPath, '--password', password ?? '', '--app-version', version, file], { stdio: 'ignore' });
+      execFileSync(process.execPath, [cli, 'signer', 'sign', '-f', keyPath, '--password', password ?? '', '--app-version', version, file], { stdio: 'ignore', env });
     } catch { throw new Error('Signing failed; release aborted'); }
   }
   const signature = readArtifactSignature(file);
