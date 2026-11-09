@@ -356,3 +356,16 @@ cryptographic verification remains mandatory. The failed run did not upload
 candidate artifacts or publish/deploy. Production-key verification awaits a new
 manual run on the corrected commit, not a rerun of the old commit.
 
+## Client/backend compatibility (2026-11-09)
+
+Six loopback Chromium cases from archived sources with independent locked
+dependencies confirmed: old backend accepts both clients/mixed rooms; new
+backend rejects old client uploads/ICE HTTP/LiveKit token401 and reconnect
+identity_in_use despite initially working voice/chat. New/new works. Legacy
+room-state caused the candidate to persist string undefined; fixed by validating
+session credentials, clearing absent/invalid values and omitting empty auth.
+Regression fails before and passes after. Matrix also asserts the old-client
+denials remain enforced; no auth fallback is added. See COMPATIBILITY.md for
+client-first rollout constraints and what is not covered. Existing signed
+run42515045176 predates this app-code fix and requires a new candidate build.
+

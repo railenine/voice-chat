@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -61,6 +63,17 @@ jobs:
 
       - name: Browser media smoke test
         run: npm run test:browser
+
+      - name: Legacy and candidate compatibility matrix
+        run: npm run test:compatibility
+
+      - name: Upload compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-report
+          path: .test-tmp/compat-*/report.json
+          if-no-files-found: ignore
 
   migration-rehearsal:
     name: Isolated Linux migration and rollback
