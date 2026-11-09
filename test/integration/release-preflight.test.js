@@ -24,7 +24,7 @@ it('prepares versions without reusing binary metadata and refuses unsafe push be
     execFileSync('git', ['init', '-b', 'fix/test'], { cwd: dir, env });
     const run = (...args) => spawnSync(process.execPath, ['scripts/bump-version.js', ...args], { cwd: dir, encoding: 'utf8', env });
     const denied = run('0.2.3', '--push');
-    assert.notEqual(denied.status, 0); assert.match(denied.stderr, /clean main branch/);
+    assert.notEqual(denied.status, 0); assert.match(denied.stderr, /Automatic push is disabled/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(dir, 'package.json'))).version, '0.2.2');
     assert.notEqual(run('0.2.1').status, 0);
     const prepared = run('0.2.3'); assert.equal(prepared.status, 0, prepared.stderr);

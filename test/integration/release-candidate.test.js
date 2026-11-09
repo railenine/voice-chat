@@ -38,11 +38,15 @@ it('release preparation verifies both signed artifacts and rejects stale bytes a
     };
     const portableFile = 'src-tauri/target/release/RVxis.exe';
     const manifest = { version,
+      portable_url: `https://github.com/railenine/voice-chat/releases/download/v${version}/RVxis.exe`,
       platforms: { 'windows-x86_64': asset(`src-tauri/target/release/bundle/nsis/RVxis_${version}_x64-setup.exe`, `RVxis_${version}_x64-setup.exe`) },
       portable: { 'windows-x86_64': asset(portableFile, 'RVxis.exe') } };
     write('latest.json', manifest);
+    asset(`src-tauri/target/release/bundle/msi/RVxis_${version}_x64_en-US.msi`, `RVxis_${version}_x64_en-US.msi`);
+    write('src-tauri/target/release/voice-chat.exe', fs.readFileSync(path.join(root, portableFile), 'utf8'));
+    write('RELEASE_NOTES.md', 'Candidate release notes');
     const report = releaseCandidateReport(root, 'a'.repeat(40));
-    assert.equal(report.artifacts.length, 2);
+    assert.equal(report.artifacts.length, 3);
     assert.equal(report.artifacts.every(a => a.signatureVerified), true);
     assert.equal(report.version, version);
     // Never sign a cached installer for another version as the new release.

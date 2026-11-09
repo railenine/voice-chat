@@ -91,3 +91,17 @@ jobs:
         run: |
           sudo env -i PATH="$RUNNER_TEMP/rvxis-pm2/node_modules/.bin:$(dirname "$(command -v node)"):/usr/bin:/bin" \
             GITHUB_ACTIONS=true "$(command -v node)" scripts/test-migrate-isolated.js --ci
+
+  windows-release-safety:
+    name: Windows release verification regressions
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test test/integration/desktop-promotion.test.js test/integration/release-candidate.test.js test/integration/release-archive.test.js test/integration/release-signing.test.js

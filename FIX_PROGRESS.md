@@ -369,3 +369,19 @@ denials remain enforced; no auth fallback is added. See COMPATIBILITY.md for
 client-first rollout constraints and what is not covered. Existing signed
 run42515045176 predates this app-code fix and requires a new candidate build.
 
+## Immutable desktop artifact promotion (2026-11-09)
+
+Prepared manual build/verify/publish modes, removing automatic tag rebuild and
+publication. Version bump --push now fails before mutation. Promotion requires
+an approved successful same-repository dispatch build, exact source checkout,
+immutable artifact run/digest and fresh format2 report. ZIP SHA is verified before
+allowlisted bounded extraction; portable/NSIS/MSI signatures, alias, notes and
+manifest hashes are verified. Publish uses a separate write-permission job after
+read-only verification and explicit typed confirmation. It creates a new source
+tag/draft without pushing main, uploads original bytes, reads every asset back,
+rechecks tag/latest, then publishes. Existing releases/tags are never replaced;
+partial failures leave a draft/tag for manual inspection, no automatic deletion.
+Tests use disposable keys and fake GitHub endpoints; Windows ZIP traversal and
+duplicate/missing/extra entry regressions are covered. No real tag/release/deploy
+was created. Fresh format2 GitHub build/verify remains the next integration check.
+
