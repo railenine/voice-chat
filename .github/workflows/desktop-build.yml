@@ -223,7 +223,7 @@ jobs:
     needs: [verify-candidate]
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
       actions: read
     steps:
       - uses: actions/checkout@v4
@@ -244,6 +244,7 @@ jobs:
         run: node scripts/promote-desktop.js
         env:
           GH_TOKEN: ${{ github.token }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
           CANDIDATE_SOURCE_ROOT: ${{ github.workspace }}/candidate-source
           PROMOTION_MODE: publish
           PUBLISH_CONFIRMATION: ${{ inputs.publish_confirmation }}

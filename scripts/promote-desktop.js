@@ -61,7 +61,7 @@ export function verifyPromotionCheckouts(verifierRoot, sourceRoot, workflowSha, 
 }
 
 export async function promoteDesktop({ sourceRoot, outputRoot, source, contextSha, runId, expectedDigest,
-  verifierCommit = contextSha, mode = 'verify', confirmation = '', token, fetchImpl = fetch, extract }) {
+  verifierCommit = contextSha, mode = 'verify', confirmation = '', token, publicationToken, fetchImpl = fetch, extract }) {
   if (!['verify', 'publish'].includes(mode)) throw Error('Invalid promotion mode');
   if (!/^[a-f0-9]{40}$/.test(source || '') || source !== contextSha) throw Error('Candidate must match source checkout exactly');
   if (!/^[a-f0-9]{40}$/.test(verifierCommit || '')) throw Error('Invalid verifier revision');
@@ -69,17 +69,22 @@ export async function promoteDesktop({ sourceRoot, outputRoot, source, contextSh
   const { version } = checkReleaseSource(sourceRoot), tag = `v${version}`, approvedDigest = digest(expectedDigest);
   if (mode === 'publish' && confirmation !== `PUBLISH ${tag}`) throw Error(`Publishing requires explicit PUBLISH ${tag} confirmation`);
   if (!token) throw Error('GitHub token is required');
+  if (mode === 'publish' && !publicationToken) throw Error('DESKTOP_RELEASE_TOKEN is required for publish: Contents write and Workflows write for this repository');
   const headers = { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'RVxis-verified-promotion' };
+  // Actions stays on GITHUB_TOKEN (Actions read). Only release/tag operations use
+  // the dedicated credential; GITHUB_TOKEN cannot receive Workflows write.
+  const requestHeaders = resource => ({ ...headers, Authorization: `Bearer ${
+    mode === 'publish' && !resource.startsWith('/actions/') ? publicationToken : token}` });
   async function api(resource, { method = 'GET', body, missing = false } = {}) {
-    const response = await fetchImpl(apiRoot + resource, { method, headers: { ...headers, 'Content-Type': 'application/json' },
+    const response = await fetchImpl(apiRoot + resource, { method, headers: { ...requestHeaders(resource), 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(90000) });
     if (missing && response.status === 404) return null;
     if (!response.ok) throw Error(`GitHub API ${method} ${resource.split('?')[0]} failed: ${response.status}`);
     return response.json();
   }
   async function download(resource, limit, accept = 'application/octet-stream') {
-    let response = await fetchImpl(apiRoot + resource, { headers: { ...headers, Accept: accept },
+    let response = await fetchImpl(apiRoot + resource, { headers: { ...requestHeaders(resource), Accept: accept },
       redirect: 'manual', signal: AbortSignal.timeout(90000) });
     if (response.status === 302) {
       const location = new URL(response.headers.get('location'));
@@ -132,7 +137,7 @@ export async function promoteDesktop({ sourceRoot, outputRoot, source, contextSh
   fs.writeFileSync(receiptPath, JSON.stringify(receipt, null, 2) + '\n');
   for (const file of files) {
     const response = await fetchImpl(`https://uploads.github.com/repos/${repository}/releases/${release.id}/assets?name=${encodeURIComponent(file.name)}`,
-      { method: 'POST', headers: { ...headers, 'Content-Type': 'application/octet-stream' }, body: file.data,
+      { method: 'POST', headers: { ...requestHeaders('/releases'), 'Content-Type': 'application/octet-stream' }, body: file.data,
         redirect: 'error', signal: AbortSignal.timeout(90000) });
     if (!response.ok) throw Error('Asset upload failed; draft is left unpublished');
     const uploaded = await response.json();
@@ -169,6 +174,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     source: process.env.EXPECTED_SOURCE, runId: process.env.CANDIDATE_RUN_ID,
     expectedDigest: process.env.EXPECTED_DIGEST, mode: process.env.PROMOTION_MODE,
     confirmation: process.env.PUBLISH_CONFIRMATION, token: process.env.GH_TOKEN,
+    publicationToken: process.env.DESKTOP_RELEASE_TOKEN,
     extract: ({ archive, destination, expectedFiles }) => {
       const allowed = path.join(outputRoot, 'expected-files.json');
       fs.writeFileSync(allowed, JSON.stringify(expectedFiles));

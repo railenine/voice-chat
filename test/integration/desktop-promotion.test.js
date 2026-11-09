@@ -13,7 +13,7 @@ function fakeGitHub(fixture, overrides = {}) {
   const json = (body, status = 200) => Response.json(body, { status });
   const fetchImpl = async (url, options = {}) => {
     const u = new URL(url), method = options.method || 'GET', resource = u.pathname.replace('/repos/railenine/voice-chat', '');
-    state.calls.push({ method, resource });
+    state.calls.push({ method, resource, authorization: options.headers?.Authorization });
     if (u.hostname === 'storage.example.test') {
       assert.equal(options.headers, undefined, 'Repository token must not reach storage');
       return new Response(overrides.corruptZip ? 'corrupt archive' : zip);
@@ -60,7 +60,7 @@ function fakeGitHub(fixture, overrides = {}) {
     throw Error(`Unexpected fake API request: ${method} ${resource}`);
   };
   return { state, zipDigest, options: () => ({ sourceRoot: fixture.sourceRoot, source: fixture.source, contextSha: fixture.source,
-    runId: '42', expectedDigest: zipDigest, token: 'test-only', outputRoot: fs.mkdtempSync(path.join(fixture.root, 'out-')), fetchImpl,
+    runId: '42', expectedDigest: zipDigest, token: 'test-only', publicationToken: 'publication-only', outputRoot: fs.mkdtempSync(path.join(fixture.root, 'out-')), fetchImpl,
     extract: ({ destination }) => fs.cpSync(fixture.artifactRoot, destination, { recursive: true }) }) };
 }
 
@@ -68,16 +68,25 @@ it('verification is read-only; publishing preserves exact signed bytes and reads
   const f = releaseFixture();
   try {
     const github = fakeGitHub(f);
-    const verified = await promoteDesktop({ ...github.options(), verifierCommit: 'b'.repeat(40) });
+    const verified = await promoteDesktop({ ...github.options(), publicationToken: undefined, verifierCommit: 'b'.repeat(40) });
     assert.equal(verified.published, false); assert.equal(verified.files.length, 10);
     assert.equal(verified.sourceCommit, f.source);
     assert.equal(verified.verifierCommit, 'b'.repeat(40));
     assert.ok(github.state.calls.every(c => c.method === 'GET'));
     await assert.rejects(promoteDesktop({ ...github.options(), mode: 'publish' }), /explicit PUBLISH/);
+    const before = github.state.calls.length;
+    await assert.rejects(promoteDesktop({ ...github.options(), publicationToken: undefined,
+      mode: 'publish', confirmation: `PUBLISH v${f.version}` }), /DESKTOP_RELEASE_TOKEN/);
+    assert.equal(github.state.calls.length, before, 'Missing publication credentials must fail before any API request');
     const published = await promoteDesktop({ ...github.options(), verifierCommit: 'b'.repeat(40), mode: 'publish', confirmation: `PUBLISH v${f.version}` });
     assert.equal(published.published, true); assert.equal(github.state.assets.length, 10);
     assert.equal(published.sourceCommit, f.source); assert.equal(published.verifierCommit, 'b'.repeat(40));
     assert.equal(github.state.draft, false); assert.equal(github.state.readback, 10);
+    for (const call of github.state.calls.slice(before)) {
+      if (call.resource === '/zip') assert.equal(call.authorization, undefined);
+      else assert.equal(call.authorization, call.resource.startsWith('/actions/')
+        ? 'Bearer test-only' : 'Bearer publication-only', 'Actions reads and release operations use separate credentials');
+    }
   } finally { f.cleanup(); }
 });
 

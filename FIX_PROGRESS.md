@@ -398,3 +398,15 @@ the already signed ed6139a candidate instead of rebuilding app bytes for a CI
 transport fix. Checkout mismatch/dirty guards are covered by real Git repos.
 Publication and backend deployment were skipped/not attempted in the failed run.
 
+2026-11-09: public promotion42610802728 passed verification but failed its
+first mutation POST /git/refs (403). Runner confirmed Contents write. No0.2.3
+tag/release exists; latest stays0.2.2. Candidate workflow changes require
+Workflows write unavailable to GITHUB_TOKEN (GitHub release API documentation).
+Publish now requires a separate DESKTOP_RELEASE_TOKEN for tag/release operations;
+Actions downloads keep the read-only GITHUB_TOKEN. Secret is scoped only to the
+publication step; build/verify need no new credentials. Regression fails before
+the fix, passes after, checks fail-fast missing token and authorization separation.
+Candidate source/digest and binaries remain unchanged. Owner must configure the
+short-lived repository-scoped credential before a new publish run. Real publish
+is not yet verified; no backend/main activation was performed.
+

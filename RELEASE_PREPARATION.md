@@ -65,6 +65,35 @@ source/digest. Для кандидата42596623845 сохраняются sourc
 
 ## Ошибки и восстановление
 
+### Права публикации кандидата с изменениями workflow
+
+Run42610802728: verify прошёл, publish остановился на POST /git/refs с403,
+несмотря на подтверждённый Contents write у GITHUB_TOKEN. Тегv0.2.3 и релиз
+не созданы. Кандидат ed6139a меняет .github/workflows относительно main.
+[GitHub требует Workflows write для такого target](https://docs.github.com/en/rest/releases/releases#create-a-release);
+обычный GITHUB_TOKEN это право получить не может. Повтор без исправления
+авторизации не устраняет причину. Не переносить target на main/другой SHA.
+
+Для publish нужен repository Actions secret DESKTOP_RELEASE_TOKEN: fine-grained
+PAT с коротким сроком действия, только для railenine/voice-chat, Contents:
+Read and write и Workflows: Read and write (Metadata read добавляется GitHub).
+Actions write, доступ ко всем репозиториям и административные права не нужны.
+Создание такого токена и добавление секрета выполняет владелец; значение не
+передавать в чат, файлы, логи или репозиторий. После выпуска временный PAT
+можно отозвать; для регулярных выпусков предпочтителен отдельный GitHub App.
+
+GITHUB_TOKEN остаётся read-only и читает Actions artifact. DESKTOP_RELEASE_TOKEN
+передаётся только шагу publish и используется для тегов, релиза, загрузки и
+чтения draft assets. Build/verify не получают его и не требуют его наличия.
+Publish без секрета останавливается до API-запросов. Тест проверяет раздельные
+Authorization для Actions и releases, отсутствие токенов на storage redirect,
+а также сохранение всех проверок подписей/байтов перед публикацией.
+
+После добавления секрета запустить НОВЫЙ workflow на исправленной ветке с
+прежними candidate_run_id/expected_source/expected_digest. Пересборка не нужна.
+Реальные права нового PAT и write/upload/readback остаются проверкой GitHub,
+локальный mock их выдать или подтвердить не может.
+
 Ни существующие published releases, ни drafts, ни теги не перезаписываются.
 При ошибке до публикации новый draft/tag могут остаться для ручного разбора;
 скрипт не удаляет их и не продолжает вслепую после повторного запуска.
