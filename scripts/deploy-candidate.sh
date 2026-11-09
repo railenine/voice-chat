@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+case "${1:-}" in
+  '') deploy_mode=activate ;;
+  --verify-only) deploy_mode=verify ;;
+  *) echo 'Usage: deploy-candidate.sh [--verify-only]' >&2; exit 1 ;;
+esac
+[[ $# -le 1 ]] || { echo 'Unexpected deployment arguments' >&2; exit 1; }
+
 # Provisioning is a separate, explicit operation. Never move legacy directories
 # or install/modify Coturn during an application release.
 [[ "${RVXIS_RELEASE:-}" =~ ^[a-f0-9]{40}$ ]] || { echo 'Invalid release ID' >&2; exit 1; }
@@ -61,6 +68,23 @@ done
 [[ "$ready" == true ]] || { echo 'Candidate health check failed' >&2; exit 1; }
 cleanup_probe
 
+if [[ "$deploy_mode" == verify ]]; then
+  echo 'Candidate verified; production links and process unchanged'
+  exit 0
+fi
+
+# The migrated legacy process may have NODE_ENV unset. A rollback must not
+# silently enable production-only behaviour in the restored application.
+old_node_env=$(pm2 jlist | node --input-type=module -e '
+  let input=""; for await (const chunk of process.stdin) input+=chunk;
+  const matches=JSON.parse(input).filter(p=>p.name===process.argv[1]);
+  if(matches.length!==1 || matches[0].pm2_env.status!=="online") process.exit(1);
+  const value=matches[0].pm2_env.NODE_ENV;
+  if(value===undefined) console.log("__unset__");
+  else if(["production","development","test"].includes(value)) console.log(value);
+  else process.exit(1);
+' "$process_name")
+
 atomic_link() {
   local target=$1 link=$2
   ln -s -- "$target" "$link.next.$$"
@@ -70,13 +94,16 @@ restart_backend() {
   pm2 delete "$process_name" > /dev/null 2>&1 || true
   local release_id
   release_id=$(basename "$(readlink -f -- "$backend")")
-  RVXIS_RELEASE="$release_id" NODE_ENV=production HOST="$service_host" PORT="$service_port" pm2 start "$backend/server/index.js" --cwd "$backend" --name "$process_name" --interpreter "$node_binary"
+  local mode="${1:-production}"
+  local environment=(env -u NODE_ENV "RVXIS_RELEASE=$release_id" "HOST=$service_host" "PORT=$service_port")
+  if [[ "$mode" != __unset__ ]]; then environment+=("NODE_ENV=$mode"); fi
+  "${environment[@]}" pm2 start "$backend/server/index.js" --cwd "$backend" --name "$process_name" --interpreter "$node_binary"
 }
 rollback() {
   trap - ERR INT TERM
   atomic_link "$old_frontend" "$frontend"
   atomic_link "$old_backend" "$backend"
-  restart_backend
+  restart_backend "$old_node_env"
   echo 'Activation failed; previous release restored' >&2
   exit 1
 }

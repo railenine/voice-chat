@@ -410,3 +410,14 @@ Candidate source/digest and binaries remain unchanged. Owner must configure the
 short-lived repository-scoped credential before a new publish run. Real publish
 is not yet verified; no backend/main activation was performed.
 
+2026-11-09 server preparation after successful public desktop42641201516 and
+user-reported actual portable0.2.2→0.2.3: add --verify-only to candidate delivery,
+leaving production PID/symlinks unchanged after the isolated probe. Activation
+rollback now restores the previous NODE_ENV (including unset); the migrated
+legacy process has it unset and must not be silently switched to production.
+Linux PM2 harness covers both verify-only outcomes, PID stability and unset/
+production rollback. It now runs in CI with isolated fixtures and a sentinel;
+VPS mode additionally snapshots actual production PID/paths. Push quality CI
+packages an immutable server candidate and source/size/SHA256 metadata without
+deploying it. Main still auto-deploys; no merge or server activation is implied.
+

@@ -67,6 +67,38 @@ jobs:
       - name: Legacy and candidate compatibility matrix
         run: npm run test:compatibility
 
+      - name: Package verified server candidate without deployment
+        if: github.event_name == 'push'
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --quiet HEAD --
+          tar -czf "$RUNNER_TEMP/rvxis-server-$GITHUB_SHA.tar.gz" dist/ package.json package-lock.json server/ scripts/
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          import { execFileSync } from 'node:child_process';
+          const file=`rvxis-server-${process.env.GITHUB_SHA}.tar.gz`;
+          const data=fs.readFileSync(`${process.env.RUNNER_TEMP}/${file}`);
+          const report={sourceCommit:process.env.GITHUB_SHA,
+            sourceTree:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),
+            version:JSON.parse(fs.readFileSync('package.json')).version,
+            runId:Number(process.env.GITHUB_RUN_ID),file,bytes:data.length,
+            sha256:crypto.createHash('sha256').update(data).digest('hex'),
+            deployed:false};
+          fs.writeFileSync(`${process.env.RUNNER_TEMP}/server-candidate.json`,JSON.stringify(report,null,2)+'\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,`\nServer candidate: ${file}\n\nSHA256: ${report.sha256}\n\nDeployed: false\n`);
+          NODE
+
+      - name: Upload server candidate
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-release-candidate
+          path: |
+            ${{ runner.temp }}/rvxis-server-${{ github.sha }}.tar.gz
+            ${{ runner.temp }}/server-candidate.json
+          if-no-files-found: error
+
       - name: Upload compatibility report
         if: always()
         uses: actions/upload-artifact@v4
@@ -91,6 +123,10 @@ jobs:
         run: |
           sudo env -i PATH="$RUNNER_TEMP/rvxis-pm2/node_modules/.bin:$(dirname "$(command -v node)"):/usr/bin:/bin" \
             GITHUB_ACTIONS=true "$(command -v node)" scripts/test-migrate-isolated.js --ci
+      - name: Rehearse candidate verification, activation and legacy rollback
+        run: |
+          sudo env -i PATH="$RUNNER_TEMP/rvxis-pm2/node_modules/.bin:$(dirname "$(command -v node)"):/usr/bin:/bin" \
+            GITHUB_ACTIONS=true "$(command -v node)" scripts/test-deploy-isolated.js --ci
 
   windows-release-safety:
     name: Windows release verification regressions

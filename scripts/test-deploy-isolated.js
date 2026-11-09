@@ -20,6 +20,8 @@ const root = path.join(parent, `run-${crypto.randomBytes(8).toString('hex')}`);
 let env, daemonUsed = false, error, cleaned = false;
 const checks = [];
 const report = { root, node: process.version, checks };
+const ci = process.argv.length === 3 && process.argv[2] === '--ci' && process.env.GITHUB_ACTIONS === 'true';
+if (process.argv.length > 2 && !ci) throw new Error('Only --ci on GitHub Actions is supported');
 
 const freePort = port => new Promise((resolve, reject) => {
   const socket = net.createServer();
@@ -32,6 +34,7 @@ async function health(port) {
   return response.json();
 }
 async function productionSnapshot() {
+  if (ci) return { harnessPid: process.pid, sentinel: fs.readFileSync(path.join(root, 'sentinel'), 'utf8') };
   const current = await health(3000);
   if (current.status !== 'ok') throw new Error('Working backend must be healthy before/after the test');
   const listeners = execFileSync('ss', ['-H', '-lntp', 'sport = :3000'], { encoding: 'utf8' });
@@ -65,6 +68,7 @@ if (mode==='probe-fail' || (mode==='activation-fail' && port===3200)) process.ex
 http.createServer((req,res)=>{
   res.setHeader('Content-Type','application/json');
   res.end(JSON.stringify({status:'ok',version,node:process.version,
+    nodeEnv:process.env.NODE_ENV??null,
     ...(mode==='legacy'?{}:{releaseId:process.env.RVXIS_RELEASE})}));
 }).listen(port,process.env.HOST || '127.0.0.1');
 `);
@@ -79,22 +83,24 @@ async function expectRelease(id, version, legacy = false) {
       assert.equal(current.status, 'ok'); assert.equal(current.version, version);
       assert.equal(current.releaseId ?? null, legacy ? null : id);
       assert.equal(current.node, process.version);
+      assert.equal(current.nodeEnv, legacy ? null : 'production');
       return;
     } catch (failure) { if (i === 19) throw failure; }
     await new Promise(resolve => setTimeout(resolve, 500));
   }
 }
-function deploy(id, expectedSuccess, marker) {
-  const result = command('bash', [path.join(root, 'deploy-under-test.sh')], { RVXIS_RELEASE: id });
+function deploy(id, expectedSuccess, marker, args = []) {
+  const result = command('bash', [path.join(root, 'deploy-under-test.sh'), ...args], { RVXIS_RELEASE: id });
   assert.equal(result.status === 0, expectedSuccess);
   assert.ok(result.output.includes(marker), 'Deployment did not reach the expected path; inspect test.log');
 }
 
 try {
   await freePort(3200); await freePort(3201);
-  const before = await productionSnapshot();
   fs.mkdirSync(root, { mode: 0o700 });
   if (fs.realpathSync(root) !== root) throw new Error('Test root must not be a symlink');
+  if (ci) fs.writeFileSync(path.join(root, 'sentinel'), crypto.randomBytes(32).toString('hex'));
+  const before = await productionSnapshot();
   fs.mkdirSync(path.join(root, 'shared'));
   fs.mkdirSync(path.join(root, 'pm2'));
   fs.writeFileSync(path.join(root, 'shared/.env'), 'DEPLOYMENT_FIXTURE_ONLY=1\n');
@@ -118,6 +124,17 @@ try {
   assert.equal(started.status, 0);
   await expectRelease(initial, '0.2.2', true);
 
+  console.log('[Delivery test] Verify-only keeps the active PID and links unchanged');
+  const currentProcess = () => JSON.parse(command('pm2', ['jlist']).output.trim()).find(p => p.name === 'rvxis-deploy-smoke');
+  const initialPid = currentProcess().pid;
+  deploy(good, true, 'Candidate verified; production links and process unchanged', ['--verify-only']);
+  await expectRelease(initial, '0.2.2', true);
+  assert.equal(currentProcess().pid, initialPid);
+  deploy(badProbe, false, 'Candidate health check failed', ['--verify-only']);
+  await expectRelease(initial, '0.2.2', true);
+  assert.equal(currentProcess().pid, initialPid);
+  checks.push({ case: 'verify-only-success-and-rejection', passed: true });
+
   console.log('[Delivery test] Rollback to a legacy version without releaseId');
   deploy(badActivation, false, 'Activation failed; previous release restored');
   await expectRelease(initial, '0.2.2', true);
@@ -132,7 +149,8 @@ try {
   deploy(badActivation, false, 'Activation failed; previous release restored');
   await expectRelease(good, '0.2.3'); checks.push({ case: 'activation-rollback', passed: true });
   assert.deepEqual(await productionSnapshot(), before);
-  report.productionPidAndPathsUnchanged = true;
+  if (ci) report.ciSentinelUnchanged = true;
+  else report.productionPidAndPathsUnchanged = true;
 } catch (failure) {
   error = failure.message;
 } finally {
@@ -151,7 +169,8 @@ try {
   fs.rmdirSync(lock);
 }
 report.isolatedPm2Stopped = cleaned;
-report.passed = !error && cleaned && checks.length === 4;
+report.mode = ci ? 'github-actions-isolated-fixtures' : 'vps-production-snapshot';
+report.passed = !error && cleaned && checks.length === 5;
 if (error) report.error = error;
 console.log(JSON.stringify(report, null, 2));
 if (fs.existsSync(root)) fs.writeFileSync(path.join(root, 'result.json'), JSON.stringify(report, null, 2));

@@ -1,8 +1,10 @@
 # Кандидат 0.2.3 и выпуск проверенных файлов
 
-Статус на 2026-11-09: подготовка в fix/sequential-audit-fixes, PR #10 — draft.
-Production остаётся на прежнем коде0.2.2 с Node22.22.0. Подготовка механизма
-не разрешает публикацию, создание release tag, merge main или backend deploy.
+Статус на 2026-11-09: desktopv0.2.3 опубликован из проверенного кандидата
+42596623845/sourceed6139a через publish42641201516. Public assets/signatures,
+основной updater route и реальный portable0.2.2→0.2.3 проверены (native переход
+по отчёту пользователя). PR #10 остаётся draft. Backend — прежний0.2.2 с
+Node22.22.0; main merge и backend deploy ещё не одобрены.
 
 ## Три ручных режима desktop-build.yml
 
@@ -23,7 +25,7 @@ PE version portable, signatures, alias, notes и manifest hashes. Существ
 
 `publish` — отдельный запуск после явного одобрения конкретного кандидата.
 Нужны те же три координаты и точная строка `PUBLISH v0.2.3` в publish_confirmation.
-Сначала read-only job verify, затем отдельный job с contents:write скачивает и
+Сначала read-only job verify, затем отдельный publish job скачивает и
 повторно проверяет тот же ZIP. Создаёт тег на одобренный source commit и draft
 релиза, загружает только проверенные файлы. Все загруженные файлы скачиваются
 обратно и сверяются по SHA-256, повторно проверяются tag/latest. Только затем
@@ -61,7 +63,7 @@ expected_source и не исполняются. Проверяющий код б
 receipt фиксирует sourceCommit и verifierCommit отдельно. Поэтому исправление
 проверяющего кода не требует пересборки уже одобренного EXE и не меняет его
 source/digest. Для кандидата42596623845 сохраняются sourceed6139a и прежний ZIP.
-Режим publish сейчас запускать не нужно: выпуск требует отдельного поручения.
+Desktop0.2.3 уже выпущен; повторно публиковать тот же tag нельзя.
 
 ## Ошибки и восстановление
 
@@ -106,7 +108,42 @@ Actions ZIP download использует Accept application/vnd.github+json, а
 Первый verify42598215169 остановился с415 из-за общего octet-stream заголовка,
 до распаковки/публикации. Regression теперь воспроизводит это различие и отказ.
 
-## Что осталось до реального выпуска
+## Текущий серверный этап после desktop выпуска
+
+Push CI на рабочей ветке теперь сохраняет server-release-candidate только
+после quality gate: tar.gz с dist/package/lock/server/scripts и внешний
+server-candidate.json (source/tree/run/version/size/SHA256). Это подготовка,
+не деплой. Брать только артефакт успешного push run с проверенным head SHA,
+не PR merge SHA. Архив исключает .env, .git, node_modules и desktop binaries.
+Полный workflow должен быть success, включая отдельный Linux rollback job.
+
+Кандидат сначала распаковывается в НОВЫЙ /var/www/voice-chat-releases/<SHA>.
+Обязательны проверка SHA256 архива и безопасного списка путей до распаковки;
+существующий каталог не перезаписывать. Активные symlinks пока не менять.
+Вызов с runtime Node22.22.0 и RVXIS_FRONTEND=/var/www/voice-chat:
+
+```bash
+RVXIS_RELEASE=<FULL_SHA> bash scripts/deploy-candidate.sh --verify-only
+```
+
+Команда выполняется из каталога кандидата с /opt/rvxis-runtime/current/bin
+в PATH. Устанавливает production dependencies только в кандидате, связывает
+его .env с существующим shared env и запускает короткий production probe на
+127.0.0.1:3101. После успешного health/version/releaseId завершает probe без
+изменения frontend/backend links и без PM2 restart. Это не проверка живых
+голосовых сессий, nginx assets и полного функционала клиента.
+
+Последующая активация требует отдельного одобрения и уведомления о коротком
+разрыве signaling/SFU-сессий при restart. Старые0.2.2 клиенты несовместимы с
+новыми protected APIs/rejoin; один успешный тест не доказывает обновление всех.
+Сохранить прежние target paths и рабочий rollback. При автоматическом откате
+NODE_ENV восстанавливается в прежнее production/development/test или unset,
+вместо прежнего принудительного production. Тесты Linux проверяют verify-only
+с сохранением PID/links, отказ плохого probe, legacy unset rollback, активацию
+и откат уже production-кандидата. Push main всё ещё активирует автоматически:
+не merge PR во время проверки. Coturn/LiveKit не меняются.
+
+## Исторический план до desktop выпуска
 
 1. Свежий build formatVersion2 и verify на GitHub. Прежний run42515045176
    успешно подтвердил ключ проекта для7fa1bfc, но не содержит исправление
@@ -120,6 +157,6 @@ Actions ZIP download использует Accept application/vnd.github+json, а
 4. Отдельное одобрение публикации конкретных run/source/digest. Затем отдельно
    согласованная активация backend. Сейчас ни один из этих шагов не выполнен.
 
-URL в latest.json относятся к будущему v0.2.3 и до публикации могут вернуть404.
+URL опубликованного v0.2.3 уже доступны и проверены.
 Исходные latest.json — неподписанные шаблоны; готовый манифест генерируется для
 фактических байтов сборки. Не подменять им результат build/verify.
