@@ -37,16 +37,8 @@ function snapshot(label, sha) {
   const log = fs.openSync(path.join(session, `${label}-build.log`), 'w');
   try {
     const cache = process.env.RVXIS_COMPAT_CACHE ? ['--cache', process.env.RVXIS_COMPAT_CACHE] : [];
-    const reuse = process.env.RVXIS_COMPAT_REUSE && path.resolve(process.env.RVXIS_COMPAT_REUSE, label);
-    if (reuse) {
-      assert.deepEqual(fs.readFileSync(path.join(dir, 'package-lock.json')), fs.readFileSync(path.join(reuse, 'package-lock.json')),
-        'Reusing dependencies requires an identical lockfile');
-      assert.ok(fs.existsSync(path.join(reuse, 'node_modules')));
-      fs.symlinkSync(path.join(reuse, 'node_modules'), path.join(dir, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-    } else {
-      execFileSync(process.execPath, [npmCli, 'ci', '--ignore-scripts', '--no-audit', '--no-fund', ...cache],
-        { cwd: dir, env, stdio: ['ignore', log, log] });
-    }
+    execFileSync(process.execPath, [npmCli, 'ci', '--ignore-scripts', '--no-audit', '--no-fund', ...cache],
+      { cwd: dir, env, stdio: ['ignore', log, log] });
     execFileSync(process.execPath, ['node_modules/vite/bin/vite.js', 'build'],
       { cwd: dir, env, stdio: ['ignore', log, log] });
   } finally { fs.closeSync(log); }
