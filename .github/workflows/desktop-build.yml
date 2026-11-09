@@ -12,7 +12,7 @@ on:
         description: 'Successful build run ID (verify/publish only)'
         type: string
       expected_source:
-        description: 'Approved full source commit SHA (verify/publish only)'
+        description: 'Approved candidate source SHA, independent of verifier revision'
         type: string
       expected_digest:
         description: 'Approved Windows artifact ZIP SHA-256 (verify/publish only)'
@@ -193,6 +193,12 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Checkout exact candidate source as data, without running it
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source }}
+          path: candidate-source
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -201,6 +207,7 @@ jobs:
         run: node scripts/promote-desktop.js
         env:
           GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SOURCE_ROOT: ${{ github.workspace }}/candidate-source
           PROMOTION_MODE: verify
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
           EXPECTED_SOURCE: ${{ inputs.expected_source }}
@@ -223,6 +230,12 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
+      - name: Checkout exact candidate source as data, without running it
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source }}
+          path: candidate-source
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -231,6 +244,7 @@ jobs:
         run: node scripts/promote-desktop.js
         env:
           GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SOURCE_ROOT: ${{ github.workspace }}/candidate-source
           PROMOTION_MODE: publish
           PUBLISH_CONFIRMATION: ${{ inputs.publish_confirmation }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}

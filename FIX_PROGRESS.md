@@ -385,3 +385,16 @@ Tests use disposable keys and fake GitHub endpoints; Windows ZIP traversal and
 duplicate/missing/extra entry regressions are covered. No real tag/release/deploy
 was created. Fresh format2 GitHub build/verify remains the next integration check.
 
+Build42596623845 succeeded and its10 files/signatures/format2/source/digest were
+independently verified. Real read-only verify42598215169 then failed downloading
+the Actions ZIP with415: one octet-stream Accept was incorrectly shared with
+release-asset downloads. The mock did not enforce endpoint-specific Accept.
+Added that regression (fails before/passes after), using GitHub JSON Accept for
+Actions and octet-stream for release assets, retaining redirect token stripping.
+Verifier and candidate now have independent clean pinned checkouts; candidate
+source remains bound to its build/report/ZIP and only verifier code may advance.
+Receipt records both commits; tag still targets the candidate. This preserves
+the already signed ed6139a candidate instead of rebuilding app bytes for a CI
+transport fix. Checkout mismatch/dirty guards are covered by real Git repos.
+Publication and backend deployment were skipped/not attempted in the failed run.
+

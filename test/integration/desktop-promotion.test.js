@@ -3,7 +3,8 @@ import { it } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { promoteDesktop, verifyCandidateFolder } from '../../scripts/promote-desktop.js';
+import { execFileSync } from 'node:child_process';
+import { promoteDesktop, verifyCandidateFolder, verifyPromotionCheckouts } from '../../scripts/promote-desktop.js';
 import { releaseFixture } from '../helpers/release-fixture.js';
 
 function fakeGitHub(fixture, overrides = {}) {
@@ -22,7 +23,10 @@ function fakeGitHub(fixture, overrides = {}) {
       repository: { full_name: 'railenine/voice-chat' }, head_repository: { full_name: 'railenine/voice-chat' }, ...overrides.run });
     if (resource === '/actions/runs/42/artifacts') return json({ total_count: 1, artifacts: [{ id: 77, name: 'RVxis-Windows-x64',
       digest: zipDigest, expired: false, workflow_run: { id: 42, head_sha: fixture.source }, ...overrides.artifact }] });
-    if (resource === '/actions/artifacts/77/zip') return new Response(null, { status: 302, headers: { location: 'https://storage.example.test/zip' } });
+    if (resource === '/actions/artifacts/77/zip') {
+      if (options.headers.Accept !== 'application/vnd.github+json') return json({ error: 'Unsupported Accept header' }, 415);
+      return new Response(null, { status: 302, headers: { location: 'https://storage.example.test/zip' } });
+    }
     if (resource === '/releases/latest') {
       state.latestReads++;
       return json({ tag_name: overrides.latestAdvances && state.latestReads > 1 ? 'v99.0.0' : 'v0.2.2' });
@@ -45,6 +49,7 @@ function fakeGitHub(fixture, overrides = {}) {
     if (resource === '/releases/9' && method === 'GET') return json({ id: 9, draft: state.draft, tag_name: `v${fixture.version}`,
       assets: state.assets.map(({ data, ...meta }) => meta) });
     if (resource.startsWith('/releases/assets/')) {
+      assert.equal(options.headers.Accept, 'application/octet-stream');
       state.readback++; const asset = state.assets.find(a => a.id === Number(resource.split('/').at(-1)));
       return new Response(overrides.corruptReadback ? 'changed' : asset.data);
     }
@@ -63,14 +68,45 @@ it('verification is read-only; publishing preserves exact signed bytes and reads
   const f = releaseFixture();
   try {
     const github = fakeGitHub(f);
-    const verified = await promoteDesktop(github.options());
+    const verified = await promoteDesktop({ ...github.options(), verifierCommit: 'b'.repeat(40) });
     assert.equal(verified.published, false); assert.equal(verified.files.length, 10);
+    assert.equal(verified.sourceCommit, f.source);
+    assert.equal(verified.verifierCommit, 'b'.repeat(40));
     assert.ok(github.state.calls.every(c => c.method === 'GET'));
     await assert.rejects(promoteDesktop({ ...github.options(), mode: 'publish' }), /explicit PUBLISH/);
-    const published = await promoteDesktop({ ...github.options(), mode: 'publish', confirmation: `PUBLISH v${f.version}` });
+    const published = await promoteDesktop({ ...github.options(), verifierCommit: 'b'.repeat(40), mode: 'publish', confirmation: `PUBLISH v${f.version}` });
     assert.equal(published.published, true); assert.equal(github.state.assets.length, 10);
+    assert.equal(published.sourceCommit, f.source); assert.equal(published.verifierCommit, 'b'.repeat(40));
     assert.equal(github.state.draft, false); assert.equal(github.state.readback, 10);
   } finally { f.cleanup(); }
+});
+
+it('separate verifier and candidate checkouts stay pinned and reject dirty or mismatched revisions', () => {
+  const scratch = path.resolve('.test-tmp'); fs.mkdirSync(scratch, { recursive: true });
+  const root = fs.mkdtempSync(path.join(scratch, 'promotion-checkouts-'));
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  try {
+    const verifier = path.join(root, 'verifier'), candidate = path.join(root, 'candidate');
+    for (const [dir, value] of [[verifier, 'verifier'], [candidate, 'candidate']]) {
+      fs.mkdirSync(dir); git(dir, 'init', '-b', 'fixture'); fs.writeFileSync(path.join(dir, 'state.txt'), value);
+      git(dir, 'add', 'state.txt');
+      git(dir, '-c', 'user.name=Release Test', '-c', 'user.email=release-test@example.test', 'commit', '-qm', 'fixture');
+    }
+    const verifierSha = git(verifier, 'rev-parse', 'HEAD'), candidateSha = git(candidate, 'rev-parse', 'HEAD');
+    assert.notEqual(verifierSha, candidateSha);
+    assert.deepEqual(verifyPromotionCheckouts(verifier, candidate, verifierSha, candidateSha),
+      { verifierCommit: verifierSha, contextSha: candidateSha });
+    assert.throws(() => verifyPromotionCheckouts(verifier, candidate, candidateSha, candidateSha), /Verifier/);
+    assert.throws(() => verifyPromotionCheckouts(verifier, candidate, verifierSha, verifierSha), /Candidate/);
+    fs.writeFileSync(path.join(candidate, 'state.txt'), 'dirty');
+    assert.throws(() => verifyPromotionCheckouts(verifier, candidate, verifierSha, candidateSha));
+    fs.writeFileSync(path.join(candidate, 'state.txt'), 'candidate');
+    fs.writeFileSync(path.join(verifier, 'state.txt'), 'dirty');
+    assert.throws(() => verifyPromotionCheckouts(verifier, candidate, verifierSha, candidateSha));
+  } finally {
+    assert.equal(path.dirname(root), scratch); assert.ok(path.basename(root).startsWith('promotion-checkouts-'));
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
 
 it('wrong source, failed runs, changed ZIPs, expired artifacts and existing releases cannot be promoted', async () => {

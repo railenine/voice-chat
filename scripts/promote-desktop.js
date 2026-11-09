@@ -51,10 +51,20 @@ export function verifyCandidateFolder(sourceRoot, artifactRoot, source) {
   });
 }
 
+export function verifyPromotionCheckouts(verifierRoot, sourceRoot, workflowSha, expectedSource) {
+  const sha = cwd => execFileSync('git', ['rev-parse', 'HEAD'], { cwd, encoding: 'utf8' }).trim();
+  const verifierCommit = sha(verifierRoot), contextSha = sha(sourceRoot);
+  if (workflowSha !== verifierCommit) throw Error('Verifier must match workflow checkout exactly');
+  if (!/^[a-f0-9]{40}$/.test(expectedSource || '') || contextSha !== expectedSource) throw Error('Candidate must match source checkout exactly');
+  for (const cwd of [verifierRoot, sourceRoot]) execFileSync('git', ['diff', '--quiet', 'HEAD', '--'], { cwd, stdio: 'ignore' });
+  return { verifierCommit, contextSha };
+}
+
 export async function promoteDesktop({ sourceRoot, outputRoot, source, contextSha, runId, expectedDigest,
-  mode = 'verify', confirmation = '', token, fetchImpl = fetch, extract }) {
+  verifierCommit = contextSha, mode = 'verify', confirmation = '', token, fetchImpl = fetch, extract }) {
   if (!['verify', 'publish'].includes(mode)) throw Error('Invalid promotion mode');
-  if (!/^[a-f0-9]{40}$/.test(source || '') || source !== contextSha) throw Error('Source must match this workflow checkout exactly');
+  if (!/^[a-f0-9]{40}$/.test(source || '') || source !== contextSha) throw Error('Candidate must match source checkout exactly');
+  if (!/^[a-f0-9]{40}$/.test(verifierCommit || '')) throw Error('Invalid verifier revision');
   if (!/^[1-9][0-9]*$/.test(String(runId)) || !Number.isSafeInteger(Number(runId))) throw Error('Invalid candidate run ID');
   const { version } = checkReleaseSource(sourceRoot), tag = `v${version}`, approvedDigest = digest(expectedDigest);
   if (mode === 'publish' && confirmation !== `PUBLISH ${tag}`) throw Error(`Publishing requires explicit PUBLISH ${tag} confirmation`);
@@ -68,8 +78,8 @@ export async function promoteDesktop({ sourceRoot, outputRoot, source, contextSh
     if (!response.ok) throw Error(`GitHub API ${method} ${resource.split('?')[0]} failed: ${response.status}`);
     return response.json();
   }
-  async function download(resource, limit) {
-    let response = await fetchImpl(apiRoot + resource, { headers: { ...headers, Accept: 'application/octet-stream' },
+  async function download(resource, limit, accept = 'application/octet-stream') {
+    let response = await fetchImpl(apiRoot + resource, { headers: { ...headers, Accept: accept },
       redirect: 'manual', signal: AbortSignal.timeout(90000) });
     if (response.status === 302) {
       const location = new URL(response.headers.get('location'));
@@ -92,7 +102,7 @@ export async function promoteDesktop({ sourceRoot, outputRoot, source, contextSh
   if (!Number.isSafeInteger(artifact.id) || artifact.expired !== false ||
       artifact.workflow_run?.id !== Number(runId) || artifact.workflow_run?.head_sha !== source ||
       digest(artifact.digest) !== approvedDigest) throw Error('Artifact metadata does not match approved source/digest');
-  const zip = await download(`/actions/artifacts/${artifact.id}/zip`, 128 * 1024 * 1024);
+  const zip = await download(`/actions/artifacts/${artifact.id}/zip`, 128 * 1024 * 1024, 'application/vnd.github+json');
   if (`sha256:${sha256(zip)}` !== approvedDigest) throw Error('Downloaded ZIP digest mismatch');
   fs.mkdirSync(outputRoot, { recursive: true });
   const archive = path.join(outputRoot, 'candidate.zip'), artifactRoot = path.join(outputRoot, 'candidate');
@@ -104,7 +114,7 @@ export async function promoteDesktop({ sourceRoot, outputRoot, source, contextSh
   if (await api(`/git/ref/tags/${tag}`, { missing: true })) throw Error('Tag already exists; never overwrite it');
   const latest = await api('/releases/latest', { missing: true });
   if (latest && !isNewerVersion(version, latest.tag_name)) throw Error('Candidate must be newer than the latest release');
-  const receipt = { mode, sourceCommit: source, version, tag, candidateRunId: Number(runId),
+  const receipt = { mode, sourceCommit: source, verifierCommit, version, tag, candidateRunId: Number(runId),
     artifactId: artifact.id, artifactDigest: approvedDigest, published: false,
     files: files.map(({ data, ...meta }) => meta) };
   const receiptPath = path.join(outputRoot, 'promotion-receipt.json');
@@ -150,23 +160,23 @@ export async function promoteDesktop({ sourceRoot, outputRoot, source, contextSh
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-  const contextSha = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: sourceRoot, encoding: 'utf8' }).trim();
-  if (process.env.GITHUB_REPOSITORY !== repository || process.env.GITHUB_SHA !== contextSha) throw Error('Promotion must run from this repository workflow checkout');
-  execFileSync('git', ['diff', '--quiet', 'HEAD', '--'], { cwd: sourceRoot, stdio: 'ignore' });
+  const verifierRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+  if (process.env.GITHUB_REPOSITORY !== repository || !process.env.CANDIDATE_SOURCE_ROOT) throw Error('Promotion requires this repository and a pinned candidate checkout');
+  const sourceRoot = path.resolve(process.env.CANDIDATE_SOURCE_ROOT);
+  const { contextSha, verifierCommit } = verifyPromotionCheckouts(verifierRoot, sourceRoot, process.env.GITHUB_SHA, process.env.EXPECTED_SOURCE);
   const outputRoot = fs.mkdtempSync(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'rvxis-promotion-'));
-  const receipt = await promoteDesktop({ sourceRoot, outputRoot, contextSha,
+  const receipt = await promoteDesktop({ sourceRoot, outputRoot, contextSha, verifierCommit,
     source: process.env.EXPECTED_SOURCE, runId: process.env.CANDIDATE_RUN_ID,
     expectedDigest: process.env.EXPECTED_DIGEST, mode: process.env.PROMOTION_MODE,
     confirmation: process.env.PUBLISH_CONFIRMATION, token: process.env.GH_TOKEN,
     extract: ({ archive, destination, expectedFiles }) => {
       const allowed = path.join(outputRoot, 'expected-files.json');
       fs.writeFileSync(allowed, JSON.stringify(expectedFiles));
-      execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-File', path.join(sourceRoot, 'scripts/expand-release-candidate.ps1'),
+      execFileSync('pwsh', ['-NoProfile', '-NonInteractive', '-File', path.join(verifierRoot, 'scripts/expand-release-candidate.ps1'),
         '-Archive', archive, '-Destination', destination, '-ExpectedFiles', allowed,
         '-ExpectedVersion', checkReleaseSource(sourceRoot).version], { stdio: 'inherit' });
     } });
-  const summary = `## Desktop ${receipt.mode}\n\nSource: ${receipt.sourceCommit}\n\nCandidate run: ${receipt.candidateRunId}\n\nZIP: ${receipt.artifactDigest}\n\nPublished: ${receipt.published}\n`;
+  const summary = `## Desktop ${receipt.mode}\n\nSource: ${receipt.sourceCommit}\n\nVerifier: ${receipt.verifierCommit}\n\nCandidate run: ${receipt.candidateRunId}\n\nZIP: ${receipt.artifactDigest}\n\nPublished: ${receipt.published}\n`;
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `receipt=${path.join(outputRoot, 'promotion-receipt.json')}\n`);
   console.log(JSON.stringify(receipt, null, 2));
