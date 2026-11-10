@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from "react";
-import { isTauri, APP_VERSION } from "../config";
+import { isTauri, APP_VERSION, IS_STAGING_BUILD } from "../config";
 import { Tooltip } from "./Tooltip";
 import { UpdateBadge } from "./updater/UpdateBadge";
 import { Logo } from "./ui";
@@ -164,6 +164,7 @@ export const TitleBar: React.FC<TitleBarProps> = memo(
           className="flex items-center gap-2 px-3 h-full cursor-default z-10"
         >
           <Logo size="xs" className="w-4 h-4 shrink-0" />
+          {IS_STAGING_BUILD && <span className="text-[10px] font-semibold text-(--warning)">STAGING</span>}
           <div
             className={`flex ${hasUpdate && updateVersion ? "items-center" : "items-baseline"} gap-1.5 leading-none`}
           >

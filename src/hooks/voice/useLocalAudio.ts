@@ -5,6 +5,7 @@ import rnnoiseWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmUrl from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 import { playMuteSound, playUnmuteSound } from '../../utils/soundEffects';
 import { normalizeSinkId, buildAudioInputConstraints } from '../../utils/device';
+import { applyAudioOutput } from '../../utils/audioOutput';
 
 
 const SILENT_AUDIO_URI =
@@ -45,6 +46,8 @@ export function useLocalAudio({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const rawMicStreamRef = useRef<MediaStream | null>(null);
+  const audioGenerationRef = useRef(0);
+  const switchGenerationRef = useRef(0);
 
   const micSourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const micPreFilterNodeRef = useRef<BiquadFilterNode | null>(null);
@@ -109,7 +112,7 @@ export function useLocalAudio({
         }
         const sinkId = normalizeSinkId(audioOutputDeviceIdRef.current);
         if (typeof (audioContextRef.current as any).setSinkId === 'function') {
-          (audioContextRef.current as any).setSinkId(sinkId).catch(() => {});
+          void applyAudioOutput(audioContextRef.current as any, sinkId);
         }
       }
     }
@@ -309,6 +312,13 @@ export function useLocalAudio({
         );
       }
 
+      const generation = ++audioGenerationRef.current;
+      const ensureCurrent = (stream?: MediaStream) => {
+        if (generation !== audioGenerationRef.current) {
+          stream?.getTracks().forEach(track => track.stop());
+          throw new DOMException('Audio initialization cancelled', 'AbortError');
+        }
+      };
       let rawStream: MediaStream;
       const micConstraints = buildAudioInputConstraints(inputDeviceId);
 
@@ -317,6 +327,7 @@ export function useLocalAudio({
           audio: micConstraints,
         });
       } catch (firstErr) {
+        ensureCurrent();
         console.warn(
           'Advanced/device audio constraints failed, falling back to basic audio: true',
           firstErr
@@ -324,6 +335,7 @@ export function useLocalAudio({
         rawStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
 
+      ensureCurrent(rawStream);
       const rawAudioTrack = rawStream.getAudioTracks()[0];
       if (!rawAudioTrack) {
         throw new Error('Микрофон не вернул аудиодорожку.');
@@ -351,7 +363,9 @@ export function useLocalAudio({
             url: rnnoiseWasmUrl,
             simdUrl: rnnoiseSimdWasmUrl,
           });
+          ensureCurrent();
           await audioContext.audioWorklet.addModule(rnnoiseWorkletUrl);
+          ensureCurrent();
           const rnnoiseNode = new RnnoiseWorkletNode(audioContext, {
             maxChannels: 1,
             wasmBinary,
@@ -360,6 +374,7 @@ export function useLocalAudio({
           setIsNoiseSuppressionReady(true);
           console.log('[RNNoise] Initialized successfully');
         } catch (rnErr) {
+          ensureCurrent();
           console.warn('[RNNoise] Initialization failed, will use direct pass-through:', rnErr);
         }
 
@@ -385,6 +400,7 @@ export function useLocalAudio({
     if (prevInputDeviceRef.current === audioInputDeviceId) return;
     prevInputDeviceRef.current = audioInputDeviceId;
 
+    const switchGeneration = ++switchGenerationRef.current;
     const switchMic = async () => {
       try {
         console.log(`[Audio] Switching input device to: ${audioInputDeviceId || 'default'}`);
@@ -395,6 +411,7 @@ export function useLocalAudio({
         try {
           newRawStream = await navigator.mediaDevices.getUserMedia(constraints);
         } catch (deviceErr) {
+          if (switchGeneration !== switchGenerationRef.current) return;
           console.warn('[Audio] Failed with input device constraints, falling back to default mic:', deviceErr);
           newRawStream = await navigator.mediaDevices.getUserMedia({
             audio: {
@@ -403,6 +420,10 @@ export function useLocalAudio({
               autoGainControl: true,
             },
           });
+        }
+        if (switchGeneration !== switchGenerationRef.current) {
+          newRawStream.getTracks().forEach(track => track.stop());
+          return;
         }
         const newRawTrack = newRawStream.getAudioTracks()[0];
         if (!newRawTrack) return;
@@ -446,12 +467,13 @@ export function useLocalAudio({
     };
 
     switchMic();
+    return () => { switchGenerationRef.current++; };
   }, [audioInputDeviceId, connectMicGraph, getAudioContext, peerConnectionsRef]);
 
   // Dynamically update audioContext sinkId when output device changes
   useEffect(() => {
     if (audioContextRef.current && typeof (audioContextRef.current as any).setSinkId === 'function') {
-      (audioContextRef.current as any).setSinkId(normalizeSinkId(audioOutputDeviceId)).catch(() => {});
+      void applyAudioOutput(audioContextRef.current as any, audioOutputDeviceId);
     }
   }, [audioOutputDeviceId]);
 
@@ -524,6 +546,8 @@ export function useLocalAudio({
 
   // Complete cleanup on unmount
   const cleanupLocalAudio = useCallback(() => {
+    audioGenerationRef.current++;
+    switchGenerationRef.current++;
     if (audioContextRef.current) {
       try {
         audioContextRef.current.close();

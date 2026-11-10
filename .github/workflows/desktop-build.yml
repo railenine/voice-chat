@@ -2,20 +2,43 @@ name: Build Desktop App (Tauri v2)
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
+    inputs:
+      mode:
+        description: 'build, read-only verify, or explicitly publish a verified candidate'
+        type: choice
+        options: [build, verify, publish]
+        default: build
+      candidate_run_id:
+        description: 'Successful build run ID (verify/publish only)'
+        type: string
+      expected_source:
+        description: 'Approved candidate source SHA, independent of verifier revision'
+        type: string
+      expected_digest:
+        description: 'Approved Windows artifact ZIP SHA-256 (verify/publish only)'
+        type: string
+      publish_confirmation:
+        description: 'Publication only: type PUBLISH v<version>, e.g. PUBLISH v0.2.3'
+        type: string
+
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
 
 jobs:
   quality-gate:
+    if: inputs.mode == 'build' || inputs.mode == ''
     name: 🛡️ Quality Gate (Tests & Validation)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -38,12 +61,22 @@ jobs:
       - name: 5. Manifest Validation
         run: node scripts/generate-latest-json.js --validate-only
 
+      - name: Install browser for media smoke test
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Browser media smoke test
+        run: npm run test:browser
+
+      - name: Legacy and candidate compatibility matrix
+        run: npm run test:compatibility
+
   build-windows:
+    if: inputs.mode == 'build' || inputs.mode == ''
     name: 📦 Build Windows Desktop App
     needs: [quality-gate]
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -67,11 +100,33 @@ jobs:
       - name: Install Frontend Dependencies
         run: npm ci
 
+      - name: Release verification regressions on Windows
+        run: node --test test/integration/desktop-promotion.test.js test/integration/release-candidate.test.js test/integration/release-archive.test.js test/integration/release-signing.test.js
+
+      - name: Check production release source
+        run: node scripts/release-candidate.js --check-source
+        env:
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
+
+      - name: Remove cached release bundles before building
+        shell: pwsh
+        run: |
+          $bundlePath = Join-Path $env:GITHUB_WORKSPACE 'src-tauri/target/release/bundle'
+          if (Test-Path -LiteralPath $bundlePath) {
+            $resolvedBundle = (Resolve-Path -LiteralPath $bundlePath).Path
+            $expectedBundle = [IO.Path]::GetFullPath($bundlePath)
+            if ($resolvedBundle -ne $expectedBundle) { throw 'Unexpected bundle directory' }
+            Remove-Item -LiteralPath $bundlePath -Recurse -Force
+          }
+
       - name: Build Desktop Application (Tauri v2)
         run: npx @tauri-apps/cli build --ignore-version-mismatches
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      - name: Native security tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml --lib --locked
 
       - name: Prepare Release Binaries (RVxis.exe & backwards-compatible voice-chat.exe)
         shell: bash
@@ -86,15 +141,18 @@ jobs:
           fi
 
       - name: Generate and Sign latest.json
-        if: startsWith(github.ref, 'refs/tags/')
         run: node scripts/generate-latest-json.js
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           GITHUB_REPOSITORY: ${{ github.repository }}
 
+      - name: Verify signed artifacts and record source and hashes
+        run: node scripts/release-candidate.js
+
       - name: Upload Windows Artifacts
+        id: windows-artifact
         uses: actions/upload-artifact@v4
         with:
           name: RVxis-Windows-x64
@@ -104,33 +162,97 @@ jobs:
             src-tauri/target/release/RVxis.exe
             src-tauri/target/release/voice-chat.exe
             latest.json
+            release-candidate.json
+            RELEASE_NOTES.md
+            src-tauri/target/release/RVxis.exe.sig
+            src-tauri/target/release/bundle/nsis/*.sig
+            src-tauri/target/release/bundle/msi/*.sig
           if-no-files-found: error
 
-      - name: Clean up pre-existing release draft for tag if any
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
+      - name: Record immutable candidate coordinates
+        shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_DIGEST: ${{ steps.windows-artifact.outputs.artifact-digest }}
         run: |
-          # Check if release exists before attempting deletion to avoid silent failure masks
-          if gh release view "${{ github.ref_name }}" > /dev/null 2>&1; then
-            echo "Existing release found for ${{ github.ref_name }}, deleting prior release to recreate..."
-            gh release delete "${{ github.ref_name }}" --yes
-          else
-            echo "No existing release found for ${{ github.ref_name }}, continuing..."
-          fi
+          @"
+          ## Desktop candidate
+          Source: $env:GITHUB_SHA
+          Candidate run: $env:GITHUB_RUN_ID
+          ZIP SHA-256: $env:ARTIFACT_DIGEST
+          No release or backend deployment performed.
+          "@ | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
 
-      - name: Create GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+  verify-candidate:
+    if: inputs.mode == 'verify' || inputs.mode == 'publish'
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
         with:
-          name: RVxis ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          body_path: RELEASE_NOTES.md
-          fail_on_unmatched_files: true
-          files: |
-            src-tauri/target/release/bundle/msi/*.msi
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/RVxis.exe
-            src-tauri/target/release/voice-chat.exe
-            latest.json
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Checkout exact candidate source as data, without running it
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source }}
+          path: candidate-source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify approved immutable candidate without publishing
+        id: verification
+        run: node scripts/promote-desktop.js
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SOURCE_ROOT: ${{ github.workspace }}/candidate-source
+          PROMOTION_MODE: verify
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EXPECTED_SOURCE: ${{ inputs.expected_source }}
+          EXPECTED_DIGEST: ${{ inputs.expected_digest }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-verification-receipt
+          path: ${{ steps.verification.outputs.receipt }}
+          if-no-files-found: error
+
+  publish-candidate:
+    if: inputs.mode == 'publish'
+    needs: [verify-candidate]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Checkout exact candidate source as data, without running it
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_source }}
+          path: candidate-source
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Reverify, upload draft, read back bytes, then publish
+        id: publication
+        run: node scripts/promote-desktop.js
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DESKTOP_RELEASE_TOKEN: ${{ secrets.DESKTOP_RELEASE_TOKEN }}
+          CANDIDATE_SOURCE_ROOT: ${{ github.workspace }}/candidate-source
+          PROMOTION_MODE: publish
+          PUBLISH_CONFIRMATION: ${{ inputs.publish_confirmation }}
+          CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}
+          EXPECTED_SOURCE: ${{ inputs.expected_source }}
+          EXPECTED_DIGEST: ${{ inputs.expected_digest }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-publication-receipt
+          path: ${{ steps.publication.outputs.receipt }}
+          if-no-files-found: error

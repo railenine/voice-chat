@@ -80,6 +80,7 @@ export function validateClientMessage(msg, clientMeta = null) {
         valid: true,
         data: {
           type: 'join',
+          sessionToken: typeof msg.sessionToken === 'string' ? msg.sessionToken.slice(0, 64) : undefined,
           roomId,
           peerId,
           nickname: sanitizeNickname(nickname),

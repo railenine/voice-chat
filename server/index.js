@@ -1,4 +1,6 @@
 import express from 'express';
+import { createUploadGate } from './resourceLimits.js';
+import { claimSession, releaseSession, authorizeSession, isAllowedOrigin } from './access.js';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -6,7 +8,7 @@ import cors from 'cors';
 import fs from 'fs';
 import crypto from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
-import { AccessToken } from 'livekit-server-sdk';
+import { AccessToken, TrackSource } from 'livekit-server-sdk';
 import {
   ROOM_ID_REGEX,
   PEER_ID_REGEX,
@@ -43,58 +45,17 @@ const IS_PROD = NODE_ENV === 'production';
 const app = express();
 const server = http.createServer(app);
 
-// CORS configuration: support whitelist via CORS_ORIGIN env, with sensible safe defaults
-const rawCorsOrigin = process.env.CORS_ORIGIN;
-let corsMiddleware;
+// Apply the same exact Origin policy to HTTP and WebSocket upgrades.
+app.use((req, res, next) => {
+  if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: 'origin_not_allowed' });
+  next();
+});
+app.use(cors({ origin: (origin, callback) => callback(null, isAllowedOrigin(origin)) }));
 
-if (rawCorsOrigin && rawCorsOrigin !== '*') {
-  const allowedOrigins = rawCorsOrigin.split(',').map((s) => s.trim().toLowerCase());
-  corsMiddleware = cors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, server-to-server)
-      if (!origin) return callback(null, true);
-      const lower = origin.toLowerCase();
-      const isAllowed = allowedOrigins.some((allowed) => {
-        return (
-          lower === allowed ||
-          lower.startsWith('tauri://') ||
-          lower.startsWith('http://tauri.') ||
-          (!IS_PROD && (lower.includes('localhost') || lower.includes('127.0.0.1')))
-        );
-      });
-      if (isAllowed) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-  });
-} else if (IS_PROD) {
-  // Production default when CORS_ORIGIN is not explicitly specified
-  corsMiddleware = cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      const lower = origin.toLowerCase();
-      if (
-        lower.includes('rvxis.site') ||
-        lower.startsWith('tauri://') ||
-        lower.startsWith('http://tauri.')
-      ) {
-        return callback(null, true);
-      }
-      return callback(new Error('Not allowed by CORS'));
-    },
-  });
-} else {
-  // Development / Test mode default: permissive
-  corsMiddleware = cors();
-}
-
-app.use(corsMiddleware);
 // Body parser: strictly limit payload size to 10kb to prevent memory DoS attacks
 app.use(express.json({ limit: '10kb' }));
 
-const APP_VERSION = '0.2.2';
+const APP_VERSION = '0.2.3';
 const MIN_CLIENT_VERSION = '0.0.3';
 
 // Health & Info endpoints
@@ -104,6 +65,7 @@ app.get(['/health', '/peerjs/health'], (req, res) => {
     timestamp: new Date().toISOString(),
     service: 'rvxis-server',
     version: APP_VERSION,
+    releaseId: process.env.RVXIS_RELEASE || null,
     minClientVersion: MIN_CLIENT_VERSION
   });
 });
@@ -268,19 +230,19 @@ function validateMediaBuffer(buffer) {
 // Ephemeral Media Upload API (In-RAM only)
 app.post(
   '/api/upload',
+  createUploadGate({
+    authorize: req => authorizeSession(req, req.headers['x-room-id'], req.headers['x-peer-id']),
+    rateLimit: key => checkUploadRateLimit(key),
+  }),
   express.raw({
     type: ['image/*', 'video/*'],
     limit: '25mb',
   }),
   (req, res) => {
     try {
-      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
-      if (!checkUploadRateLimit(clientIp)) {
-        return res.status(429).json({
-          error: 'Файл не отправлен: превышен лимит загрузок (не более 15 файлов в минуту). Попробуйте позже.',
-        });
+      if (!authorizeSession(req, req.headers['x-room-id'], req.headers['x-peer-id'])) {
+        return res.status(401).json({ error: 'unauthorized' });
       }
-
       const roomId = req.headers['x-room-id'];
       if (!roomId || !rooms.has(roomId)) {
         return res.status(400).json({ error: 'Файл не отправлен: активная комната не найдена или закрыта' });
@@ -332,13 +294,10 @@ app.post(
         });
       }
 
-      if (totalUploadsBytes + size > MAX_TOTAL_RAM_UPLOADS) {
-        const sorted = Array.from(ephemeralUploads.entries()).sort((a, b) => a[1].createdAt - b[1].createdAt);
-        for (const [oldId, oldUpload] of sorted) {
-          totalUploadsBytes -= oldUpload.size;
-          ephemeralUploads.delete(oldId);
-          if (totalUploadsBytes + size <= MAX_TOTAL_RAM_UPLOADS) break;
-        }
+      const roomBytes = [...ephemeralUploads.values()].filter(upload => upload.roomId === roomId)
+        .reduce((sum, upload) => sum + upload.size, 0);
+      if (roomBytes + size > 50 * 1024 * 1024 || totalUploadsBytes + size > MAX_TOTAL_RAM_UPLOADS) {
+        return res.status(507).json({ error: 'Лимит хранения вложений достигнут. Попробуйте позже.' });
       }
 
       const fileId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -380,7 +339,7 @@ app.get('/api/media/:fileId/:filename?', (req, res) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cache-Control', 'private, max-age=3600');
+  res.setHeader('Cache-Control', 'no-store');
 
   const encodedName = encodeURIComponent(upload.filename);
   res.setHeader('Content-Disposition', `inline; filename="${encodedName}"; filename*=UTF-8''${encodedName}`);
@@ -587,15 +546,17 @@ function getIceServers(peerId = 'voicechat') {
 }
 
 app.get('/peerjs/ice-servers', (req, res) => {
-  const peerId = typeof req.query.peerId === 'string' ? req.query.peerId : 'client';
+  const { roomId, peerId } = req.query;
+  if (!authorizeSession(req, roomId, peerId)) return res.status(401).json({ error: 'unauthorized' });
   res.json({ iceServers: getIceServers(peerId) });
 });
 
 // Status endpoint: tells clients if LiveKit SFU is enabled and configured
 app.get(['/api/livekit/status', '/peerjs/livekit/status'], (req, res) => {
   res.json({
-    available: Boolean(LIVEKIT_API_SECRET && LIVEKIT_API_KEY),
+    available: process.env.DISABLE_LIVEKIT !== '1' && Boolean(LIVEKIT_API_SECRET && LIVEKIT_API_KEY),
     url: LIVEKIT_URL,
+    roomPrefix: process.env.LIVEKIT_ROOM_PREFIX || '',
   });
 });
 
@@ -659,10 +620,13 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
     }
   }
 
+  const session = authorizeSession(req, roomId.trim(), typeof peerId === 'string' ? peerId.trim() : '');
+  if (!session) return res.status(401).json({ error: 'unauthorized' });
+
   // Graceful check if SFU credentials are configured
   const currentKey = process.env.LIVEKIT_API_KEY || '';
   const currentSecret = process.env.LIVEKIT_API_SECRET || '';
-  if (!currentSecret || !currentKey) {
+  if (process.env.DISABLE_LIVEKIT === '1' || !currentSecret || !currentKey) {
     return res.status(503).json({
       error: 'livekit_not_configured',
       message: 'LiveKit SFU screen sharing is not configured on this server'
@@ -670,14 +634,16 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
   }
 
   try {
-    const cleanRoom = roomId.trim();
-    const cleanNick = sanitizeNickname(nickname);
+    const prefix = process.env.LIVEKIT_ROOM_PREFIX || '';
+    if (!/^[a-zA-Z0-9_-]{0,64}$/.test(prefix)) throw new Error('Invalid LiveKit room prefix');
+    const cleanRoom = `${prefix}${roomId.trim()}`;
+    const cleanNick = rooms.get(session.roomId)?.get(session.peerId)?.nickname || 'User';
     const identity = (peerId && typeof peerId === 'string' ? peerId.trim() : crypto.randomUUID()).slice(0, 64);
 
     const at = new AccessToken(currentKey, currentSecret, {
       identity,
       name: cleanNick,
-      ttl: '12h',
+      ttl: '10m',
     });
 
     at.addGrant({
@@ -685,7 +651,9 @@ app.post(['/api/livekit/token', '/peerjs/livekit/token'], tokenRateLimiter, asyn
       room: cleanRoom,
       canPublish: true,
       canSubscribe: true,
-      canPublishData: true,
+      canPublishData: false,
+      canUpdateOwnMetadata: true,
+      canPublishSources: [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO],
     });
 
     const token = await at.toJwt();
@@ -727,6 +695,10 @@ function safeSend(socket, payload) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     try {
       const data = typeof payload === 'string' ? payload : JSON.stringify(payload);
+      if (socket.bufferedAmount > 512 * 1024) {
+        socket.close(1013, 'Output buffer limit exceeded');
+        return false;
+      }
       socket.send(data);
       return true;
     } catch (err) {
@@ -749,11 +721,12 @@ function broadcastToRoom(roomId, message, excludePeerId = null) {
   }
 }
 
-function removeClientFromRoom(ws) {
+function removeClientFromRoom(ws, intentional = false) {
   const meta = clientMeta.get(ws);
   if (!meta) return;
 
   const { roomId, peerId } = meta;
+  releaseSession(roomId, peerId, ws, intentional);
   clientMeta.delete(ws);
 
   const room = rooms.get(roomId);
@@ -779,11 +752,20 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 
 // Handle upgrade for paths starting with /peerjs
 server.on('upgrade', (request, socket, head) => {
+  if (!isAllowedOrigin(request.headers.origin)) {
+    socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
+    return;
+  }
+  if (wss.clients.size >= 256 || [...wss.clients].filter(client => client.remoteIp === request.socket.remoteAddress).length >= 64) {
+    socket.end('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
+    return;
+  }
   const pathname = request.url ? new URL(request.url, 'http://localhost').pathname : '';
 
   // Accept both /peerjs/ws and /peerjs (and any subpath like /peerjs/peerjs for compatibility)
   if (pathname.startsWith('/peerjs')) {
     wss.handleUpgrade(request, socket, head, (ws) => {
+      ws.remoteIp = request.socket.remoteAddress;
       wss.emit('connection', ws, request);
     });
   } else {
@@ -809,13 +791,18 @@ wss.on('connection', (ws) => {
     ws.isAlive = true;
   });
 
+  let rawCount = 0, rawResetAt = Date.now();
   ws.on('message', async (raw) => {
+    if (Date.now() - rawResetAt >= 1000) { rawCount = 0; rawResetAt = Date.now(); }
+    if (++rawCount > RATE_LIMIT_HARD_CAP) {
+      ws.close(1008, 'Message rate limit exceeded');
+      return;
+    }
     let rawMsg;
     try {
       rawMsg = JSON.parse(raw.toString());
     } catch (e) {
-      const rawSnippet = String(raw).slice(0, 100);
-      console.warn('[WS] Invalid JSON received:', rawSnippet);
+      // Do not echo untrusted payloads (or credentials) into logs.
       safeSend(ws, createProtocolError('invalid_message', 'Invalid JSON syntax'));
       return;
     }
@@ -853,9 +840,15 @@ wss.on('connection', (ws) => {
     if (msg.type === 'join') {
       const { roomId, peerId, nickname, isMuted, isDeafened } = msg;
 
-      // Cleanup any previous room for this socket
-      removeClientFromRoom(ws);
+      if (clientMeta.has(ws)) {
+        safeSend(ws, createProtocolError('already_joined', 'Leave the current room before joining again'));
+        return;
+      }
 
+      if (!rooms.has(roomId) && rooms.size >= 64) {
+        safeSend(ws, createProtocolError('server_full', 'Server room capacity reached'));
+        return;
+      }
       const room = getRoom(roomId);
 
       // Check if room already has a client with the same peerId (evict stale duplicate)
@@ -873,6 +866,13 @@ wss.on('connection', (ws) => {
             `Комната заполнена (максимум ${MAX_ROOM_PEERS} участников для прямого P2P-аудио)`
           )
         );
+        return;
+      }
+
+      const session = claimSession(roomId, peerId, msg.sessionToken, ws);
+      if (!session) {
+        if (room.size === 0) rooms.delete(roomId);
+        safeSend(ws, createProtocolError('identity_in_use', 'This identity belongs to another session'));
         return;
       }
 
@@ -917,6 +917,7 @@ wss.on('connection', (ws) => {
       // Send existing peers, in-memory messages, and iceServers to joining client
       safeSend(ws, {
         type: 'room-state',
+        sessionToken: session.token,
         peers: existingPeers,
         messages: room.messages || [],
         iceServers: getIceServers(peerId),
@@ -1079,7 +1080,7 @@ wss.on('connection', (ws) => {
     }
 
     if (msg.type === 'leave') {
-      removeClientFromRoom(ws);
+      removeClientFromRoom(ws, true);
       return;
     }
   });
@@ -1143,6 +1144,7 @@ if (fs.existsSync(distPath)) {
 
 // Start server
 const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || undefined;
 
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -1158,7 +1160,7 @@ const isTestEnvironment =
   process.argv.some(arg => typeof arg === 'string' && (arg.includes('test') || arg.includes('unit-tests')));
 
 if (!isTestEnvironment) {
-  server.listen(PORT, () => {
+  server.listen(PORT, HOST, () => {
     console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║                                                           ║
@@ -1175,24 +1177,37 @@ if (!isTestEnvironment) {
   });
 }
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
+// HTTP close alone leaves upgraded WebSockets open. Close both transports,
+// with a deadline for clients that never finish the close handshake.
+let shuttingDown = false;
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received. Shutting down gracefully...`);
   clearInterval(pingInterval);
-  server.close(() => {
+  const deadline = setTimeout(() => {
+    console.warn('[Server] Shutdown deadline reached; closing remaining connections');
+    for (const ws of wss.clients) ws.terminate();
+    server.closeAllConnections();
+    process.exit(0);
+  }, 5000).unref();
+  let httpClosed = false;
+  let webSocketsClosed = false;
+  const finish = () => {
+    if (!httpClosed || !webSocketsClosed) return;
+    clearTimeout(deadline);
     console.log('Server closed');
     process.exit(0);
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down gracefully...');
-  clearInterval(pingInterval);
+  };
+  wss.close(() => { webSocketsClosed = true; finish(); });
+  for (const ws of wss.clients) ws.close(1001, 'Server shutting down');
   server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
+    httpClosed = true;
+    finish();
   });
-});
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 export {
   app,

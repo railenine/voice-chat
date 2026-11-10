@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -30,11 +32,112 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Shell syntax
+        run: |
+          for file in scripts/*.sh; do
+            bash -n "$file"
+          done
+
+      - name: Installer mode regression
+        run: |
+          rustc --edition=2021 --test src-tauri/src/installation.rs -o "$RUNNER_TEMP/rvxis-installation-tests"
+          "$RUNNER_TEMP/rvxis-installation-tests"
+
+      - name: Migration runtime and public frontend regressions
+        run: sudo "$(command -v node)" --test test/root/*.test.js
+
       - name: Unit & Integration Tests
         run: npm test
 
       - name: Validate Update Manifests
         run: node scripts/generate-latest-json.js --validate-only
 
+      - name: Check production release source
+        run: node scripts/release-candidate.js --check-source
+
       - name: Build Web Bundle
         run: npm run build
+
+      - name: Install browser for media smoke test
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Browser media smoke test
+        run: npm run test:browser
+
+      - name: Legacy and candidate compatibility matrix
+        run: npm run test:compatibility
+
+      - name: Package verified server candidate without deployment
+        if: github.event_name == 'push'
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --quiet HEAD --
+          tar -czf "$RUNNER_TEMP/rvxis-server-$GITHUB_SHA.tar.gz" dist/ package.json package-lock.json server/ scripts/
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          import { execFileSync } from 'node:child_process';
+          const file=`rvxis-server-${process.env.GITHUB_SHA}.tar.gz`;
+          const data=fs.readFileSync(`${process.env.RUNNER_TEMP}/${file}`);
+          const report={sourceCommit:process.env.GITHUB_SHA,
+            sourceTree:execFileSync('git',['rev-parse','HEAD^{tree}'],{encoding:'utf8'}).trim(),
+            version:JSON.parse(fs.readFileSync('package.json')).version,
+            runId:Number(process.env.GITHUB_RUN_ID),file,bytes:data.length,
+            sha256:crypto.createHash('sha256').update(data).digest('hex'),
+            deployed:false};
+          fs.writeFileSync(`${process.env.RUNNER_TEMP}/server-candidate.json`,JSON.stringify(report,null,2)+'\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,`\nServer candidate: ${file}\n\nSHA256: ${report.sha256}\n\nDeployed: false\n`);
+          NODE
+
+      - name: Upload server candidate
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-release-candidate
+          path: |
+            ${{ runner.temp }}/rvxis-server-${{ github.sha }}.tar.gz
+            ${{ runner.temp }}/server-candidate.json
+          if-no-files-found: error
+
+      - name: Upload compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compatibility-report
+          path: .test-tmp/compat-*/report.json
+          if-no-files-found: ignore
+
+  migration-rehearsal:
+    name: Isolated Linux migration and rollback
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup matching migration runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.22.0'
+      - name: Install isolated PM2 tooling
+        run: npm install --prefix "$RUNNER_TEMP/rvxis-pm2" --ignore-scripts --no-audit --no-fund pm2@6.0.8
+      - name: Rehearse migration and rollback as root in isolated fixtures
+        run: |
+          sudo env -i PATH="$RUNNER_TEMP/rvxis-pm2/node_modules/.bin:$(dirname "$(command -v node)"):/usr/bin:/bin" \
+            GITHUB_ACTIONS=true "$(command -v node)" scripts/test-migrate-isolated.js --ci
+      - name: Rehearse candidate verification, activation and legacy rollback
+        run: |
+          sudo env -i PATH="$RUNNER_TEMP/rvxis-pm2/node_modules/.bin:$(dirname "$(command -v node)"):/usr/bin:/bin" \
+            GITHUB_ACTIONS=true "$(command -v node)" scripts/test-deploy-isolated.js --ci
+
+  windows-release-safety:
+    name: Windows release verification regressions
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node --test test/integration/desktop-promotion.test.js test/integration/release-candidate.test.js test/integration/release-archive.test.js test/integration/release-signing.test.js

@@ -5,12 +5,18 @@ on:
     branches:
       - main
 
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -33,41 +39,37 @@ jobs:
       - name: Build frontend
         run: npm run build
 
-      - name: Deploy Frontend to VPS
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          port: ${{ secrets.VPS_PORT }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "dist/"
-          target: ${{ secrets.TARGET_DIR }}
-          strip_components: 1
-          rm: true
+      - name: Install browser for media smoke test
+        run: npx playwright-core install --with-deps chromium
 
-      - name: Deploy Backend to VPS
+      - name: Browser media smoke test
+        run: npm run test:browser
+
+      - name: Legacy and candidate compatibility matrix
+        run: npm run test:compatibility
+
+      - name: Upload release candidate
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           port: ${{ secrets.VPS_PORT }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "package.json,package-lock.json,server/,scripts/"
-          target: "/var/www/voice-chat-backend"
+          source: "dist/,package.json,package-lock.json,server/,scripts/"
+          target: "/var/www/voice-chat-releases/${{ github.sha }}"
           overwrite: true
 
-      - name: Restart Backend via SSH
+      - name: Verify and activate candidate
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          RVXIS_RELEASE: ${{ github.sha }}
+          RVXIS_FRONTEND: ${{ secrets.TARGET_DIR }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           port: ${{ secrets.VPS_PORT }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: RVXIS_RELEASE,RVXIS_FRONTEND
           script: |
-            cd /var/www/voice-chat-backend
-            npm install --omit=dev
-            chmod +x scripts/setup-coturn.sh || true
-            bash scripts/setup-coturn.sh || true
-            pm2 delete voicechat-server || true
-            pm2 start server/index.js --name voicechat-server
-            pm2 save
+            export PATH="/opt/rvxis-runtime/current/bin:$PATH"
+            bash "/var/www/voice-chat-releases/$RVXIS_RELEASE/scripts/deploy-candidate.sh"

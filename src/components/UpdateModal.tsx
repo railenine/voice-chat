@@ -36,34 +36,36 @@ export const UpdateModal: React.FC<UpdateModalProps> = memo(({
   onCheckAgain,
 }) => {
   const [renderedStatus, setRenderedStatus] = useState<UpdateStatus>(status);
-  const [fadeState, setFadeState] = useState<'visible' | 'fading-out' | 'fading-in'>('visible');
+  const [fadeState, setFadeState] = useState<'visible' | 'fading-out'>('visible');
+  const wasOpenRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [contentHeight, setContentHeight] = useState<number | undefined>(undefined);
 
-  // Sync renderedStatus on open
+  // Opening and status changes share one transition owner. Separate effects can
+  // cancel the fade timer after synchronizing status and leave content invisible.
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      setFadeState('visible');
+      return;
+    }
+    if (!wasOpenRef.current) {
+      wasOpenRef.current = true;
       setRenderedStatus(status);
       setFadeState('visible');
+      setContentHeight(undefined);
+      return;
     }
-  }, [isOpen]);
-
-  // Smooth cross-fade when status changes while modal is open
-  useEffect(() => {
-    if (!isOpen) return;
-
-    if (status !== renderedStatus) {
-      setFadeState('fading-out');
-      const timer = setTimeout(() => {
-        setRenderedStatus(status);
-        setFadeState('fading-in');
-        const inTimer = setTimeout(() => {
-          setFadeState('visible');
-        }, 220);
-        return () => clearTimeout(inTimer);
-      }, 140);
-      return () => clearTimeout(timer);
+    if (status === renderedStatus) {
+      setFadeState('visible');
+      return;
     }
+    setFadeState('fading-out');
+    const timer = setTimeout(() => {
+      setRenderedStatus(status);
+      setFadeState('visible');
+    }, 140);
+    return () => clearTimeout(timer);
   }, [status, renderedStatus, isOpen]);
 
   // Track natural content height for smooth zero-jerk height transitions

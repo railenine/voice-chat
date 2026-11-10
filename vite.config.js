@@ -25,13 +25,18 @@ export default defineConfig({
   },
   server: {
     host: "0.0.0.0",
-    port: 3000,
+    port: 5173,
     strictPort: true,
+    proxy: {
+      '/api': 'http://127.0.0.1:3000',
+      '/health': 'http://127.0.0.1:3000',
+      '/peerjs': { target: 'http://127.0.0.1:3000', ws: true },
+    },
     watch: {
       ignored: ["**/src-tauri/**"],
     },
     hmr: {
-      port: 3000,
+      port: 5173,
     },
   },
 });

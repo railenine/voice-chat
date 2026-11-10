@@ -140,6 +140,7 @@ export const VoiceSidebar: React.FC<VoiceSidebarProps> = memo(
                 key={peer.peerId}
                 peerId={peer.peerId}
                 nickname={peer.nickname}
+                connectionState={peer.connectionState}
                 isSpeaking={peer.isSpeaking}
                 isMuted={peer.isMuted}
                 isDeafened={peer.isDeafened}

@@ -1,3 +1,4 @@
+import { getRoomToken, setRoomToken } from '../../utils/roomSession';
 import { useState, useRef, useCallback, useEffect, type MutableRefObject } from 'react';
 import { getWebSocketUrl } from '../../config';
 import { playJoinSound, playLeaveSound } from '../../utils/soundEffects';
@@ -94,7 +95,7 @@ export function useSignaling({
     setError(null);
     isConnectedRef.current = true;
     setIsConnected(true);
-    setConnectionStatus('В комнате ✓');
+    setConnectionStatus('В комнате');
   }, []);
 
   const sendWsMessage = useCallback((msg: ClientMessage) => {
@@ -136,6 +137,7 @@ export function useSignaling({
         ws.send(
           JSON.stringify({
             type: 'join',
+            sessionToken: getRoomToken(roomId),
             roomId,
             peerId: myPeerIdRef.current,
             nickname: currentNicknameRef.current,
@@ -169,24 +171,15 @@ export function useSignaling({
 
         // Initial room state: list of existing peers
         if (type === 'room-state') {
+          setRoomToken(roomId, msg.sessionToken);
           console.log(`[WS] Received room-state with ${msg.peers?.length || 0} peers`);
           playJoinSound();
           wasConnectedRef.current = true;
 
           onRoomStateRef.current(msg);
 
-          const peerList = Array.isArray(msg.peers) ? msg.peers : [];
-          if (peerList.length > 0) {
-            setConnectionStatus('Восстановление звука...');
-            if (reconnectSettleTimerRef.current) clearTimeout(reconnectSettleTimerRef.current);
-            reconnectSettleTimerRef.current = setTimeout(() => {
-              console.log('[WebRTC] Reconnect settle timer expired, marking connection ready');
-              markConnected();
-            }, 3500);
-          } else {
-            // User is alone in the room, no WebRTC connections to wait for!
-            markConnected();
-          }
+          // This state confirms signaling membership, not media connectivity.
+          markConnected();
         }
 
         // Another peer joined the room

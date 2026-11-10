@@ -1,3 +1,4 @@
+import { setSoundMuted } from '../utils/soundEffects';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getBackendBaseUrl } from '../config';
 import {
@@ -40,6 +41,11 @@ export function useVoiceChat({
 }: UseVoiceChatOptions) {
   const [isDeafened, setIsDeafened] = useState(false);
   const isDeafenedRef = useRef(false);
+  const preDeafenMutedRef = useRef(false);
+  useEffect(() => {
+    setSoundMuted(isDeafened);
+    return () => setSoundMuted(false);
+  }, [isDeafened]);
   useEffect(() => {
     isDeafenedRef.current = isDeafened;
   }, [isDeafened]);
@@ -56,7 +62,6 @@ export function useVoiceChat({
   const initDoneRef = useRef(false);
   const initRef = useRef<() => void>(() => {});
   const unlockAllRemoteAudioRef = useRef<() => void>(() => {});
-  const markConnectedRef = useRef<() => void>(() => {});
 
   // 1. Room participants hook
   const {
@@ -96,7 +101,6 @@ export function useVoiceChat({
   });
 
   // 3. Remote peer audio elements & Web Audio mixer hook
-  const isConnectedRefContainer = useRef(false);
   const {
     peerVolumes,
     setPeerVolumes,
@@ -121,8 +125,6 @@ export function useVoiceChat({
       removeRemotePeerActivity(peerId);
     },
     setNeedsAudioUnlock,
-    markConnected: () => markConnectedRef.current(),
-    isConnectedRef: isConnectedRefContainer,
   });
 
   unlockAllRemoteAudioRef.current = unlockAllRemoteAudio;
@@ -153,6 +155,14 @@ export function useVoiceChat({
     sendWsMessageRef: sendWsMessageProxyRef,
   });
 
+  const onPeerState = useCallback((peerId: string, state: 'connected' | 'reconnecting' | 'disconnected') => {
+    const peer = peersInfoRef.current.get(peerId);
+    if (peer && peer.connectionState !== state) {
+      peersInfoRef.current.set(peerId, { ...peer, connectionState: state });
+      updatePeersState();
+    }
+  }, [peersInfoRef, updatePeersState]);
+
   // 5. Peer connections hook (W3C Perfect Negotiation, Opus SDP, ICE restart, coordinated recovery)
   const {
     iceServersRef,
@@ -169,8 +179,7 @@ export function useVoiceChat({
     teardownPeerAudioGraph,
     cleanupRemotePeerAudio,
     removeParticipant,
-    markConnected: () => markConnectedRef.current(),
-    isConnectedRef: isConnectedRefContainer,
+    onPeerState,
     peerConnectionsRef,
   });
 
@@ -219,14 +228,6 @@ export function useVoiceChat({
       if (Array.isArray(msg.iceServers) && msg.iceServers.length > 0) {
         iceServersRef.current = msg.iceServers;
       }
-      if (msg.peer.nickname && msg.peer.nickname !== 'Аноним') {
-        for (const [oldId, oldInfo] of peersInfoRef.current.entries()) {
-          if (oldId !== msg.peer.peerId && oldInfo.nickname === msg.peer.nickname) {
-            console.log(`[WebRTC] Removing duplicate old peer ${oldId} for ${msg.peer.nickname}`);
-            cleanupPeer(oldId);
-          }
-        }
-      }
       peersInfoRef.current.set(msg.peer.peerId, msg.peer);
       const savedVol = getSavedVolume(msg.peer.peerId, msg.peer.nickname);
       peerVolumesRef.current.set(msg.peer.peerId, savedVol);
@@ -252,7 +253,7 @@ export function useVoiceChat({
 
   const onSignal = useCallback(
     (from: string, data: WebRTCSignalData) => {
-      handleSignal(from, data);
+      if (peersInfoRef.current.has(from)) handleSignal(from, data);
     },
     [handleSignal]
   );
@@ -365,8 +366,6 @@ export function useVoiceChat({
     onWsDisconnectCleanup,
   });
 
-  isConnectedRefContainer.current = isConnected;
-  markConnectedRef.current = markConnected;
   sendWsMessageProxyRef.current = sendWsMessage;
 
   // 7. Room chat hook
@@ -405,6 +404,7 @@ export function useVoiceChat({
     setIsDeafened(nextDeafened);
 
     if (nextDeafened) {
+      preDeafenMutedRef.current = isMutedRef.current;
       setMicrophoneMuted(true);
       stopSpeaking();
       applyDeafenToRemoteAudio(true);
@@ -412,10 +412,10 @@ export function useVoiceChat({
       sendWsMessage({ type: 'update-mute', isMuted: true });
       playDeafenSound();
     } else {
-      setMicrophoneMuted(false);
+      setMicrophoneMuted(preDeafenMutedRef.current);
       applyDeafenToRemoteAudio(false);
       sendWsMessage({ type: 'update-deafen', isDeafened: false });
-      sendWsMessage({ type: 'update-mute', isMuted: false });
+      sendWsMessage({ type: 'update-mute', isMuted: preDeafenMutedRef.current });
       playUndeafenSound();
     }
   }, [setMicrophoneMuted, stopSpeaking, applyDeafenToRemoteAudio, sendWsMessage]);
@@ -507,6 +507,7 @@ export function useVoiceChat({
     myPeerIdRef.current = initialPeerId;
     setMyPeerId(initialPeerId);
 
+    let cancelled = false;
     const init = async () => {
       initRef.current = init;
       try {
@@ -516,27 +517,13 @@ export function useVoiceChat({
           );
         }
 
-        // Pre-fetch ICE servers from backend
-        try {
-          const iceRes = await fetch(`${getBackendBaseUrl()}/peerjs/ice-servers`);
-          if (iceRes.ok) {
-            const iceData = await iceRes.json();
-            if (Array.isArray(iceData?.iceServers) && iceData.iceServers.length > 0) {
-              iceServersRef.current = iceData.iceServers;
-              console.log(
-                `[ICE] Pre-fetched ${iceData.iceServers.length} ICE servers (Coturn TURN ready)`
-              );
-            }
-          }
-        } catch (iceErr) {
-          console.warn('[ICE] Pre-fetch failed, will use room-state or fallback:', iceErr);
-        }
-
         setConnectionStatus('Запрос доступа к микрофону...');
         await initLocalAudio(audioInputDeviceIdRef.current);
+        if (cancelled) return;
         startVad();
         connectWs();
       } catch (err: any) {
+        if (cancelled || err?.name === 'AbortError') return;
         console.error('Init error:', err);
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setError('Доступ к микрофону запрещён. Разрешите доступ в настройках браузера.');
@@ -553,6 +540,7 @@ export function useVoiceChat({
     init();
 
     return () => {
+      cancelled = true;
       stopVad();
       disconnectWs();
       clearAllPeerConnections();

@@ -51,6 +51,7 @@ class SimulatedPeer {
 
   handleMessage(msg) {
     if (msg.type === 'room-state') {
+      this.sessionToken = msg.sessionToken;
       this.knownPeers.clear();
       (msg.peers || []).forEach(p => this.knownPeers.set(p.peerId, p));
     } else if (msg.type === 'user-joined') {
@@ -66,6 +67,7 @@ class SimulatedPeer {
   join(roomId) {
     this.ws.send(JSON.stringify({
       type: 'join',
+      sessionToken: this.sessionToken,
       roomId,
       peerId: this.peerId,
       nickname: this.name,
@@ -232,6 +234,7 @@ async function run() {
 
     console.log('  -> Simulating Bob reconnection with fresh WebSocket...');
     const bobReconnected = new SimulatedPeer('Боб (Reconnected)', 'peer-bob-02');
+    bobReconnected.sessionToken = bob.sessionToken;
     await bobReconnected.connect(wsUrl);
     bobReconnected.join(ROOM_ID);
     await sleep(250);
@@ -316,6 +319,7 @@ async function run() {
     // Frank reconnects immediately with the same nickname and peerId
     console.log('  -> Frank reconnects immediately...');
     const frankReconnected = new SimulatedPeer('Франк', frank.peerId);
+    frankReconnected.sessionToken = frank.sessionToken;
     await frankReconnected.connect(wsUrl);
     frankReconnected.join(ROOM_ID);
     await sleep(200);
@@ -406,6 +410,7 @@ async function run() {
 
     console.log('  -> Reconnecting last peer with existing peerId in 12-peer room...');
     const reconnectedLastPeer = new SimulatedPeer('Участник-14 (Reconnected)', lastPeer.peerId);
+    reconnectedLastPeer.sessionToken = lastPeer.sessionToken;
     await reconnectedLastPeer.connect(wsUrl);
     reconnectedLastPeer.join(ROOM_ID);
     await sleep(250);

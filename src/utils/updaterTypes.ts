@@ -25,6 +25,7 @@ export interface UpdateInfo {
   date?: string;
   portableUrl?: string;
   portableSha256?: string;
+  portableSignature?: string;
   portableSize?: number;
   installerUrl?: string;
   installerSha256?: string;

@@ -13,8 +13,7 @@ export interface UsePeerConnectionsProps {
   teardownPeerAudioGraph: (peerId: string) => void;
   cleanupRemotePeerAudio: (peerId: string) => void;
   removeParticipant: (peerId: string) => void;
-  markConnected: () => void;
-  isConnectedRef: MutableRefObject<boolean>;
+  onPeerState: (peerId: string, state: 'connected' | 'reconnecting' | 'disconnected') => void;
   peerConnectionsRef?: MutableRefObject<Map<string, RTCPeerConnection>>;
 }
 
@@ -26,12 +25,14 @@ export function usePeerConnections({
   teardownPeerAudioGraph,
   cleanupRemotePeerAudio,
   removeParticipant,
-  markConnected,
-  isConnectedRef,
+  onPeerState,
   peerConnectionsRef: externalPeerConnectionsRef,
 }: UsePeerConnectionsProps) {
   const localPeerConnectionsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
   const peerConnectionsRef = externalPeerConnectionsRef || localPeerConnectionsRef;
+  const roomGenerationRef = useRef(0);
+  const peerGenerationsRef = useRef(new Map<string, number>());
+  const signalQueuesRef = useRef(new Map<string, { tail: Promise<void>; pending: number }>());
   const makingOfferRef = useRef<Map<string, boolean>>(new Map());
   const ignoreOfferRef = useRef<Map<string, boolean>>(new Map());
   const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
@@ -48,6 +49,8 @@ export function usePeerConnections({
 
   const cleanupPeer = useCallback(
     (peerId: string) => {
+      peerGenerationsRef.current.set(peerId, (peerGenerationsRef.current.get(peerId) || 0) + 1);
+      signalQueuesRef.current.delete(peerId);
       console.log(`[WebRTC] Cleaning up peer: ${peerId}`);
       const pc = peerConnectionsRef.current.get(peerId);
       if (pc) {
@@ -92,6 +95,7 @@ export function usePeerConnections({
         iceCandidatePoolSize: 2,
       });
       peerConnectionsRef.current.set(remotePeerId, pc);
+      onPeerState(remotePeerId, 'reconnecting');
 
       const polite = myPeerIdRef.current > remotePeerId;
 
@@ -102,9 +106,11 @@ export function usePeerConnections({
       }
 
       pc.onnegotiationneeded = async () => {
+        if (makingOfferRef.current.get(remotePeerId) || peerConnectionsRef.current.get(remotePeerId) !== pc) return;
         try {
           makingOfferRef.current.set(remotePeerId, true);
           await pc!.setLocalDescription();
+          if (peerConnectionsRef.current.get(remotePeerId) !== pc) return;
           const sdp = pc!.localDescription?.sdp
             ? optimizeAudioSdp(pc!.localDescription.sdp)
             : undefined;
@@ -120,11 +126,12 @@ export function usePeerConnections({
         } catch (err) {
           console.error(`[WebRTC] Negotiation error with ${remotePeerId}:`, err);
         } finally {
-          makingOfferRef.current.set(remotePeerId, false);
+          if (peerConnectionsRef.current.get(remotePeerId) === pc) makingOfferRef.current.set(remotePeerId, false);
         }
       };
 
       pc.onicecandidate = ({ candidate }) => {
+        if (peerConnectionsRef.current.get(remotePeerId) !== pc || pc!.connectionState === 'closed') return;
         if (candidate) {
           sendWsMessage({
             type: 'signal',
@@ -135,14 +142,18 @@ export function usePeerConnections({
       };
 
       pc.ontrack = (event) => {
+        if (peerConnectionsRef.current.get(remotePeerId) !== pc || pc!.connectionState === 'closed') return;
         console.log(`[WebRTC] ontrack event from ${remotePeerId}`);
         const remoteStream = event.streams[0] || new MediaStream([event.track]);
         handleRemoteStream(remotePeerId, remoteStream);
       };
 
       const checkStateAndRecover = () => {
+        if (peerConnectionsRef.current.get(remotePeerId) !== pc) return;
         const connState = pc!.connectionState;
         const iceState = pc!.iceConnectionState;
+        onPeerState(remotePeerId, connState === 'connected' ? 'connected'
+          : connState === 'failed' || connState === 'closed' ? 'disconnected' : 'reconnecting');
         console.log(`[WebRTC] Peer ${remotePeerId} state: conn=${connState}, ice=${iceState}`);
 
         if (
@@ -159,12 +170,6 @@ export function usePeerConnections({
           if (discTimer) {
             clearTimeout(discTimer);
             disconnectedTimersRef.current.delete(remotePeerId);
-          }
-          if (!isConnectedRef.current) {
-            console.log(
-              `[WebRTC] Peer ${remotePeerId} reached connected state, completing reconnection`
-            );
-            markConnected();
           }
           return;
         }
@@ -184,20 +189,6 @@ export function usePeerConnections({
                 );
                 try {
                   curPc.restartIce();
-                  const offer = await curPc.createOffer({ iceRestart: true });
-                  await curPc.setLocalDescription(offer);
-                  const sdp = curPc.localDescription?.sdp
-                    ? optimizeAudioSdp(curPc.localDescription.sdp)
-                    : undefined;
-                  sendWsMessage({
-                    type: 'signal',
-                    to: remotePeerId,
-                    data: {
-                      description: curPc.localDescription
-                        ? { type: curPc.localDescription.type, sdp }
-                        : undefined,
-                    },
-                  });
                 } catch (e) {
                   console.warn(`[WebRTC] ICE restart failed for ${remotePeerId}:`, e);
                 }
@@ -235,11 +226,13 @@ export function usePeerConnections({
 
       return pc;
     },
-    [myPeerIdRef, streamRef, sendWsMessage, handleRemoteStream, isConnectedRef, markConnected]
+    [myPeerIdRef, streamRef, sendWsMessage, handleRemoteStream, onPeerState]
   );
 
   const rebuildPeer = useCallback(
     (remotePeerId: string, notifyRemote = false) => {
+      peerGenerationsRef.current.set(remotePeerId, (peerGenerationsRef.current.get(remotePeerId) || 0) + 1);
+      signalQueuesRef.current.delete(remotePeerId);
       console.log(
         `[WebRTC] Rebuilding peer connection for ${remotePeerId} (notifyRemote=${notifyRemote})`
       );
@@ -282,19 +275,14 @@ export function usePeerConnections({
 
       teardownPeerAudioGraph(remotePeerId);
 
-      setTimeout(() => {
-        const newPc = getOrCreatePeerConnection(remotePeerId);
-        if (newPc && newPc.onnegotiationneeded) {
-          newPc.onnegotiationneeded(new Event('negotiationneeded'));
-        }
-      }, 50);
+      getOrCreatePeerConnection(remotePeerId);
     },
     [sendWsMessage, teardownPeerAudioGraph, getOrCreatePeerConnection]
   );
 
   rebuildPeerRef.current = rebuildPeer;
 
-  const handleSignal = useCallback(
+  const processSignal = useCallback(
     async (from: string, data: WebRTCSignalData) => {
       if (data.reconnect) {
         console.log(`[WebRTC] Received coordinated reconnect request from ${from}`);
@@ -329,9 +317,10 @@ export function usePeerConnections({
           try {
             await pc.setRemoteDescription(description);
           } finally {
-            isSettingRemoteAnswerPendingRef.current.set(from, false);
+            if (peerConnectionsRef.current.get(from) === pc) isSettingRemoteAnswerPendingRef.current.set(from, false);
           }
 
+          if (peerConnectionsRef.current.get(from) !== pc) return;
           if (description.type === 'answer') {
             ignoreOfferRef.current.set(from, false);
           }
@@ -341,6 +330,7 @@ export function usePeerConnections({
             console.log(`[WebRTC] Flushing ${queue.length} queued ICE candidates for ${from}`);
             pendingCandidatesRef.current.delete(from);
             for (const cand of queue) {
+              if (peerConnectionsRef.current.get(from) !== pc) return;
               try {
                 await pc.addIceCandidate(cand);
               } catch (err) {
@@ -351,6 +341,7 @@ export function usePeerConnections({
 
           if (description.type === 'offer') {
             await pc.setLocalDescription();
+            if (peerConnectionsRef.current.get(from) !== pc) return;
             const sdp = pc.localDescription?.sdp
               ? optimizeAudioSdp(pc.localDescription.sdp)
               : undefined;
@@ -376,6 +367,7 @@ export function usePeerConnections({
               queue = [];
               pendingCandidatesRef.current.set(from, queue);
             }
+            if (queue.length >= 128) return;
             queue.push(data.candidate);
             console.log(`[WebRTC] Queued early ICE candidate for ${from} (total: ${queue.length})`);
           } else {
@@ -393,7 +385,32 @@ export function usePeerConnections({
     [getOrCreatePeerConnection, myPeerIdRef, sendWsMessage, rebuildPeer]
   );
 
+  const handleSignal = useCallback((from: string, data: WebRTCSignalData) => {
+    const roomGeneration = roomGenerationRef.current;
+    const peerGeneration = peerGenerationsRef.current.get(from) || 0;
+    let queue = signalQueuesRef.current.get(from);
+    if (!queue) {
+      queue = { tail: Promise.resolve(), pending: 0 };
+      signalQueuesRef.current.set(from, queue);
+    }
+    if (queue.pending >= 64) return Promise.resolve();
+    const record = queue;
+    record.pending++;
+    record.tail = record.tail.then(async () => {
+      if (roomGeneration === roomGenerationRef.current && peerGeneration === (peerGenerationsRef.current.get(from) || 0)) {
+        await processSignal(from, data);
+      }
+    }).catch(error => console.warn('[WebRTC] Signal handling failed', error)).finally(() => {
+      record.pending--;
+      if (record.pending === 0 && signalQueuesRef.current.get(from) === record) signalQueuesRef.current.delete(from);
+    });
+    return record.tail;
+  }, [processSignal]);
+
   const clearAllPeerConnections = useCallback(() => {
+    roomGenerationRef.current++;
+    signalQueuesRef.current.clear();
+    peerGenerationsRef.current.clear();
     peerConnectionsRef.current.forEach((pc) => {
       try {
         pc.close();

@@ -243,12 +243,12 @@ describe('WebSocket Signaling Integration Tests (Real WS Server)', () => {
     assert.strictEqual(leftMsg.peerId, 'peer-go');
   });
 
-  it('7. duplicate identity: new connection with same peerId evicts old connection cleanly', async () => {
+  it('7. duplicate identity: only the session owner can replace its connection', async () => {
     const roomId = 'test-room-dup-7';
     const client1 = await createClient();
 
     client1.send({ type: 'join', roomId, peerId: 'peer-same-id', nickname: 'First' });
-    await client1.waitFor((m) => m.type === 'room-state');
+    const originalState = await client1.waitFor((m) => m.type === 'room-state');
 
     // Connect second client with IDENTICAL peerId
     const client2 = await createClient();
@@ -258,9 +258,11 @@ describe('WebSocket Signaling Integration Tests (Real WS Server)', () => {
     });
 
     client2.send({ type: 'join', roomId, peerId: 'peer-same-id', nickname: 'Second' });
-    const state2 = await client2.waitFor((m) => m.type === 'room-state');
-
-    assert.strictEqual(state2.type, 'room-state');
+    const rejection = await client2.waitFor((m) => m.type === 'error');
+    assert.strictEqual(rejection.code, 'identity_in_use');
+    assert.strictEqual(client1Closed, false);
+    client2.send({ type: 'join', roomId, peerId: 'peer-same-id', nickname: 'Second', sessionToken: originalState.sessionToken });
+    await client2.waitFor((m) => m.type === 'room-state');
     // Allow brief event tick for socket close
     await new Promise((r) => setTimeout(r, 100));
     assert.strictEqual(client1Closed, true, 'Original connection must be closed upon duplicate join');

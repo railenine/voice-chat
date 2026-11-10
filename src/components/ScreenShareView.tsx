@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
+import { applyAudioOutput } from '../utils/audioOutput';
 import {
   RemoteVideoTrack,
   RemoteAudioTrack,
@@ -22,6 +23,7 @@ import { Button, Badge } from './ui';
 import { Tooltip } from './Tooltip';
 
 interface ScreenShareViewProps {
+  isDeafened?: boolean;
   activeStreams: RemoteScreenShare[];
   localVideoTrack: LocalVideoTrack | null;
   localAudioTrack: LocalAudioTrack | null;
@@ -38,6 +40,7 @@ interface ScreenShareViewProps {
 
 export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
   activeStreams,
+  isDeafened = false,
   localVideoTrack,
   localAudioTrack,
   isSharing,
@@ -72,20 +75,6 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
       setFocusedId('');
     }
   }, [activeStreams, isSharing, watchedPeerId]);
-
-  // Safety net: when ScreenShareView unmounts, mute and detach all remote audio tracks
-  useEffect(() => {
-    return () => {
-      activeStreams.forEach((s) => {
-        if (s.audioTrack) {
-          try {
-            s.audioTrack.setVolume(0);
-            s.audioTrack.detach();
-          } catch { }
-        }
-      });
-    };
-  }, [activeStreams]);
 
   // Fullscreen toggle handler with universal Mobile/iOS/Android support
   const toggleFullscreen = async () => {
@@ -166,15 +155,6 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
       setIsClosing(false);
     } else if (isRendered) {
       setIsClosing(true);
-      // Immediately silence and detach all audio tracks so audio stops on frame 0
-      activeStreams.forEach((s) => {
-        if (s.audioTrack) {
-          try {
-            s.audioTrack.setVolume(0);
-            s.audioTrack.detach();
-          } catch {}
-        }
-      });
       const timer = setTimeout(() => {
         setIsRendered(false);
         setIsClosing(false);
@@ -253,7 +233,7 @@ export const ScreenShareView: React.FC<ScreenShareViewProps> = memo(({
           <RemoteVideoPlayer
             key={focusedRemoteStream.participantId}
             stream={focusedRemoteStream}
-            volume={streamVolumes[focusedRemoteStream.participantId] ?? 100}
+            volume={isClosing || isDeafened ? 0 : (streamVolumes[focusedRemoteStream.participantId] ?? 100)}
             onVolumeChange={(vol) => onVolumeChange(focusedRemoteStream.participantId, vol)}
             audioOutputDeviceId={audioOutputDeviceId}
           />
@@ -448,7 +428,6 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
       } catch { }
       try {
         videoTrack.detach(videoEl);
-        videoTrack.detach();
       } catch { }
     };
   }, [stream.videoTrack]);
@@ -463,9 +442,7 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
     audioTrack.setVolume(volume / 100);
 
     const targetSinkId = normalizeSinkId(audioOutputDeviceId);
-    if (typeof (audioEl as any).setSinkId === 'function') {
-      (audioEl as any).setSinkId(targetSinkId).catch(() => {});
-    }
+    void applyAudioOutput(audioEl, targetSinkId);
 
     audioEl.play().catch(() => { });
 
@@ -479,7 +456,6 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
       try {
         audioTrack.setVolume(0);
         audioTrack.detach(audioEl);
-        audioTrack.detach();
       } catch { }
     };
   }, [stream.audioTrack]);
@@ -489,11 +465,7 @@ const RemoteVideoPlayer: React.FC<RemoteVideoPlayerProps> = ({
     const audioEl = audioRef.current;
     if (!audioEl) return;
     const targetSinkId = normalizeSinkId(audioOutputDeviceId);
-    if (typeof (audioEl as any).setSinkId === 'function') {
-      (audioEl as any).setSinkId(targetSinkId).catch((err: any) => {
-        console.warn('[ScreenShare] Error setting sinkId on audio element:', err);
-      });
-    }
+    void applyAudioOutput(audioEl, targetSinkId);
   }, [audioOutputDeviceId]);
 
   // Update volume when slider moves

@@ -1,3 +1,4 @@
+import { roomAuthorization } from '../utils/roomSession';
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import {
   MessageSquare,
@@ -39,6 +40,8 @@ interface StagedAttachment {
 }
 
 interface ChatPanelProps {
+  audioOutputDeviceId?: string;
+  isDeafened?: boolean;
   roomId: string;
   messages: ChatMessage[];
   myPeerId: string;
@@ -57,7 +60,9 @@ interface ChatPanelProps {
 }
 
 export const ChatPanel: React.FC<ChatPanelProps> = memo(({
+  audioOutputDeviceId,
   roomId,
+  isDeafened = false,
   messages,
   myPeerId,
   onSendMessage,
@@ -281,6 +286,7 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       method: 'POST',
       headers: {
         'Content-Type': file.type || 'application/octet-stream',
+        ...roomAuthorization(roomId),
         'x-room-id': roomId,
         'x-peer-id': myPeerId,
         'x-filename': encodeURIComponent(file.name),
@@ -873,7 +879,8 @@ export const ChatPanel: React.FC<ChatPanelProps> = memo(({
       </form>
 
       {/* Media Viewer Modal */}
-      <MediaViewerModal
+      <MediaViewerModal isDeafened={isDeafened}
+        audioOutputDeviceId={audioOutputDeviceId}
         item={viewingMedia}
         onClose={() => setViewingMedia(null)}
       />

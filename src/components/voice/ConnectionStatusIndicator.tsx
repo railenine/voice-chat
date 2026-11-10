@@ -93,8 +93,8 @@ export const ConnectionStatusIndicator: React.FC<ConnectionStatusIndicatorProps>
       className={`${basePill} pl-2.5 pr-3 gap-1.5 bg-(--success-soft) border-(--success-border) text-(--success) ${className}`}
     >
       <span className="w-1.5 h-1.5 rounded-full bg-(--success) shrink-0 -translate-y-px" aria-hidden="true" />
-      <span className={`leading-none ${isMobile ? 'hidden xs:inline' : 'inline'}`}>Подключено</span>
-      <span className={`leading-none ${isMobile ? 'xs:hidden' : 'hidden'}`}>В сети</span>
+      <span className={`leading-none ${isMobile ? 'hidden xs:inline' : 'inline'}`}>В комнате</span>
+      <span className={`leading-none ${isMobile ? 'xs:hidden' : 'hidden'}`}>В комнате</span>
     </div>
   );
 });

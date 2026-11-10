@@ -1,3 +1,4 @@
+import { roomAuthorization } from '../utils/roomSession';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Room,
@@ -111,6 +112,16 @@ export function useScreenShare({
   const [localAudioTrack, setLocalAudioTrack] = useState<LocalAudioTrack | null>(null);
 
   const roomRef = useRef<Room | null>(null);
+  const nicknameRef = useRef(nickname);
+  nicknameRef.current = nickname;
+  const connectedRef = useRef(false);
+  const stopScreenShareRef = useRef<() => void>(() => {});
+  const [connectionState, setConnectionState] = useState<'unavailable' | 'connecting' | 'connected' | 'reconnecting' | 'failed'>('unavailable');
+  useEffect(() => {
+    if (connectedRef.current && roomRef.current) {
+      roomRef.current.localParticipant.setName(nickname).catch(() => setError('Не удалось обновить имя трансляции'));
+    }
+  }, [nickname]);
   const isJoinedRef = useRef(isJoined);
   isJoinedRef.current = isJoined;
 
@@ -222,6 +233,8 @@ export function useScreenShare({
         roomRef.current.disconnect();
         roomRef.current = null;
       }
+      connectedRef.current = false;
+      setConnectionState('unavailable');
       setIsSharing(false);
       setActiveStreams([]);
       setStreamingPeerIds(new Set());
@@ -231,6 +244,7 @@ export function useScreenShare({
     }
 
     let isCancelled = false;
+    setConnectionState('connecting');
 
     const connectLiveKit = async () => {
       try {
@@ -238,14 +252,13 @@ export function useScreenShare({
         // Request token from backend
         const tokenRes = await fetch(`${getBackendBaseUrl()}/peerjs/livekit/token`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomId, nickname, peerId }),
+          headers: { 'Content-Type': 'application/json', ...roomAuthorization(roomId) },
+          body: JSON.stringify({ roomId, nickname: nicknameRef.current, peerId }),
         });
 
         if (!tokenRes.ok) {
           const errData = await tokenRes.json().catch(() => ({}));
-          console.warn('[LiveKit] Token request failed:', errData);
-          return;
+          throw new Error(errData.message || 'Не удалось получить доступ к трансляции');
         }
 
         const { token, livekitUrl } = await tokenRes.json();
@@ -267,6 +280,9 @@ export function useScreenShare({
         room.on(RoomEvent.TrackMuted, () => syncRemoteStreams(room));
         room.on(RoomEvent.TrackUnmuted, () => syncRemoteStreams(room));
 
+        room.on(RoomEvent.ParticipantNameChanged, () => syncRemoteStreams(room));
+        room.on(RoomEvent.Reconnecting, () => { connectedRef.current = false; if (!isCancelled) setConnectionState('reconnecting'); });
+        room.on(RoomEvent.Reconnected, () => { connectedRef.current = true; if (!isCancelled) { setConnectionState('connected'); syncRemoteStreams(room); } });
         room.on(RoomEvent.ParticipantConnected, () => syncRemoteStreams(room));
         room.on(RoomEvent.ParticipantDisconnected, () => syncRemoteStreams(room));
 
@@ -282,6 +298,10 @@ export function useScreenShare({
         });
 
         room.on(RoomEvent.Disconnected, () => {
+          connectedRef.current = false;
+          if (isCancelled) return;
+          setConnectionState('failed');
+          setError('Соединение трансляции прервано');
           initialSyncDoneRef.current = false;
           knownStreamingIdsRef.current = new Set();
           setIsSharing(false);
@@ -292,14 +312,20 @@ export function useScreenShare({
         await room.connect(livekitUrl, token, {
           autoSubscribe: true,
         });
-        console.log('[LiveKit] Successfully connected to SFU room:', roomId);
+        if (isCancelled) { room.disconnect(); return; }
+        connectedRef.current = true;
+        setConnectionState('connected');
+        await room.localParticipant.setName(nicknameRef.current);
+        console.log('[LiveKit] Successfully connected to SFU room:', room.name);
         if (!isCancelled) {
           syncRemoteStreams(room);
         }
       } catch (err: any) {
         if (!isCancelled) {
           console.error('[LiveKit] Connection error:', err);
-          setError(err?.message || 'Failed to connect to LiveKit');
+          connectedRef.current = false;
+          setConnectionState('failed');
+          setError(err?.message || 'Не удалось подключиться к трансляции');
         }
       }
     };
@@ -308,6 +334,7 @@ export function useScreenShare({
 
     return () => {
       isCancelled = true;
+      connectedRef.current = false;
       initialSyncDoneRef.current = false;
       knownStreamingIdsRef.current = new Set();
       if (roomRef.current) {
@@ -315,7 +342,7 @@ export function useScreenShare({
         roomRef.current = null;
       }
     };
-  }, [isJoined, roomId, nickname, peerId, isAvailable, syncRemoteStreams]);
+  }, [isJoined, roomId, peerId, isAvailable, syncRemoteStreams]);
 
   // 3. Start Screen Sharing
   const startScreenShare = useCallback(async (options?: StartScreenShareOptions) => {
@@ -325,7 +352,7 @@ export function useScreenShare({
     }
 
     const room = roomRef.current;
-    if (!room) {
+    if (!room || !connectedRef.current) {
       setError('LiveKit room is not connected');
       return;
     }
@@ -375,7 +402,7 @@ export function useScreenShare({
       if (vTrack) {
         (vTrack as LocalVideoTrack).mediaStreamTrack.onended = () => {
           console.log('[LiveKit] Screen share stopped by user via browser bar');
-          stopScreenShare();
+          stopScreenShareRef.current();
         };
       }
     } catch (err: any) {
@@ -417,21 +444,18 @@ export function useScreenShare({
     }
   }, [localVideoTrack, localAudioTrack, syncRemoteStreams]);
 
+  stopScreenShareRef.current = stopScreenShare;
+
   // 5. Volume control for remote streams
   const setStreamVolume = useCallback((participantId: string, volume: number) => {
     const clamped = Math.max(0, Math.min(100, volume));
     setStreamVolumes((prev) => ({ ...prev, [participantId]: clamped }));
 
-    // Find remote audio track and apply volume
-    const stream = activeStreams.find((s) => s.participantId === participantId);
-    if (stream && stream.audioTrack) {
-      // livekit-client setVolume takes 0.0 to 1.0 (with headroom up to 2.0)
-      stream.audioTrack.setVolume(clamped / 100);
-    }
-  }, [activeStreams]);
+  }, []);
 
   return {
     isAvailable,
+    connectionState,
     canShareScreen: canDeviceShareScreen(),
     isSharing,
     isConnecting,

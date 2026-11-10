@@ -1,4 +1,5 @@
-import React, { useState, memo } from 'react';
+import React, { useState, useRef, useEffect, memo } from 'react';
+import { applyAudioOutput } from '../utils/audioOutput';
 import { Image as ImageIcon, Video, ExternalLink, Copy, Check, Sparkles } from 'lucide-react';
 import { Modal } from './Modal';
 import { Button } from './ui';
@@ -14,16 +15,24 @@ export interface MediaViewerItem {
 }
 
 export interface MediaViewerModalProps {
+  audioOutputDeviceId?: string;
+  isDeafened?: boolean;
   item: MediaViewerItem | null;
   onClose: () => void;
 }
 
 export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
   item,
+  audioOutputDeviceId,
+  isDeafened = false,
   onClose,
 }) => {
   const [copied, setCopied] = useState(false);
   const [confirmExternalUrl, setConfirmExternalUrl] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    if (videoRef.current) void applyAudioOutput(videoRef.current, audioOutputDeviceId);
+  }, [audioOutputDeviceId, item?.url, item?.type]);
 
   if (!item) return null;
 
@@ -72,6 +81,9 @@ export const MediaViewerModal: React.FC<MediaViewerModalProps> = memo(({
         <Modal.Body className="p-2 sm:p-4 bg-(--bg) flex items-center justify-center min-h-60 max-h-[calc(92vh-140px)] overflow-hidden">
           {item.type === 'video' ? (
             <video
+              ref={videoRef}
+              muted={isDeafened}
+              onVolumeChange={(event) => { if (isDeafened) event.currentTarget.muted = true; }}
               src={resolvedUrl}
               controls
               autoPlay

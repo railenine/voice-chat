@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { isTauri, getBackendBaseUrl, APP_VERSION } from '../config';
-import { isNewerVersion } from '../utils/semver';
+import { isTauri, getBackendBaseUrl, APP_VERSION, IS_STAGING_BUILD } from '../config';
+import { isNewerVersion, parseSemver } from '../utils/semver';
 import { UpdateInfo, UpdateStatus } from '../utils/updaterTypes';
 import { shouldAutoOpenUpdateModal, buildUpdaterUrl } from '../utils/updaterPolicy';
 
@@ -14,6 +14,7 @@ const DISMISSED_VERSION_KEY = 'rvxis_dismissed_update_version';
 
 // Optional dev/test mock: enabled ONLY if explicitly requested via URL (?mock_update=true)
 const isMockUpdateEnabled = (): boolean =>
+  !IS_STAGING_BUILD &&
   typeof window !== 'undefined' &&
   (new URLSearchParams(window.location.search).has('mock_update') ||
    new URLSearchParams(window.location.search).has('mock-update'));
@@ -29,7 +30,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
   const isInRoom = !!options?.isInRoom;
   const [status, setStatus] = useState<UpdateStatus>(isMockUpdateEnabled() ? 'available' : 'idle');
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(isMockUpdateEnabled() ? MOCK_UPDATE_INFO : null);
-  const [isPortable, setIsPortable] = useState<boolean>(false);
+  const [isPortable, setIsPortable] = useState<boolean>(IS_STAGING_BUILD);
   const [downloadProgress, setDownloadProgress] = useState<number>(0);
   const [downloadedBytes, setDownloadedBytes] = useState<number>(0);
   const [totalBytes, setTotalBytes] = useState<number>(0);
@@ -39,6 +40,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
 
   // Check if running in portable mode on desktop
   useEffect(() => {
+    if (IS_STAGING_BUILD) return;
     if (isTauri()) {
       import('@tauri-apps/api/core')
         .then(({ invoke }) => {
@@ -51,6 +53,12 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
   }, []);
 
   const checkForUpdates = useCallback(async (manual = false) => {
+    if (IS_STAGING_BUILD) {
+      setError('Обновления отключены в тестовой сборке');
+      setStatus('error');
+      if (manual) setIsModalOpen(true);
+      return;
+    }
     if (isMockUpdateEnabled()) {
       setStatus('available');
       setUpdateInfo(MOCK_UPDATE_INFO);
@@ -85,6 +93,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
       }
     };
 
+    let successfulCheck = false;
     try {
       if (isTauri()) {
         let tauriFound = false;
@@ -93,6 +102,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
         try {
           const { check } = await import('@tauri-apps/plugin-updater');
           const update = await check();
+          successfulCheck = true;
           if (update && update.available) {
             await waitMinDisplay();
             tauriUpdateObjRef.current = update;
@@ -113,6 +123,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
               date: update.date,
               portableUrl,
               portableSha256: rawPortable.sha256,
+              portableSignature: rawPortable.signature,
               portableSize: rawPortable.size,
               installerUrl: rawPlatform.url,
               installerSha256: rawPlatform.sha256,
@@ -148,6 +159,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
             });
             if (res.ok) {
               const manifest = await res.json();
+              if (parseSemver(manifest.version)) successfulCheck = true;
               if (manifest.version && isNewerVersion(manifest.version, APP_VERSION)) {
                 await waitMinDisplay();
                 const rawPortable = manifest.portable?.['windows-x86_64'] || {};
@@ -162,6 +174,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
                     manifest.portable_url ||
                     `https://github.com/railenine/voice-chat/releases/download/v${manifest.version}/RVxis.exe`,
                   portableSha256: rawPortable.sha256,
+              portableSignature: rawPortable.signature,
                   portableSize: rawPortable.size,
                   installerUrl: rawPlatform.url,
                   installerSha256: rawPlatform.sha256,
@@ -208,6 +221,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
             }
           }
 
+          if (parseSemver(serverVersion)) successfulCheck = true;
           if (serverVersion && isNewerVersion(serverVersion, APP_VERSION)) {
             await waitMinDisplay();
             setUpdateInfo({
@@ -233,6 +247,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
         }
       }
 
+      if (!successfulCheck) throw new Error('Не удалось получить корректную версию с сервера обновлений');
       await waitMinDisplay();
       setStatus('up-to-date');
       if (manual) {
@@ -253,6 +268,11 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
 
   // Install update: supports both 'portable' in-place swap and 'installer' setup
   const installUpdate = useCallback(async (mode?: 'portable' | 'installer') => {
+    if (IS_STAGING_BUILD) {
+      setError('Обновления отключены в тестовой сборке');
+      setStatus('error');
+      return;
+    }
     if (isMockUpdateEnabled()) {
       setStatus('downloading');
       setDownloadProgress(20);
@@ -267,6 +287,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
       const targetMode = mode || (isPortable ? 'portable' : 'installer');
 
       if (targetMode === 'portable') {
+        let unlistenProgress: (() => void) | null = null;
         // Portable mode: download standalone RVxis.exe and swap in-place
         try {
           setStatus('downloading');
@@ -277,7 +298,6 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
           const { invoke } = await import('@tauri-apps/api/core');
           const { listen } = await import('@tauri-apps/api/event');
 
-          let unlistenProgress: (() => void) | null = null;
           try {
             unlistenProgress = await listen('portable-update-progress', (event: any) => {
               const { downloaded, total } = event.payload || {};
@@ -301,15 +321,17 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
             downloadUrl,
             expectedSha256: updateInfo?.portableSha256 || null,
             expectedSize: updateInfo?.portableSize || null,
+            signature: updateInfo?.portableSignature || '',
           });
 
           setStatus('restart-required');
-          if (unlistenProgress) unlistenProgress();
         } catch (err: any) {
           console.error('[Updater] Portable update error:', err);
           setStatus('error');
           const msg = typeof err === 'string' ? err : err?.message || (err ? String(err) : 'Ошибка портативного обновления');
           setError(msg);
+        } finally {
+          unlistenProgress?.();
         }
       } else if (tauriUpdateObjRef.current) {
         // Installer mode: run standard NSIS installer
@@ -364,6 +386,7 @@ export function useAppUpdater(options?: UseAppUpdaterOptions) {
 
   // Auto-check on startup + periodic check every 30 minutes
   useEffect(() => {
+    if (IS_STAGING_BUILD) return;
     const timer = setTimeout(() => {
       checkForUpdates(false);
     }, 4000);

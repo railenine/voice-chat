@@ -1,3 +1,5 @@
+mod portable_security;
+mod installation;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -141,18 +143,7 @@ fn start_drag(window: tauri::Window) {
 
 #[tauri::command]
 fn is_portable_mode() -> bool {
-    if let Ok(exe_path) = std::env::current_exe() {
-        let exe_dir = exe_path.parent().unwrap_or(std::path::Path::new(""));
-        let has_uninstaller = exe_dir.join("Uninstall VoiceChat.exe").exists()
-            || exe_dir.join("Uninstall RVxis.exe").exists()
-            || exe_dir.join("unins000.exe").exists();
-        let path_str = exe_path.to_string_lossy().to_lowercase();
-        let in_programs = path_str.contains("appdata\\local\\programs")
-            || path_str.contains("program files");
-        !has_uninstaller && !in_programs
-    } else {
-        true
-    }
+    std::env::current_exe().map(|path| installation::is_portable_executable(&path)).unwrap_or(false)
 }
 
 #[tauri::command]
@@ -161,13 +152,24 @@ async fn apply_portable_update(
     download_url: String,
     expected_sha256: Option<String>,
     expected_size: Option<u64>,
+    signature: String,
 ) -> Result<(), String> {
     use futures_util::StreamExt;
     use sha2::{Digest, Sha256};
     use tauri::Emitter;
     use tokio::io::AsyncWriteExt;
 
+    portable_security::ensure_updates_enabled()?;
+    let _guard = portable_security::UpdateGuard::acquire()?;
+    if !download_url.starts_with("https://") || signature.trim().is_empty() {
+        return Err("Обновление требует HTTPS и подписи издателя".into());
+    }
+    if !expected_sha256.as_ref().is_some_and(|h| h.len() == 64 && h.chars().all(|c| c.is_ascii_hexdigit()))
+        || !expected_size.is_some_and(|n| n >= 3 * 1024 * 1024 && n <= portable_security::MAX_UPDATE_BYTES) {
+        return Err("Обновление требует корректных размера и SHA-256".into());
+    }
     let current_exe = std::env::current_exe().map_err(|e| format!("Не удалось определить путь к приложению: {e}"))?;
+    installation::ensure_portable_executable(&current_exe)?;
     let parent_dir = current_exe.parent().ok_or("Не удалось определить папку приложения")?;
     let exe_name = current_exe.file_name().ok_or("Не удалось определить имя файла")?.to_string_lossy().to_string();
     let tmp_exe = parent_dir.join(format!("{exe_name}.update.tmp"));
@@ -180,6 +182,9 @@ async fn apply_portable_update(
 
     // 1. Download new executable with streaming hash calculation
     let client = reqwest::Client::builder()
+        .https_only(true)
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(180))
         .build()
         .map_err(|e| format!("Ошибка создания HTTP клиента: {e}"))?;
 
@@ -214,6 +219,11 @@ async fn apply_portable_update(
             first_bytes.extend_from_slice(&chunk[..std::cmp::min(needed, chunk.len())]);
         }
 
+        if downloaded_bytes + chunk.len() as u64 > expected_size.unwrap() {
+            drop(file);
+            let _ = std::fs::remove_file(&tmp_exe);
+            return Err("Превышен допустимый размер обновления".into());
+        }
         hasher.update(&chunk);
 
         file.write_all(&chunk)
@@ -275,7 +285,12 @@ async fn apply_portable_update(
         }
     }
 
-    // 3. Perform atomic swap with rollback safety
+    if let Err(error) = portable_security::verify_download(&tmp_exe, &signature) {
+        let _ = std::fs::remove_file(&tmp_exe);
+        return Err(error);
+    }
+
+    // 3. Replace only verified bytes; restore the previous binary on launch failure.
     if old_exe.exists() {
         let _ = std::fs::remove_file(&old_exe);
     }
@@ -293,21 +308,14 @@ async fn apply_portable_update(
         return Err(format!("Не удалось установить новый файл (выполнен автоматический откат): {e}"));
     }
 
-    // 4. Launch the new executable
-    std::process::Command::new(&current_exe)
-        .spawn()
-        .map_err(|e| format!("Не удалось запустить обновлённое приложение: {e}"))?;
-
-    // 5. Background cleanup for .old file
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        let old_path = old_exe.to_string_lossy().to_string();
-        let _ = std::process::Command::new("cmd.exe")
-            .args(["/C", "ping", "127.0.0.1", "-n", "3", ">", "NUL", "&", "del", "/f", "/q", &old_path])
-            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-            .spawn();
+    // 4. Launch the verified executable, rolling back if spawning fails.
+    if let Err(error) = std::process::Command::new(&current_exe).spawn() {
+        let _ = std::fs::rename(&current_exe, &tmp_exe);
+        let rollback = std::fs::rename(&old_exe, &current_exe);
+        let _ = std::fs::remove_file(&tmp_exe);
+        return Err(format!("Не удалось запустить обновление: {error}; откат: {rollback:?}"));
     }
+    // The next successfully started app removes .old; no shell cleanup commands.
 
     // 6. Exit old process cleanly
     std::process::exit(0);
@@ -315,10 +323,12 @@ async fn apply_portable_update(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build());
+    #[cfg(not(feature = "staging"))]
+    let builder = builder.plugin(tauri_plugin_updater::Builder::new().build());
+    builder
         .setup(|app| {
             // Clean up any leftover .old and .update.tmp files from previous portable updates
             if let Ok(current_exe) = std::env::current_exe() {

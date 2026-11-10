@@ -194,7 +194,7 @@ describe('2. Real Device & Screen Share Policy Unit Tests', () => {
 
   it('normalizes audio output sinkId correctly for W3C compliance', () => {
     assert.strictEqual(normalizeSinkId('default'), '');
-    assert.strictEqual(normalizeSinkId('communications'), '');
+    assert.strictEqual(normalizeSinkId('communications'), 'communications');
     assert.strictEqual(normalizeSinkId(''), '');
     assert.strictEqual(normalizeSinkId(null), '');
     assert.strictEqual(normalizeSinkId(undefined), '');

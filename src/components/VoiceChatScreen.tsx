@@ -399,7 +399,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             isNoiseSuppression={isNoiseSuppression}
             canShareScreen={screenShare.isAvailable && screenShare.canShareScreen}
             isSharingScreen={screenShare.isSharing}
-            isConnectingScreen={screenShare.isConnecting}
+            isConnectingScreen={screenShare.isConnecting || screenShare.connectionState !== 'connected'}
             muteHotkeyLabel={muteHotkey.label}
             deafenHotkeyLabel={deafenHotkey.label}
             toggleMute={toggleMute}
@@ -424,6 +424,8 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
           {/* Main Chat & Stream Area */}
           <main className="flex-1 flex flex-col min-w-0 p-2 pt-2 sm:p-4 sm:pt-3 lg:p-0 overflow-hidden lg:gap-0">
             <ChatPanel
+              audioOutputDeviceId={deviceState?.selectedOutput}
+              isDeafened={isDeafened}
               roomId={roomId}
               messages={messages}
               myPeerId={myPeerId}
@@ -437,7 +439,10 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
               handleRetry={handleRetry}
               className="flex-1 min-h-0"
               streamView={
+                <>
+                {screenShare.error && <p role="alert" className="p-3 text-sm text-(--danger) bg-(--danger-soft)">{screenShare.error}</p>}
                 <ScreenShareView
+                  isDeafened={isDeafened}
                   activeStreams={screenShare.activeStreams}
                   localVideoTrack={screenShare.localVideoTrack}
                   localAudioTrack={screenShare.localAudioTrack}
@@ -451,6 +456,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
                   onVolumeChange={screenShare.setStreamVolume}
                   audioOutputDeviceId={deviceState?.selectedOutput}
                 />
+                </>
               }
             />
           </main>
@@ -467,7 +473,7 @@ export const VoiceChatScreen: React.FC<VoiceChatScreenProps> = memo(({
             isNoiseSuppression={isNoiseSuppression}
             canShareScreen={screenShare.isAvailable && screenShare.canShareScreen}
             isSharingScreen={screenShare.isSharing}
-            isConnectingScreen={screenShare.isConnecting}
+            isConnectingScreen={screenShare.isConnecting || screenShare.connectionState !== 'connected'}
             muteHotkeyLabel={muteHotkey.label}
             deafenHotkeyLabel={deafenHotkey.label}
             toggleMute={toggleMute}

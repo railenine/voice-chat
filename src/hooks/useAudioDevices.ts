@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { setSoundOutputDevice, playTestSound } from '../utils/soundEffects';
+import { applyAudioOutput, subscribeAudioOutputErrors } from '../utils/audioOutput';
 import {
   reconcileSelectedDevice,
   normalizeSinkId,
@@ -35,8 +36,15 @@ export function useAudioDevices() {
   const [hasPermission, setHasPermission] = useState<boolean>(false);
   const [isTestingMic, setIsTestingMic] = useState<boolean>(false);
   const [micVolume, setMicVolume] = useState<number>(0);
+  const [outputError, setOutputError] = useState<string | null>(null);
+  const outputSelectionGeneration = useRef(0);
+  useEffect(() => {
+    const unsubscribe = subscribeAudioOutputErrors(setOutputError);
+    return () => { outputSelectionGeneration.current++; unsubscribe(); };
+  }, []);
 
   const testStreamRef = useRef<MediaStream | null>(null);
+  const testGenerationRef = useRef(0);
   const testAudioCtxRef = useRef<AudioContext | null>(null);
   const testAnimFrameRef = useRef<number | null>(null);
 
@@ -81,7 +89,7 @@ export function useAudioDevices() {
 
       // Reconcile devices without wiping preferences when permission is not yet granted
       setSelectedInputState((prev) => reconcileSelectedDevice(prev, inputs, hasLabels));
-      setSelectedOutputState((prev) => reconcileSelectedDevice(prev, outputs, hasLabels));
+      setSelectedOutputState((prev) => reconcileSelectedDevice(prev, outputs, outputs.some(device => Boolean(device.label))));
     } catch (err) {
       console.warn('[AudioDevices] Error enumerating devices:', err);
     }
@@ -110,7 +118,15 @@ export function useAudioDevices() {
   }, []);
 
   // Set selected speaker/headphones
-  const setSelectedOutput = useCallback((deviceId: string) => {
+  const setSelectedOutput = useCallback(async (deviceId: string) => {
+    const generation = ++outputSelectionGeneration.current;
+    setOutputError(null);
+    // Do not display/persist a successful selection if the browser rejects it.
+    const probe = document.createElement('audio');
+    const applied = await applyAudioOutput(probe, deviceId, message => {
+      if (generation === outputSelectionGeneration.current) setOutputError(message);
+    });
+    if (generation !== outputSelectionGeneration.current || !applied) return;
     setSelectedOutputState(deviceId);
     try {
       localStorage.setItem(STORAGE_KEY_OUTPUT, deviceId);
@@ -120,6 +136,7 @@ export function useAudioDevices() {
 
   // Start / stop microphone test meter
   const stopMicTest = useCallback(() => {
+    testGenerationRef.current++;
     if (testAnimFrameRef.current) {
       cancelAnimationFrame(testAnimFrameRef.current);
       testAnimFrameRef.current = null;
@@ -138,6 +155,7 @@ export function useAudioDevices() {
 
   const startMicTest = useCallback(async () => {
     stopMicTest();
+    const generation = testGenerationRef.current;
     try {
       let stream: MediaStream;
       try {
@@ -146,8 +164,13 @@ export function useAudioDevices() {
         };
         stream = await navigator.mediaDevices.getUserMedia(constraints);
       } catch (err) {
+        if (generation !== testGenerationRef.current) return;
         console.warn('[AudioDevices] Failed with selectedInput, falling back to default mic:', err);
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+      if (generation !== testGenerationRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
       }
       testStreamRef.current = stream;
 
@@ -220,6 +243,7 @@ export function useAudioDevices() {
     audioOutputs,
     selectedInput,
     selectedOutput,
+    outputError,
     hasPermission,
     isSinkSupported,
     isTestingMic,

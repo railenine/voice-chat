@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.test-tmp/
 yarn.lock
 pnpm-lock.yaml
 
@@ -55,6 +56,7 @@ src-tauri/gen/
 *.exe
 
 # Internal context & generated release artifacts
+release-candidate.json
 CONVERSATION_HISTORY.md
 PROJECT_CONTEXT_HANDOFF.md
 scripts/export-chat.js

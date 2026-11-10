@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { extractReleaseNotes } from './generate-latest-json.js';
+import { isNewerVersion } from '../src/utils/semver.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,8 +15,8 @@ function main() {
   const targetVersion = args.find((a) => !a.startsWith('-'));
 
   if (!targetVersion) {
-    console.error('Usage: node scripts/bump-version.js <new-version> [--push]');
-    console.error('Example: node scripts/bump-version.js 0.0.46 --push');
+    console.error('Usage: node scripts/bump-version.js <new-version>');
+    console.error('Example: node scripts/bump-version.js 0.2.4');
     process.exit(1);
   }
 
@@ -24,6 +25,16 @@ function main() {
   if (!/^\d+\.\d+\.\d+(?:-[\w.]+)?$/.test(cleanVersion)) {
     console.error(`Invalid version format: "${targetVersion}". Expected format like "0.0.46"`);
     process.exit(1);
+  }
+
+  if (shouldPush) {
+    throw new Error('Automatic push is disabled; prepare a candidate and use verified artifact promotion');
+  }
+  if (!isNewerVersion(cleanVersion, JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8')).version)) {
+    throw new Error('Release version must increase');
+  }
+  if (execFileSync('git', ['tag', '--list', `v${cleanVersion}`], { cwd: rootDir, encoding: 'utf8' }).trim()) {
+    throw new Error('Release tag already exists');
   }
 
   console.log(`\n🚀 Bumping project version to: v${cleanVersion}\n`);
@@ -67,6 +78,14 @@ function main() {
     cargo = cargo.replace(/version\s*=\s*"[^"]+"/, `version = "${cleanVersion}"`);
     fs.writeFileSync(cargoTomlPath, cargo, 'utf8');
     console.log(`  ✓ src-tauri/Cargo.toml: -> ${cleanVersion}`);
+  }
+  const cargoLockPath = path.join(rootDir, 'src-tauri', 'Cargo.lock');
+  if (fs.existsSync(cargoLockPath)) {
+    const lock = fs.readFileSync(cargoLockPath, 'utf8');
+    const updated = lock.replace(/(\[\[package\]\]\r?\nname = "voice-chat"\r?\nversion = ")[^"]+("\r?\n)/,
+      (_match, prefix, suffix) => `${prefix}${cleanVersion}${suffix}`);
+    if (updated === lock) throw new Error('Could not update root package in Cargo.lock');
+    fs.writeFileSync(cargoLockPath, updated, 'utf8');
   }
 
   // 4. src/config.ts
@@ -127,6 +146,10 @@ function main() {
       try {
         const m = JSON.parse(fs.readFileSync(mPath, 'utf8'));
         m.version = cleanVersion;
+        // These fields belong to actual bytes, not a version template.
+        for (const asset of [...Object.values(m.platforms || {}), ...Object.values(m.portable || {})]) {
+          delete asset.signature; delete asset.sha256; delete asset.size;
+        }
         m.notes = releaseNotes;
         m.pub_date = new Date().toISOString();
         m.portable_url = `https://github.com/railenine/voice-chat/releases/download/v${cleanVersion}/RVxis.exe`;
@@ -146,32 +169,8 @@ function main() {
 
   console.log(`\n🎉 All files updated to version ${cleanVersion}!`);
 
-  // Optional: Git commit and tag push
-  if (shouldPush) {
-    console.log('\n📦 Creating git commit, tag, and pushing to origin...');
-    try {
-      execSync('git add -A', {
-        cwd: rootDir,
-        stdio: 'inherit',
-      });
-      execSync(`git commit -m "chore(release): v${cleanVersion}"`, { cwd: rootDir, stdio: 'inherit' });
-      execSync(`git tag -a "v${cleanVersion}" -m "Release v${cleanVersion}"`, { cwd: rootDir, stdio: 'inherit' });
-      execSync('git push origin main', { cwd: rootDir, stdio: 'inherit' });
-      execSync(`git push origin "v${cleanVersion}"`, { cwd: rootDir, stdio: 'inherit' });
-      console.log(`\n🚀 Successfully pushed commit and tag v${cleanVersion} to origin!`);
-      console.log('GitHub Actions will now build the release and deploy it automatically.');
-    } catch (err) {
-      console.error('\n❌ Git operation failed:', err.message);
-      process.exit(1);
-    }
-  } else {
-    console.log('\nNext steps:');
-    console.log('  1. Review changes: git diff');
-    console.log(`  2. Commit: git commit -am "chore(release): v${cleanVersion}"`);
-    console.log(`  3. Tag:    git tag -a v${cleanVersion} -m "Release v${cleanVersion}"`);
-    console.log(`  4. Push:   git push origin main && git push origin v${cleanVersion}`);
-    console.log(`  (Or run again with --push to do this automatically)`);
-  }
+  console.log('Review the version diff, then build and verify the candidate via desktop-build.yml.');
+  console.log('Publishing promotes approved artifact bytes; it does not push main or rebuild.');
 }
 
 main();
